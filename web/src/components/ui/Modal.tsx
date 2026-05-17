@@ -10,7 +10,7 @@ interface ModalProps {
   title?: ReactNode;
   eyebrow?: string;
   children: ReactNode;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 export function Modal({ open, onClose, title, eyebrow, children, size = 'md' }: ModalProps) {
@@ -30,7 +30,14 @@ export function Modal({ open, onClose, title, eyebrow, children, size = 'md' }: 
   if (!open) return null;
   if (typeof window === 'undefined' || !document.body) return null;
 
-  const widthClass = size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-3xl' : 'max-w-xl';
+  const widthClass =
+    size === 'sm'
+      ? 'max-w-md'
+      : size === 'lg'
+      ? 'max-w-3xl'
+      : size === 'xl'
+      ? 'max-w-5xl'
+      : 'max-w-xl';
 
   // Portal to document.body so the modal escapes any parent <a>/<Link>
   // that would otherwise cause invalid HTML nesting (e.g. dashboard row Links).

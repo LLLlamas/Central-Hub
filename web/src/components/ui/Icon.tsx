@@ -152,6 +152,12 @@ export const Icon = {
       <path d="M8 7v5M8 4.5v.5" />
     </S>
   ),
+  Help: (p: IconProps) => (
+    <S {...p}>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M6.3 6.2a1.8 1.8 0 113 1.5c-.7.5-1.3.8-1.3 1.6M8 11.5v.4" />
+    </S>
+  ),
   Sparkle: (p: IconProps) => (
     <S {...p}>
       <path d="M8 2l1.5 4.5L14 8l-4.5 1.5L8 14l-1.5-4.5L2 8l4.5-1.5z" />

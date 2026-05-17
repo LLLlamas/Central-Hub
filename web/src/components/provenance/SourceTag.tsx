@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { linkifyRiderRefs } from '@/components/RiderRef';
+import { usePdfViewer } from '@/components/PdfViewer';
 import { cn } from '@/lib/cn';
 
 interface SourceTagProps {
@@ -25,6 +26,7 @@ interface SourceTagProps {
  */
 export function SourceTag({ source, field, className }: SourceTagProps) {
   const [open, setOpen] = useState(false);
+  const { openPdf } = usePdfViewer();
   const src = getRealSource(source);
 
   return (
@@ -103,11 +105,16 @@ export function SourceTag({ source, field, className }: SourceTagProps) {
           )}
 
           {src.artifactUrl && (
-            <a
-              href={src.artifactUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-[3px] border border-[var(--color-ocean)]/40 hover:border-[var(--color-ocean)] hover:bg-[var(--color-paper-2)]/50 transition-colors group"
+            <button
+              type="button"
+              onClick={() =>
+                openPdf({
+                  url: src.artifactUrl!,
+                  page: src.pages?.[0],
+                  title: src.artifactLabel ?? src.document,
+                })
+              }
+              className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-[3px] border border-[var(--color-ocean)]/40 hover:border-[var(--color-ocean)] hover:bg-[var(--color-paper-2)]/50 transition-colors group"
             >
               <span className="font-mono w-6 h-6 flex items-center justify-center rounded-[2px] bg-[var(--color-paper-2)] text-[var(--color-ocean)] text-[12px]">
                 📕
@@ -116,10 +123,10 @@ export function SourceTag({ source, field, className }: SourceTagProps) {
                 {src.artifactLabel ?? 'Open source document'}
               </span>
               <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
-                Open
+                View
               </span>
               <Icon.Arrow size={12} className="text-[var(--color-ink-3)] group-hover:text-[var(--color-ocean)]" />
-            </a>
+            </button>
           )}
 
           <p className="pt-3 border-t border-[var(--color-rule-soft)] text-[10.5px] font-mono uppercase tracking-[0.14em] text-[var(--color-ink-4)]">

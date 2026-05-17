@@ -7,6 +7,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { MockBadge } from '@/components/provenance/MockBadge';
 import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
+import { usePdfViewer } from '@/components/PdfViewer';
 import { cn } from '@/lib/cn';
 import type { FlightImport } from '@/types';
 
@@ -127,6 +128,7 @@ function StatusChip({ status, inverted }: { status: FlightImport['status']; inve
 }
 
 function FlightReview({ imp }: { imp: FlightImport }) {
+  const { openPdf } = usePdfViewer();
   const f = imp.parsedFlights[0];
   if (!f) return <EmptyState title="No flights parsed" />;
 
@@ -137,7 +139,16 @@ function FlightReview({ imp }: { imp: FlightImport }) {
         <div className="px-5 py-3.5 border-b border-[var(--color-rule-soft)] flex items-center justify-between gap-3">
           <div>
             <div className="eyebrow">Side-by-side review</div>
-            <div className="text-[13.5px] font-semibold mt-0.5">{imp.filename}</div>
+            <button
+              type="button"
+              onClick={() => openPdf({ url: '/' + imp.filename, title: imp.filename })}
+              title="View the flight confirmation PDF"
+              className="mt-1 cursor-pointer hover:opacity-80 transition-opacity"
+            >
+              <Chip tone="travel">
+                <Icon.Document size={10} /> {imp.filename}
+              </Chip>
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <StatusChip status={imp.status} />

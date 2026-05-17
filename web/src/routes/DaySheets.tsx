@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { MockBadge } from '@/components/provenance/MockBadge';
 import { MockTag } from '@/components/provenance/MockTag';
 import { SourceTag } from '@/components/provenance/SourceTag';
+import { SensitiveExplain } from '@/components/ExplainTag';
 import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { LobbyCallLadder } from '@/components/LobbyCallLadder';
 import { LastUpdated } from '@/components/LastUpdated';
@@ -591,9 +592,12 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
                         </span>
                         <Chip tone="neutral" size="sm">{scheduleItemLabel(it.type)}</Chip>
                         {mode === 'edit' && it.sensitive && (
-                          <Chip tone="critical" size="sm">
-                            <Icon.Lock size={9} /> Sensitive
-                          </Chip>
+                          <span className="inline-flex items-center">
+                            <Chip tone="critical" size="sm">
+                              <Icon.Lock size={9} /> Sensitive
+                            </Chip>
+                            <SensitiveExplain />
+                          </span>
                         )}
                         {mode === 'edit' && hiddenForUser && (
                           <Chip tone="off" size="sm">
@@ -665,9 +669,12 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
                     <div className="flex items-center gap-2">
                       <span className="text-[13px] font-semibold">{h.name}</span>
                       {h.sensitive && (
-                        <Chip tone="critical" size="sm">
-                          <Icon.Lock size={9} /> Hidden in print
-                        </Chip>
+                        <span className="inline-flex items-center">
+                          <Chip tone="critical" size="sm">
+                            <Icon.Lock size={9} /> Hidden in print
+                          </Chip>
+                          <SensitiveExplain />
+                        </span>
                       )}
                     </div>
                     <div className="text-[12px] text-[var(--color-ink-3)]">{h.address}</div>

@@ -10,9 +10,10 @@ Source-of-truth docs in repo root:
 - `potential-implementation.md` — build playbook and feature scope
 - `tour-management-deep-research.md` — domain research, competitor landscape
 - `redesign-plan.md` — active plan for the clarity + mobile redesign (read before UI work)
+- `pdf-highlighter.md` — the in-app PDF viewer's design + the (unbuilt) text-highlighting plan
 - `RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf` — canonical rider test fixture
 - `mock-booking-agent-deal-memo.md` + `mock-tour-route.csv` — mock artifacts the booking-agent flow would produce
-- The rider PDF + CSV + deal memo are also copied to `web/public/` so they can be opened from in-app links
+- `web/public/` holds the in-app-openable docs: the rider PDF, the CSV + deal memo, and two generated flight-confirmation PDFs
 
 ## Run
 
@@ -60,6 +61,8 @@ web/src/
 │   ├── LobbyCallLadder.tsx        # Back-cascade from doors → soundcheck → load-in → bus → lobby
 │   ├── TodaySurface.tsx           # Role-aware "Today" surface — desktop Overview hero + mobile home
 │   ├── LastUpdated.tsx            # "Last updated {date} by {name}" audit line
+│   ├── PdfViewer.tsx              # In-app PDF modal — PdfViewerProvider + usePdfViewer()
+│   ├── ExplainTag.tsx             # Amber "(?)" — plain-English popup for red/alert warnings
 │   └── VisibilityEditor.tsx
 └── routes/
     ├── TourOverview.tsx           # /
@@ -106,7 +109,9 @@ Rules:
 - Section-level tagging (e.g. `<MockTag source="schedule_item">` on the "Show clock" section title) is preferred over per-row when the source is uniform.
 - For free-text strings that mention `§N` (rider sections), use `linkifyRiderRefs(text)` from `components/RiderRef.tsx` — it converts each `§N` substring into a clickable `p.N` link that opens the rider PDF at that page.
 
-`<LastUpdated stamp={...} />` (`components/LastUpdated.tsx`) is a paired surface for the `audit_trail` mock source — it renders the "Last updated {date} by {name}" line and carries its own `<MockTag source="audit_trail">`. The line itself prints; only the MockTag self-hides.
+`<LastUpdated stamp={...} />` (`components/LastUpdated.tsx`) is a paired surface for the `audit_trail` mock source — it renders a "{label} {date} by {name}" line (label defaults to "Last updated"; pass `label="Approved"` for sign-offs) and carries its own `<MockTag source="audit_trail">`. The line itself prints; only the MockTag self-hides.
+
+`<ExplainTag>` (`components/ExplainTag.tsx`) is a sibling pattern for *warnings*, not provenance: a small amber "(?)" next to any red/alert element opens a plain-English, non-jargon explanation (with a rider-page link where relevant). Presets `SensitiveExplain` / `ConflictExplain` / `ExcludedBrandExplain` single-source the repeated copy.
 
 ## Rider section references (`§N`)
 
@@ -130,6 +135,8 @@ Currently exposes:
 - `lockedDays`, `isDayLocked(id)`, `toggleDayLocked(id)`, `setDayLocked(id, locked)`
 - `getDayLastUpdated(day)` — resolves a `Day`'s last-updated `UpdateStamp` against an in-memory `dayUpdates` overlay (falls back to seeded `day.lastUpdated`); locking/unlocking a day live-stamps it with `MOCK_NOW` + current viewer
 - `resolvedConflicts`, `resolveConflict(id, {chosenValue, source?, note?})`, `unresolveConflict(id)` — `resolveConflict` stamps `MOCK_NOW`
+- `isSectionApproved(key)` / `getSectionApproval(key)` / `approveSection(key)` / `reopenSection(key)` — rider-section sign-off, keyed `${type}-${index}`; approvals seed from sections whose mock status is `approved` and stamp `MOCK_NOW` + current viewer
+- `getSectionEdit(key)` / `updateSectionEdit(key, patch)` — inline corrections (`RiderSectionEdit`) layered over the AI extraction
 
 When backend lands, replace with TanStack Query + Zustand or similar; the context shape is intentionally stable so callers don't have to change.
 
@@ -160,6 +167,7 @@ If you add a route that should be printable / shareable / chrome-free, put it un
 - **Tailwind only**, no styled-components or CSS Modules. Tokens defined in `index.css` `@theme` block.
 - **Inline SVG icons** in `components/ui/Icon.tsx` — add new icons there, not via an icon library.
 - **Modals always portal to `document.body`** via `createPortal` — needed because day-sheet rows are inside `<Link>` and a modal inside an anchor is invalid HTML. See `components/ui/Modal.tsx` and `CommandPalette.tsx` for the pattern.
+- **PDF references open in-app, never a new tab.** Call `usePdfViewer().openPdf({ url, page?, title? })` (`components/PdfViewer.tsx`); the rider PDF path is `RIDER_PDF_PATH` from `lib/riderSections.ts`. Don't add `<a href="….pdf" target="_blank">`.
 - **Click handlers inside provenance tags + RiderRef use `e.stopPropagation()`** so they work when nested inside parent links.
 - **CSS Grid items that hold variable-width content need `min-w-0`** to prevent the column blowing out the grid (this bit us in `RiderIngest`'s section detail column — fixed but worth remembering).
 - **Print sheet is letter-size (8.5" wide, 816px @ 96 DPI).** `@media print` in `index.css` strips paper grain, gradients, action bar, and provenance markers. `print:hidden` on Tailwind utilities handles per-element hiding.
@@ -196,6 +204,10 @@ If you add a route that should be printable / shareable / chrome-free, put it un
 - **Printable day sheet** (`/print/daysheet/:date`) — uses `mockVenues.ts` for venue/promoter info. If a new show city is added, also add a venue entry there or the print sheet's right column will be empty.
 - **Per-day lock state** — chips render in DaySheets day picker, Calendar grid, Tour Overview stat. Lock state is in-memory only; resets on refresh.
 - **Conflict feed + resolution flow** — surface on Tour Overview + drill-in on `/ingest/riders`. Resolve modal pre-fills mailto: with PM's email + conflict context.
+- **Rider section review — inline edit + approve** — on `/ingest/riders` each section can be corrected inline and then **Approved**. The Input List, Monitor Mix, FOH Outputs tables and free-text sections have editable fields (borderless `EditableText` / `EditableSelect`); edits layer over the extraction via `updateSectionEdit` (keyed `${type}-${index}`). Approving stamps the section with an `UpdateStamp` and shows `<LastUpdated label="Approved">`; an approved section is locked until **Reopen**. The nested sections (Backline, Catering, Lodging) are review-only for now — see the gap list.
+- **In-app PDF viewer** — `PdfViewerProvider` / `usePdfViewer()` (`components/PdfViewer.tsx`, mounted in `main.tsx`) shows PDFs in a popup `Modal` (size `xl`) at the cited page, instead of a new tab. Wired into every PDF reference: `RiderRef` §N/p.N links, `SourceTag` + `MockTag` artifact links, the rider filename chip, and the flight filename chips. **Full design + the unbuilt highlighting plan are in `pdf-highlighter.md` — read it before touching this.**
+- **Warning explainers** — `<ExplainTag>` (`components/ExplainTag.tsx`) adds a clickable amber "(?)" to every red/alert element (rider version warning, extraction flags, conflicts, "Sensitive" markers, excluded-brand flags); each opens a plain-English explanation.
+- **Flight PDFs** — `web/public/` holds two generated flight-confirmation PDFs. They're produced by `web/scripts/gen-flight-pdfs.mjs` (one-off Node script; `pdf-lib` is a devDependency). Re-run it if the `flightImports` mock data changes.
 - **Cmd+K palette** — provider in `Layout`. Search index built from tour days + personnel + schedule items + venues + pages.
 - **Route map** — static SVG with hard-coded city lat/lngs in `RouteMap.tsx`. New cities need their lat/lng added there.
 - **Calendar List/Grid toggle** — `Calendar.tsx` defaults to Grid on desktop, List on mobile, switchable on both. List view groups days by month with headers; the month grid uses compact cells on mobile.
@@ -216,6 +228,8 @@ Tier 1 untouched:
 - Public read-only share link for day sheets (tokenized URL → `/print/daysheet/:date?token=...`)
 
 Tier 2:
+- PDF text highlighting — the viewer + jump-to-page are done, but auto-highlighting the cited text is blocked on a data issue (Spanish PDF vs. English citations). Plan + fix in `pdf-highlighter.md`.
+- Inline editing for the nested rider sections — Backline, Catering, and Lodging are still review-only; only the tabular sections (Input List, Monitor Mix, FOH Outputs) and free-text sections are inline-editable today. Eventually every section type should be correctable.
 - Diff between rider versions
 - Catering allergy/diet aggregator
 - Promoter contact card as a first-class entity

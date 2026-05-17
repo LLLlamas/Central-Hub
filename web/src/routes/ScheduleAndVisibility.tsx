@@ -7,6 +7,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { MockBadge } from '@/components/provenance/MockBadge';
 import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
+import { SensitiveExplain } from '@/components/ExplainTag';
 import { VisibilityEditor } from '@/components/VisibilityEditor';
 import { fmtDate, dayTypeLabel, scheduleItemLabel } from '@/lib/format';
 import { resolveVisibility } from '@/lib/visibility';
@@ -125,9 +126,12 @@ export function ScheduleAndVisibility() {
                 action={
                   <div className="flex items-center gap-1.5">
                     {selected.sensitive && (
-                      <Chip tone="critical">
-                        <Icon.Lock size={10} /> Sensitive
-                      </Chip>
+                      <span className="inline-flex items-center">
+                        <Chip tone="critical">
+                          <Icon.Lock size={10} /> Sensitive
+                        </Chip>
+                        <SensitiveExplain />
+                      </span>
                     )}
                     <Button size="sm" variant="outline" leading={<Icon.Settings size={12} />}>
                       Edit item

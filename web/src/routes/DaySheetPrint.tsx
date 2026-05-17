@@ -4,6 +4,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Chip } from '@/components/ui/Chip';
 import { MockTag } from '@/components/provenance/MockTag';
 import { SourceTag } from '@/components/provenance/SourceTag';
+import { SensitiveExplain } from '@/components/ExplainTag';
 import { LastUpdated } from '@/components/LastUpdated';
 import {
   fmtDate,
@@ -409,9 +410,12 @@ function ScheduleRow({ item }: { item: ScheduleItem }) {
         <div className="leading-snug">
           <span className="font-semibold text-[var(--color-ink)]">{item.title}</span>
           {item.sensitive && (
-            <span className="ml-1.5 font-mono text-[9px] uppercase tracking-[0.10em] text-[var(--color-accent)]">
-              ⚠ sensitive
-            </span>
+            <>
+              <span className="ml-1.5 font-mono text-[9px] uppercase tracking-[0.10em] text-[var(--color-accent)]">
+                ⚠ sensitive
+              </span>
+              <SensitiveExplain />
+            </>
           )}
         </div>
         {item.location && (
@@ -490,9 +494,12 @@ function HotelRow({ hotel }: { hotel: Hotel }) {
       <div className="font-semibold text-[var(--color-ink)] leading-tight flex items-center gap-1">
         {hotel.name}
         {hotel.sensitive && (
-          <span className="font-mono text-[8.5px] uppercase tracking-[0.12em] text-[var(--color-accent)]">
-            ⚠ artist
-          </span>
+          <>
+            <span className="font-mono text-[8.5px] uppercase tracking-[0.12em] text-[var(--color-accent)]">
+              ⚠ artist
+            </span>
+            <SensitiveExplain />
+          </>
         )}
       </div>
       <div className="text-[var(--color-ink-2)] leading-snug">{hotel.address}</div>

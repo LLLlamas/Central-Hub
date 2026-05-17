@@ -3,6 +3,7 @@ import { getSource, realSourceLabels, phaseLabels, type SourceKey, type Provenan
 import { Modal } from '@/components/ui/Modal';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
+import { usePdfViewer } from '@/components/PdfViewer';
 import { cn } from '@/lib/cn';
 
 interface MockTagProps {
@@ -17,6 +18,7 @@ interface MockTagProps {
 }
 
 function ArtifactLink({ artifact }: { artifact: ProvenanceArtifact }) {
+  const { openPdf } = usePdfViewer();
   const iconChar =
     artifact.kind === 'csv'
       ? '▦'
@@ -29,27 +31,37 @@ function ArtifactLink({ artifact }: { artifact: ProvenanceArtifact }) {
       : artifact.kind === 'image'
       ? '◧'
       : '◰';
+  const cls =
+    'flex items-center gap-2.5 px-3 py-2 rounded-[3px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] hover:bg-[var(--color-paper-2)]/50 transition-colors group';
+  const inner = (
+    <>
+      <span className="font-mono w-6 h-6 flex items-center justify-center rounded-[2px] bg-[var(--color-paper-2)] text-[var(--color-ink-2)] text-[12px]">
+        {iconChar}
+      </span>
+      <span className="flex-1 text-[12.5px] font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-accent)]">
+        {artifact.label}
+      </span>
+      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
+        {artifact.kind === 'pdf' ? 'View' : 'Open'}
+      </span>
+      <Icon.Arrow size={12} className="text-[var(--color-ink-3)] group-hover:text-[var(--color-accent)]" />
+    </>
+  );
   return (
     <li>
-      <a
-        href={artifact.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-2.5 px-3 py-2 rounded-[3px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] hover:bg-[var(--color-paper-2)]/50 transition-colors group"
-      >
-        <span
-          className="font-mono w-6 h-6 flex items-center justify-center rounded-[2px] bg-[var(--color-paper-2)] text-[var(--color-ink-2)] text-[12px]"
+      {artifact.kind === 'pdf' ? (
+        <button
+          type="button"
+          onClick={() => openPdf({ url: artifact.url, title: artifact.label })}
+          className={cn('w-full text-left', cls)}
         >
-          {iconChar}
-        </span>
-        <span className="flex-1 text-[12.5px] font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-accent)]">
-          {artifact.label}
-        </span>
-        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-3)]">
-          Open
-        </span>
-        <Icon.Arrow size={12} className="text-[var(--color-ink-3)] group-hover:text-[var(--color-accent)]" />
-      </a>
+          {inner}
+        </button>
+      ) : (
+        <a href={artifact.url} target="_blank" rel="noopener noreferrer" className={cls}>
+          {inner}
+        </a>
+      )}
     </li>
   );
 }

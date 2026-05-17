@@ -10,6 +10,10 @@ import { SourceTag } from '@/components/provenance/SourceTag';
 import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { RiderRef, linkifyRiderRefs } from '@/components/RiderRef';
 import { ConflictResolveModal } from '@/components/ConflictResolveModal';
+import { ExplainTag, ConflictExplain, ExcludedBrandExplain } from '@/components/ExplainTag';
+import { LastUpdated } from '@/components/LastUpdated';
+import { usePdfViewer } from '@/components/PdfViewer';
+import { RIDER_PDF_PATH } from '@/lib/riderSections';
 import { cn } from '@/lib/cn';
 import type {
   RiderImport,
@@ -17,6 +21,9 @@ import type {
   RiderSectionType,
   RiderSectionStatus,
   Conflict,
+  InputChannel,
+  MonitorMix,
+  FOHOutput,
 } from '@/types';
 
 // Friendly labels for the canonical section types (handoff §1).
@@ -45,11 +52,15 @@ const SECTION_LABELS: Record<RiderSectionType, string> = {
 };
 
 export function RiderIngest() {
-  const { tour } = useApp();
+  const { tour, isSectionApproved } = useApp();
+  const { openPdf } = usePdfViewer();
   const imp = tour.riderImports[0];
-  const [activeSection, setActiveSection] = useState<string | null>(
-    imp?.sections.find((s) => s.type === 'input_list') ? 'input_list-0' : imp?.sections[0] ? `${imp.sections[0].type}-0` : null,
-  );
+  const [activeSection, setActiveSection] = useState<string | null>(() => {
+    if (!imp) return null;
+    const inputListIdx = imp.sections.findIndex((s) => s.type === 'input_list');
+    if (inputListIdx >= 0) return `input_list-${inputListIdx}`;
+    return imp.sections[0] ? `${imp.sections[0].type}-0` : null;
+  });
 
   if (!imp) {
     return (
@@ -65,6 +76,7 @@ export function RiderIngest() {
   const sectionMap = new Map<string, RiderSection>();
   imp.sections.forEach((s, i) => sectionMap.set(`${s.type}-${i}`, s));
   const section = activeSection ? sectionMap.get(activeSection) ?? null : null;
+  const approvedCount = imp.sections.filter((s, i) => isSectionApproved(`${s.type}-${i}`)).length;
 
   return (
     <div>
@@ -75,7 +87,7 @@ export function RiderIngest() {
             Rider import
           </>
         }
-        description="Review extracted rider sections beside the source PDF. Conflicts surface for a human decision and are never auto-resolved."
+        description="Review each extracted section, correct anything the AI got wrong inline, then approve it. Conflicts surface for a human decision and are never auto-resolved."
         actions={
           <Button variant="primary" leading={<Icon.Plus size={14} />}>
             Upload rider
@@ -83,7 +95,16 @@ export function RiderIngest() {
         }
         meta={
           <div className="flex flex-wrap items-center gap-2">
-            <Chip tone="critical">{imp.filename}</Chip>
+            <button
+              type="button"
+              onClick={() => openPdf({ url: RIDER_PDF_PATH, title: imp.filename })}
+              title="View the rider PDF"
+              className="cursor-pointer hover:opacity-80 transition-opacity"
+            >
+              <Chip tone="critical">
+                <Icon.Document size={10} /> {imp.filename}
+              </Chip>
+            </button>
             <Chip tone="neutral" variant="outline">
               <Icon.Document size={10} /> {imp.pageCount} pages
             </Chip>
@@ -99,7 +120,7 @@ export function RiderIngest() {
       {/* Cover & revision banner */}
       <CoverBanner imp={imp} />
 
-      <PipelineStrip sections={imp.sections} />
+      <PipelineStrip sections={imp.sections} approvedCount={approvedCount} />
 
       <div className="grid lg:grid-cols-[260px_1fr] gap-5 mt-6">
         {/* Sections list */}
@@ -107,7 +128,7 @@ export function RiderIngest() {
           <div className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
             <div className="eyebrow">Detected sections</div>
             <div className="text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
-              {imp.sections.length} found · {imp.sections.filter((s) => s.status === 'approved').length} approved
+              {imp.sections.length} found · {approvedCount} approved
             </div>
           </div>
           <ul className="divide-y divide-[var(--color-rule-soft)]">
@@ -134,7 +155,7 @@ export function RiderIngest() {
                             title="Conflicts detected"
                           />
                         )}
-                        <SectionStatusDot status={s.status} />
+                        <SectionStatusDot status={isSectionApproved(key) ? 'approved' : s.status} />
                       </div>
                     </div>
                     <div
@@ -157,7 +178,7 @@ export function RiderIngest() {
             tables) live inside the 1fr column without pushing the grid
             past the page max-width. Without it, CSS Grid auto-min-width
             lets children stretch the column. */}
-        <div className="space-y-5 min-w-0">{section ? <SectionView section={section} sourceLang={imp.sourceLanguage} /> : null}</div>
+        <div className="space-y-5 min-w-0">{section && activeSection ? <SectionView section={section} sectionKey={activeSection} sourceLang={imp.sourceLanguage} /> : null}</div>
       </div>
 
       <DataSourcesPanel
@@ -194,6 +215,17 @@ function CoverBanner({ imp }: { imp: RiderImport }) {
           {imp.revisionInfo?.warning && (
             <div className="mt-2 inline-flex items-center gap-1.5 text-[11.5px] font-mono uppercase tracking-[0.10em] text-[var(--color-accent)]">
               <Icon.Alert size={11} /> {imp.revisionInfo.warning}
+              <ExplainTag
+                title="Why this version warning matters"
+                ariaLabel="Explain the rider version warning"
+                riderLink={{ section: 1, label: 'Open the rider cover page' }}
+              >
+                This rider tells you to ignore older copies of itself. Touring
+                documents are revised often, and working from an outdated rider
+                causes real problems on show day — wrong gear ordered, missed
+                requirements, contradictions with the artist's team. Always work
+                from the newest version.
+              </ExplainTag>
             </div>
           )}
         </div>
@@ -262,10 +294,9 @@ function Fact({
   );
 }
 
-function PipelineStrip({ sections }: { sections: RiderSection[] }) {
+function PipelineStrip({ sections, approvedCount }: { sections: RiderSection[]; approvedCount: number }) {
   const total = sections.length;
-  const approved = sections.filter((s) => s.status === 'approved').length;
-  const inReview = sections.filter((s) => s.status === 'review').length;
+  const processed = sections.filter((s) => s.status !== 'pending').length;
   const avgConf = sections.reduce((a, s) => a + (s.confidence ?? 0), 0) / Math.max(1, sections.length);
   const conflictCount = sections.reduce((a, s) => a + (s.conflicts?.length ?? 0), 0);
 
@@ -273,8 +304,8 @@ function PipelineStrip({ sections }: { sections: RiderSection[] }) {
     <Card padded={false}>
       <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-[var(--color-rule-soft)]">
         <PipelineStep num="01" label="Classify" value={`${total} sections detected`} hint="Single API call. Returns sections present, page ranges, language, PM contact." status="done" />
-        <PipelineStep num="02" label="Extract" value={`${inReview + approved}/${total} processed`} hint="One structured-output call per section. Schemas per type." status={inReview > 0 ? 'doing' : 'done'} />
-        <PipelineStep num="03" label="Review" value={`${approved}/${total} approved`} hint="Side-by-side: PDF on left, extracted data on right. Click any cell to edit." status={approved < total ? 'doing' : 'done'} />
+        <PipelineStep num="02" label="Extract" value={`${processed}/${total} extracted`} hint="One structured-output call per section. Schemas per type." status={processed < total ? 'doing' : 'done'} />
+        <PipelineStep num="03" label="Review" value={`${approvedCount}/${total} approved`} hint="Correct any wrong field inline, then approve the section." status={approvedCount < total ? 'doing' : 'done'} />
         <PipelineStep num="04" label="Conflicts" value={`${conflictCount} flagged · avg conf ${(avgConf * 100).toFixed(0)}%`} hint="Never auto-resolved. Human always decides." status={conflictCount > 0 ? 'doing' : 'done'} />
       </div>
     </Card>
@@ -336,7 +367,37 @@ function SectionStatusChip({ status }: { status: RiderSectionStatus }) {
   return <Chip tone={m.tone}>{m.label}</Chip>;
 }
 
-function SectionView({ section, sourceLang }: { section: RiderSection; sourceLang: string }) {
+function SectionView({
+  section,
+  sectionKey,
+  sourceLang,
+}: {
+  section: RiderSection;
+  sectionKey: string;
+  sourceLang: string;
+}) {
+  const {
+    getSectionEdit,
+    updateSectionEdit,
+    isSectionApproved,
+    getSectionApproval,
+    approveSection,
+    reopenSection,
+  } = useApp();
+
+  const edit = getSectionEdit(sectionKey);
+  const approved = isSectionApproved(sectionKey);
+  const approval = getSectionApproval(sectionKey);
+
+  // Effective payload = the AI extraction with any inline corrections layered on.
+  const inputList = edit?.inputList ?? section.inputList;
+  const monitorMix = edit?.monitorMix ?? section.monitorMix;
+  const fohOutputs = edit?.fohOutputs ?? section.fohOutputs;
+  const freeText = edit?.freeText ?? section.freeText;
+  const freeTextEn = edit?.freeTextEn ?? section.freeTextEn;
+  const effStatus: RiderSectionStatus = approved ? 'approved' : section.status;
+  const eff: RiderSection = { ...section, inputList, monitorMix, fohOutputs, freeText, freeTextEn };
+
   return (
     <>
       <SectionCard
@@ -353,24 +414,56 @@ function SectionView({ section, sourceLang }: { section: RiderSection; sourceLan
                 Conf {(section.confidence * 100).toFixed(0)}%
               </Chip>
             )}
-            <SectionStatusChip status={section.status} />
+            <SectionStatusChip status={effStatus} />
             <Button size="sm" variant="outline" leading={<Icon.X size={12} />}>
               Re-extract
             </Button>
-            {section.status !== 'approved' && (
-              <Button size="sm" variant="primary" leading={<Icon.Check size={12} />}>
+            {approved ? (
+              <Button size="sm" variant="outline" onClick={() => reopenSection(sectionKey)}>
+                Reopen
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="primary"
+                leading={<Icon.Check size={12} />}
+                onClick={() => approveSection(sectionKey)}
+              >
                 Approve section
               </Button>
             )}
           </div>
         }
       >
-        {section.inputList ? (
-          <InputListReview channels={section.inputList} />
-        ) : section.monitorMix ? (
-          <MonitorMixReview mixes={section.monitorMix} />
-        ) : section.fohOutputs ? (
-          <FOHOutputsReview outputs={section.fohOutputs} />
+        {approved && approval ? (
+          <div className="mb-4 inline-flex items-center gap-2 rounded-[3px] border border-[var(--color-moss)]/35 bg-[var(--color-moss)]/8 px-2.5 py-1.5">
+            <Icon.Check size={12} className="text-[var(--color-moss)] shrink-0" />
+            <LastUpdated label="Approved" stamp={approval} />
+          </div>
+        ) : (
+          <p className="mb-4 text-[11.5px] text-[var(--color-ink-3)] leading-relaxed">
+            Click any field to correct what the AI extracted. Approve the section once it matches the source.
+          </p>
+        )}
+
+        {inputList ? (
+          <InputListReview
+            channels={inputList}
+            disabled={approved}
+            onChange={(v) => updateSectionEdit(sectionKey, { inputList: v })}
+          />
+        ) : monitorMix ? (
+          <MonitorMixReview
+            mixes={monitorMix}
+            disabled={approved}
+            onChange={(v) => updateSectionEdit(sectionKey, { monitorMix: v })}
+          />
+        ) : fohOutputs ? (
+          <FOHOutputsReview
+            outputs={fohOutputs}
+            disabled={approved}
+            onChange={(v) => updateSectionEdit(sectionKey, { fohOutputs: v })}
+          />
         ) : section.backline ? (
           <BacklineReview backline={section.backline} />
         ) : section.lodging ? (
@@ -380,7 +473,13 @@ function SectionView({ section, sourceLang }: { section: RiderSection; sourceLan
         ) : section.conflicts ? (
           <ConflictsReview conflicts={section.conflicts} />
         ) : (
-          <FreeTextReview es={section.freeText} en={section.freeTextEn} />
+          <FreeTextReview
+            es={freeText}
+            en={freeTextEn}
+            disabled={approved}
+            onChangeEs={(v) => updateSectionEdit(sectionKey, { freeText: v })}
+            onChangeEn={(v) => updateSectionEdit(sectionKey, { freeTextEn: v })}
+          />
         )}
       </SectionCard>
 
@@ -389,7 +488,7 @@ function SectionView({ section, sourceLang }: { section: RiderSection; sourceLan
           View raw extraction
         </summary>
         <pre className="font-mono text-[11px] leading-[1.5] text-[var(--color-ink-2)] bg-[var(--color-paper-2)]/40 p-4 border-t border-[var(--color-rule-soft)] overflow-x-auto max-h-[280px] w-full max-w-full">
-{JSON.stringify(stripUiNoise(section), null, 2)}
+{JSON.stringify(stripUiNoise(eff), null, 2)}
         </pre>
       </details>
     </>
@@ -414,7 +513,109 @@ function stripUiNoise(s: RiderSection) {
 // Per-section review components
 // =========================================================
 
-function InputListReview({ channels }: { channels: NonNullable<RiderSection['inputList']> }) {
+// --- Inline-edit primitives ------------------------------
+// Borderless inputs that read as plain text until hovered/focused, so a
+// dense review table stays calm but every value is one click from editable.
+// Disabled (= section approved) renders them as static, locked text.
+
+function EditableText({
+  value,
+  onChange,
+  disabled,
+  mono = false,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled: boolean;
+  mono?: boolean;
+  placeholder?: string;
+  className?: string;
+}) {
+  return (
+    <input
+      type="text"
+      value={value}
+      placeholder={placeholder}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+      className={cn(
+        'w-full min-w-0 bg-transparent rounded-[2px] px-1 py-0.5 outline-none border border-transparent',
+        disabled
+          ? 'cursor-default'
+          : 'hover:border-[var(--color-rule)] focus:border-[var(--color-ocean)] focus:bg-[var(--color-card)]',
+        mono && 'font-mono',
+        className,
+      )}
+    />
+  );
+}
+
+function EditableSelect({
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  value: string | undefined;
+  options: readonly { value: string; label: string }[];
+  onChange: (v: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <select
+      value={value ?? ''}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+      className={cn(
+        'w-full min-w-0 bg-transparent rounded-[2px] px-1 py-0.5 text-[11px] uppercase tracking-[0.04em] outline-none border border-transparent',
+        disabled
+          ? 'cursor-default appearance-none text-[var(--color-ink-3)]'
+          : 'hover:border-[var(--color-rule)] focus:border-[var(--color-ocean)] focus:bg-[var(--color-card)] cursor-pointer',
+      )}
+    >
+      <option value="">—</option>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+const STAND_OPTIONS = [
+  { value: 'boom', label: 'Boom' },
+  { value: 'short_boom', label: 'Short boom' },
+  { value: 'tall_boom', label: 'Tall boom' },
+  { value: 'mini_boom', label: 'Mini boom' },
+  { value: 'straight', label: 'Straight' },
+  { value: 'clamp', label: 'Clamp' },
+  { value: 'none', label: 'None' },
+  { value: 'other', label: 'Other' },
+] as const;
+
+const MONITOR_TYPE_OPTIONS = [
+  { value: 'in_ear_stereo', label: 'In-ear stereo' },
+  { value: 'in_ear_mono', label: 'In-ear mono' },
+  { value: 'wedge', label: 'Wedge' },
+  { value: 'side_fill', label: 'Side fill' },
+  { value: 'drum_fill', label: 'Drum fill' },
+  { value: 'other', label: 'Other' },
+] as const;
+
+function InputListReview({
+  channels,
+  onChange,
+  disabled,
+}: {
+  channels: InputChannel[];
+  onChange: (channels: InputChannel[]) => void;
+  disabled: boolean;
+}) {
+  const update = (i: number, patch: Partial<InputChannel>) =>
+    onChange(channels.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
   return (
     <div>
       <p className="text-[12.5px] text-[var(--color-ink-3)] mb-3 leading-relaxed">
@@ -425,11 +626,11 @@ function InputListReview({ channels }: { channels: NonNullable<RiderSection['inp
           <thead className="bg-[var(--color-paper-2)]/40">
             <tr className="text-left text-[10px] font-mono uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
               <th className="px-2.5 py-2 w-10">Ch</th>
-              <th className="px-2.5 py-2">Source</th>
-              <th className="px-2.5 py-2">Mic / DI</th>
-              <th className="px-2.5 py-2">Stand</th>
-              <th className="px-2.5 py-2 w-10">+48V</th>
-              <th className="px-2.5 py-2">Wireless</th>
+              <th className="px-2.5 py-2 min-w-[140px]">Source</th>
+              <th className="px-2.5 py-2 min-w-[110px]">Mic / DI</th>
+              <th className="px-2.5 py-2 w-28">Stand</th>
+              <th className="px-2.5 py-2 w-12 text-center">+48V</th>
+              <th className="px-2.5 py-2 w-28">Wireless</th>
               <th className="px-2.5 py-2">Flags</th>
             </tr>
           </thead>
@@ -445,20 +646,47 @@ function InputListReview({ channels }: { channels: NonNullable<RiderSection['inp
                     hasFlags && 'bg-[rgba(184,57,43,0.04)]',
                   )}
                 >
-                  <td className="px-2.5 py-1.5 font-mono tabular font-semibold text-[var(--color-ink-2)]">{c.channelNumber}</td>
-                  <td className="px-2.5 py-1.5">
-                    <div>{c.source}</div>
-                    {c.sourceEn && c.sourceEn !== c.source && (
-                      <div className="text-[10.5px] italic text-[var(--color-ink-3)]">{c.sourceEn}</div>
-                    )}
+                  <td className="px-2.5 py-1.5 font-mono tabular font-semibold text-[var(--color-ink-2)] align-top">{c.channelNumber}</td>
+                  <td className="px-1.5 py-1 align-top">
+                    <EditableText value={c.source} disabled={disabled} onChange={(v) => update(i, { source: v })} />
+                    <EditableText
+                      value={c.sourceEn ?? ''}
+                      disabled={disabled}
+                      placeholder="Input Here"
+                      onChange={(v) => update(i, { sourceEn: v })}
+                      className="text-[10.5px] italic text-[var(--color-ink-3)]"
+                    />
                   </td>
-                  <td className="px-2.5 py-1.5 font-mono text-[11px] text-[var(--color-ink-2)]">{c.micOrDi}</td>
-                  <td className="px-2.5 py-1.5 text-[var(--color-ink-3)] uppercase text-[10px] tracking-[0.08em]">
-                    {c.standType?.replace('_', ' ') ?? '—'}
+                  <td className="px-1.5 py-1 align-top">
+                    <EditableText value={c.micOrDi} mono disabled={disabled} onChange={(v) => update(i, { micOrDi: v })} />
                   </td>
-                  <td className="px-2.5 py-1.5 text-center">{c.phantom48v ? '✓' : ''}</td>
-                  <td className="px-2.5 py-1.5 text-[11px] text-[var(--color-ink-3)]">{c.wireless ? c.wirelessSystem ?? 'Yes' : ''}</td>
-                  <td className="px-2.5 py-1.5">
+                  <td className="px-1.5 py-1 align-top">
+                    <EditableSelect
+                      value={c.standType}
+                      options={STAND_OPTIONS}
+                      disabled={disabled}
+                      onChange={(v) => update(i, { standType: (v || undefined) as InputChannel['standType'] })}
+                    />
+                  </td>
+                  <td className="px-2.5 py-1.5 text-center align-top">
+                    <input
+                      type="checkbox"
+                      checked={!!c.phantom48v}
+                      disabled={disabled}
+                      onChange={(e) => update(i, { phantom48v: e.target.checked })}
+                      className="accent-[var(--color-ink)] disabled:opacity-100"
+                    />
+                  </td>
+                  <td className="px-1.5 py-1 align-top">
+                    <EditableText
+                      value={c.wirelessSystem ?? ''}
+                      disabled={disabled}
+                      placeholder="Input Here"
+                      onChange={(v) => update(i, { wirelessSystem: v, wireless: v.trim().length > 0 })}
+                      className="text-[11px] text-[var(--color-ink-3)]"
+                    />
+                  </td>
+                  <td className="px-2.5 py-1.5 align-top">
                     {hasFlags &&
                       c.extractionFlags!.map((f, j) => (
                         <span
@@ -468,6 +696,24 @@ function InputListReview({ channels }: { channels: NonNullable<RiderSection['inp
                         >
                           <Icon.Alert size={9} className="inline -mt-0.5 mr-1" />
                           {f.message}
+                          <ExplainTag
+                            title="Why this line is flagged"
+                            ariaLabel="Explain this extraction flag"
+                            riderLink={{ section: 'input_list', label: 'Open the input list in the rider' }}
+                          >
+                            <p>
+                              The AI that read this rider wasn't fully sure about
+                              this line and flagged it for a person to
+                              double-check before the channel list is approved.
+                            </p>
+                            <p>
+                              The specific concern: <strong>{f.message}</strong>
+                            </p>
+                            <p>
+                              Open the rider to confirm what it actually says,
+                              then correct the row if needed.
+                            </p>
+                          </ExplainTag>
                         </span>
                       ))}
                   </td>
@@ -481,62 +727,93 @@ function InputListReview({ channels }: { channels: NonNullable<RiderSection['inp
   );
 }
 
-function MonitorMixReview({ mixes }: { mixes: NonNullable<RiderSection['monitorMix']> }) {
+function MonitorMixReview({
+  mixes,
+  onChange,
+  disabled,
+}: {
+  mixes: MonitorMix[];
+  onChange: (mixes: MonitorMix[]) => void;
+  disabled: boolean;
+}) {
+  const update = (i: number, patch: Partial<MonitorMix>) =>
+    onChange(mixes.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
   return (
     <div>
       <p className="text-[12.5px] text-[var(--color-ink-3)] mb-3 leading-relaxed">
         {mixes.length} stereo monitor mixes. Person names parsed from mix labels are cross-referenced against the personnel extractor.
       </p>
-      <table className="w-full text-[12.5px] border border-[var(--color-rule-soft)] rounded-[3px] overflow-hidden">
-        <thead className="bg-[var(--color-paper-2)]/40">
-          <tr className="text-left text-[10px] font-mono uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-            <th className="px-3 py-2 w-16">Outputs</th>
-            <th className="px-3 py-2">Mix name</th>
-            <th className="px-3 py-2">Person</th>
-            <th className="px-3 py-2">Type</th>
-            <th className="px-3 py-2">Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {mixes.map((m, i) => (
-            <tr key={i} className={cn('border-t border-[var(--color-rule-soft)]', i % 2 === 1 && 'bg-[var(--color-paper)]/40')}>
-              <td className="px-3 py-1.5 font-mono tabular text-[var(--color-ink-2)] font-semibold">{m.outputs}</td>
-              <td className="px-3 py-1.5 font-semibold">{m.mixName}</td>
-              <td className="px-3 py-1.5">{m.personName ?? '—'}</td>
-              <td className="px-3 py-1.5 text-[var(--color-ink-3)] uppercase text-[10px] tracking-[0.08em]">{m.type.replace('_', ' ')}</td>
-              <td className="px-3 py-1.5 text-[var(--color-ink-3)]">{m.notes ?? '—'}</td>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12.5px] border border-[var(--color-rule-soft)] rounded-[3px] overflow-hidden">
+          <thead className="bg-[var(--color-paper-2)]/40">
+            <tr className="text-left text-[10px] font-mono uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+              <th className="px-3 py-2 w-20">Outputs</th>
+              <th className="px-3 py-2 min-w-[130px]">Mix name</th>
+              <th className="px-3 py-2 min-w-[100px]">Person</th>
+              <th className="px-3 py-2 w-32">Type</th>
+              <th className="px-3 py-2 min-w-[100px]">Notes</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {mixes.map((m, i) => (
+              <tr key={i} className={cn('border-t border-[var(--color-rule-soft)]', i % 2 === 1 && 'bg-[var(--color-paper)]/40')}>
+                <td className="px-2 py-1"><EditableText value={m.outputs} mono disabled={disabled} onChange={(v) => update(i, { outputs: v })} /></td>
+                <td className="px-2 py-1"><EditableText value={m.mixName} disabled={disabled} onChange={(v) => update(i, { mixName: v })} className="font-semibold" /></td>
+                <td className="px-2 py-1"><EditableText value={m.personName ?? ''} placeholder="Input Here" disabled={disabled} onChange={(v) => update(i, { personName: v })} /></td>
+                <td className="px-2 py-1">
+                  <EditableSelect
+                    value={m.type}
+                    options={MONITOR_TYPE_OPTIONS}
+                    disabled={disabled}
+                    onChange={(v) => update(i, { type: (v || 'other') as MonitorMix['type'] })}
+                  />
+                </td>
+                <td className="px-2 py-1"><EditableText value={m.notes ?? ''} placeholder="Input Here" disabled={disabled} onChange={(v) => update(i, { notes: v })} className="text-[var(--color-ink-3)]" /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-function FOHOutputsReview({ outputs }: { outputs: NonNullable<RiderSection['fohOutputs']> }) {
+function FOHOutputsReview({
+  outputs,
+  onChange,
+  disabled,
+}: {
+  outputs: FOHOutput[];
+  onChange: (outputs: FOHOutput[]) => void;
+  disabled: boolean;
+}) {
+  const update = (i: number, patch: Partial<FOHOutput>) =>
+    onChange(outputs.map((o, idx) => (idx === i ? { ...o, ...patch } : o)));
   return (
     <div>
       <p className="text-[12.5px] text-[var(--color-ink-3)] mb-3 leading-relaxed">
         {outputs.length} FOH outputs. SMPTE, talkback, light/video sends, and the main + sub + fill bus.
       </p>
-      <table className="w-full text-[12.5px] border border-[var(--color-rule-soft)] rounded-[3px] overflow-hidden">
-        <thead className="bg-[var(--color-paper-2)]/40">
-          <tr className="text-left text-[10px] font-mono uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-            <th className="px-3 py-2 w-16">Output</th>
-            <th className="px-3 py-2">Source</th>
-            <th className="px-3 py-2">Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {outputs.map((o, i) => (
-            <tr key={i} className={cn('border-t border-[var(--color-rule-soft)]', i % 2 === 1 && 'bg-[var(--color-paper)]/40')}>
-              <td className="px-3 py-1.5 font-mono tabular text-[var(--color-ink-2)] font-semibold">{o.outputNumber}</td>
-              <td className="px-3 py-1.5">{o.source}</td>
-              <td className="px-3 py-1.5 text-[var(--color-ink-3)]">{o.notes ?? '—'}</td>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12.5px] border border-[var(--color-rule-soft)] rounded-[3px] overflow-hidden">
+          <thead className="bg-[var(--color-paper-2)]/40">
+            <tr className="text-left text-[10px] font-mono uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+              <th className="px-3 py-2 w-20">Output</th>
+              <th className="px-3 py-2 min-w-[140px]">Source</th>
+              <th className="px-3 py-2 min-w-[120px]">Notes</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {outputs.map((o, i) => (
+              <tr key={i} className={cn('border-t border-[var(--color-rule-soft)]', i % 2 === 1 && 'bg-[var(--color-paper)]/40')}>
+                <td className="px-2 py-1"><EditableText value={o.outputNumber} mono disabled={disabled} onChange={(v) => update(i, { outputNumber: v })} /></td>
+                <td className="px-2 py-1"><EditableText value={o.source} disabled={disabled} onChange={(v) => update(i, { source: v })} /></td>
+                <td className="px-2 py-1"><EditableText value={o.notes ?? ''} placeholder="Input Here" disabled={disabled} onChange={(v) => update(i, { notes: v })} className="text-[var(--color-ink-3)]" /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -579,6 +856,7 @@ function BacklineReview({ backline }: { backline: NonNullable<RiderSection['back
                     {h.excluded && h.excluded.length > 0 && (
                       <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-accent)]">
                         <Icon.X size={10} /> Excluded: {h.excluded.join(', ')}
+                        <ExcludedBrandExplain section="backline" />
                       </div>
                     )}
                     {h.notes && <div className="text-[11px] text-[var(--color-ink-3)] mt-0.5 italic">{h.notes}</div>}
@@ -713,6 +991,7 @@ function CateringReview({ catering }: { catering: NonNullable<RiderSection['cate
                   {hasExcl && (
                     <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--color-accent)]">
                       <Icon.X size={9} /> NOT {item.brandExcluded!.join(', ')}
+                      <ExcludedBrandExplain section="catering" />
                     </span>
                   )}
                   {item.dietaryTags && item.dietaryTags.length > 0 && (
@@ -811,6 +1090,7 @@ function ConflictsReview({ conflicts }: { conflicts: Conflict[] }) {
             </div>
             <div className={cn('text-[13px] font-semibold text-[var(--color-ink)]', res && 'line-through')}>
               {linkifyRiderRefs(c.description)}
+              <ConflictExplain conflict={c} />
             </div>
             <ul className="mt-2 space-y-1">
               {c.values.map((v, i) => (
@@ -849,23 +1129,46 @@ function ConflictsReview({ conflicts }: { conflicts: Conflict[] }) {
   );
 }
 
-function FreeTextReview({ es, en }: { es?: string; en?: string }) {
-  if (!es && !en) {
-    return <p className="text-[12.5px] text-[var(--color-ink-3)]">No extracted text yet. Section pending.</p>;
-  }
+function FreeTextReview({
+  es,
+  en,
+  onChangeEs,
+  onChangeEn,
+  disabled,
+}: {
+  es?: string;
+  en?: string;
+  onChangeEs: (v: string) => void;
+  onChangeEn: (v: string) => void;
+  disabled: boolean;
+}) {
+  const taClass = cn(
+    'w-full text-[13px] leading-[1.55] bg-transparent border-l-2 border-[var(--color-rule)] pl-3 py-1 rounded-r-[2px] outline-none resize-y',
+    !disabled && 'hover:bg-[var(--color-paper-2)]/40 focus:bg-[var(--color-card)] focus:border-[var(--color-ocean)]',
+  );
   return (
     <div className="grid md:grid-cols-2 gap-4">
       <div>
         <div className="eyebrow mb-1.5">Source · ES</div>
-        <p className="text-[13px] text-[var(--color-ink-2)] leading-[1.55] border-l-2 border-[var(--color-rule)] pl-3">
-          {es ?? '—'}
-        </p>
+        <textarea
+          value={es ?? ''}
+          disabled={disabled}
+          rows={5}
+          placeholder="Input Here"
+          onChange={(e) => onChangeEs(e.target.value)}
+          className={cn(taClass, 'text-[var(--color-ink-2)]')}
+        />
       </div>
       <div>
         <div className="eyebrow mb-1.5">Translation · EN</div>
-        <p className="text-[13px] text-[var(--color-ink-2)] italic leading-[1.55] border-l-2 border-[var(--color-rule)] pl-3">
-          {en ?? '—'}
-        </p>
+        <textarea
+          value={en ?? ''}
+          disabled={disabled}
+          rows={5}
+          placeholder="Input Here"
+          onChange={(e) => onChangeEn(e.target.value)}
+          className={cn(taClass, 'text-[var(--color-ink-2)] italic')}
+        />
       </div>
     </div>
   );

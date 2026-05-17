@@ -7,6 +7,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { MockTag } from '@/components/provenance/MockTag';
 import { PersonName } from '@/components/provenance/PersonName';
+import { SensitiveExplain } from '@/components/ExplainTag';
 import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { LastUpdated } from '@/components/LastUpdated';
 import {
@@ -146,9 +147,12 @@ export function DayDetail() {
                             {scheduleItemLabel(it.type)}
                           </Chip>
                           {it.sensitive && (
-                            <Chip tone="critical" size="sm">
-                              <Icon.Lock size={10} /> Sensitive
-                            </Chip>
+                            <span className="inline-flex items-center">
+                              <Chip tone="critical" size="sm">
+                                <Icon.Lock size={10} /> Sensitive
+                              </Chip>
+                              <SensitiveExplain />
+                            </span>
                           )}
                           <VisibilityPill level={lvl} />
                         </div>
@@ -235,9 +239,12 @@ export function DayDetail() {
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="text-[12.5px] font-semibold">{h.name}</span>
                         {h.sensitive && (
-                          <Chip tone="critical" size="sm">
-                            <Icon.Lock size={9} /> Sensitive
-                          </Chip>
+                          <span className="inline-flex items-center">
+                            <Chip tone="critical" size="sm">
+                              <Icon.Lock size={9} /> Sensitive
+                            </Chip>
+                            <SensitiveExplain />
+                          </span>
                         )}
                       </div>
                       <div className="text-[11.5px] text-[var(--color-ink-3)]">

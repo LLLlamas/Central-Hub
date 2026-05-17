@@ -6,6 +6,7 @@ import { SectionCard } from '@/components/ui/Card';
 import { SourceTag } from '@/components/provenance/SourceTag';
 import { RiderRef, linkifyRiderRefs } from '@/components/RiderRef';
 import { ConflictResolveModal } from '@/components/ConflictResolveModal';
+import { ConflictExplain } from '@/components/ExplainTag';
 import { useApp } from '@/state/AppState';
 import { getAllConflicts } from '@/data/mockTour';
 import { cn } from '@/lib/cn';
@@ -170,6 +171,7 @@ function ConflictRow({
         </div>
         <p className="text-[12.5px] text-[var(--color-ink)] leading-snug">
           {linkifyRiderRefs(conflict.description)}
+          <ConflictExplain conflict={conflict} />
         </p>
         {conflict.suggestedResolution && (
           <p className="mt-1 text-[11.5px] text-[var(--color-ink-3)] leading-relaxed">

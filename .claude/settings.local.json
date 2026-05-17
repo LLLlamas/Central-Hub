@@ -6,7 +6,8 @@
       "Bash(npm run *)",
       "mcp__Claude_Preview__preview_start",
       "Bash(curl -s \"http://localhost:5173/src/components/ui/Modal.tsx\")",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(node -p \"require\\('pdfjs-dist/package.json'\\).version\")"
     ]
   }
 }

@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
-import { getRiderSection, riderPageUrl } from '@/lib/riderSections';
+import type { ReactNode, MouseEvent } from 'react';
+import { getRiderSection, RIDER_PDF_PATH } from '@/lib/riderSections';
+import { usePdfViewer } from '@/components/PdfViewer';
 import { cn } from '@/lib/cn';
 
 interface RiderRefProps {
@@ -12,6 +13,10 @@ interface RiderRefProps {
   className?: string;
 }
 
+const linkStyle =
+  'p-0 bg-transparent border-0 cursor-pointer text-[var(--color-ocean)] hover:text-[var(--color-ink)] ' +
+  'underline decoration-dotted underline-offset-[3px] decoration-[var(--color-ocean)]/40 hover:decoration-solid transition-colors';
+
 /**
  * Clickable rider-section reference.
  *
@@ -20,10 +25,11 @@ interface RiderRefProps {
  * inline `§N` substrings without duplicating the section name that
  * usually follows them in surrounding text).
  *
- * Clicks open the rider PDF at the right page (#page=N) in a new tab.
- * stopPropagation lets the link work inside parent <Link> rows.
+ * Clicks open the rider PDF at the right page in the in-app PDF modal.
+ * stopPropagation lets it work inside parent <Link> rows.
  */
 export function RiderRef({ section, label, short, className }: RiderRefProps) {
+  const { openPdf } = usePdfViewer();
   const s = getRiderSection(section);
 
   if (!s) {
@@ -35,47 +41,37 @@ export function RiderRef({ section, label, short, className }: RiderRefProps) {
     );
   }
 
+  const open = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openPdf({ url: RIDER_PDF_PATH, page: s.pages[0], title: `Rider — ${s.name}` });
+  };
+
   if (short) {
     return (
-      <a
-        href={riderPageUrl(s.pages)}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={(e) => e.stopPropagation()}
-        className={cn(
-          'inline-baseline font-mono tabular',
-          'text-[var(--color-ocean)] hover:text-[var(--color-ink)]',
-          'underline decoration-dotted underline-offset-[3px] decoration-[var(--color-ocean)]/40 hover:decoration-solid',
-          'transition-colors',
-          className,
-        )}
-        title={`Open rider PDF — ${s.name} (page ${s.pages.join(' / ')})`}
+      <button
+        type="button"
+        onClick={open}
+        className={cn('inline align-baseline font-mono tabular', linkStyle, className)}
+        title={`View rider PDF — ${s.name} (page ${s.pages.join(' / ')})`}
       >
         p.{s.pages[0]}
-      </a>
+      </button>
     );
   }
 
   return (
-    <a
-      href={riderPageUrl(s.pages)}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      className={cn(
-        'inline-flex items-baseline gap-1 align-baseline',
-        'text-[var(--color-ocean)] hover:text-[var(--color-ink)]',
-        'underline decoration-dotted underline-offset-[3px] decoration-[var(--color-ocean)]/40 hover:decoration-solid',
-        'transition-colors',
-        className,
-      )}
-      title={`Open rider PDF at page ${s.pages.join(' / ')}`}
+    <button
+      type="button"
+      onClick={open}
+      className={cn('inline-flex items-baseline gap-1 align-baseline text-left', linkStyle, className)}
+      title={`View rider PDF at page ${s.pages.join(' / ')}`}
     >
       <span>{label ?? s.name}</span>
       <span className="font-mono text-[0.85em] text-[var(--color-ocean)]/80">
         (p.{s.pages[0]})
       </span>
-    </a>
+    </button>
   );
 }
 

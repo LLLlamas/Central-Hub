@@ -2,7 +2,16 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import { mockTour, currentUsers, defaultUserKey } from '@/data/mockTour';
 import { MOCK_NOW } from '@/lib/today';
-import type { Tour, CurrentUser, Day, ID, UpdateStamp } from '@/types';
+import type {
+  Tour,
+  CurrentUser,
+  Day,
+  ID,
+  UpdateStamp,
+  InputChannel,
+  MonitorMix,
+  FOHOutput,
+} from '@/types';
 
 export type DensityMode = 'simple' | 'pro';
 
@@ -12,6 +21,15 @@ export interface ConflictResolution {
   chosenValue: string;      // free-text — picked from a value or typed in
   source?: string;          // optional label, e.g. "Confirmed with PM via email"
   note?: string;
+}
+
+/** Inline corrections to an extracted rider section, keyed by `${type}-${index}`. */
+export interface RiderSectionEdit {
+  inputList?: InputChannel[];
+  monitorMix?: MonitorMix[];
+  fohOutputs?: FOHOutput[];
+  freeText?: string;
+  freeTextEn?: string;
 }
 
 interface AppState {
@@ -35,6 +53,15 @@ interface AppState {
   resolvedConflicts: ReadonlyMap<ID, ConflictResolution>;
   resolveConflict: (id: ID, resolution: Omit<ConflictResolution, 'resolvedAt' | 'resolvedBy'>) => void;
   unresolveConflict: (id: ID) => void;
+  // Rider section review — keyed by `${sectionType}-${index}`. Approvals seed
+  // from sections whose mock status is already 'approved'. Edits are inline
+  // corrections layered over the extracted payload.
+  isSectionApproved: (key: string) => boolean;
+  getSectionApproval: (key: string) => UpdateStamp | undefined;
+  approveSection: (key: string) => void;
+  reopenSection: (key: string) => void;
+  getSectionEdit: (key: string) => RiderSectionEdit | undefined;
+  updateSectionEdit: (key: string, patch: RiderSectionEdit) => void;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -55,6 +82,19 @@ const INITIAL_LOCKED: ID[] = [
   'day_2025-09-25',
 ];
 
+// Seed: rider sections whose mock status is already 'approved' start approved,
+// stamped to when the PM reviewed revision 2 of the rider.
+const SEED_SECTION_APPROVAL: UpdateStamp = { at: '2025-09-11T10:00', by: 'Manuel González' };
+function initialSectionApprovals(): Map<string, UpdateStamp> {
+  const seed = new Map<string, UpdateStamp>();
+  mockTour.riderImports.forEach((imp) => {
+    imp.sections.forEach((s, i) => {
+      if (s.status === 'approved') seed.set(`${s.type}-${i}`, SEED_SECTION_APPROVAL);
+    });
+  });
+  return seed;
+}
+
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [userKey, setUserKey] = useState<keyof typeof currentUsers>(defaultUserKey);
   const [densityMode, setDensityMode] = useState<DensityMode>(getInitialDensityMode);
@@ -65,6 +105,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     () => new Map(),
   );
   const [dayUpdates, setDayUpdates] = useState<ReadonlyMap<ID, UpdateStamp>>(() => new Map());
+  const [sectionApprovals, setSectionApprovals] = useState<ReadonlyMap<string, UpdateStamp>>(
+    initialSectionApprovals,
+  );
+  const [sectionEdits, setSectionEdits] = useState<ReadonlyMap<string, RiderSectionEdit>>(
+    () => new Map(),
+  );
 
   useEffect(() => {
     window.localStorage.setItem(DENSITY_STORAGE_KEY, densityMode);
@@ -141,6 +187,44 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const isSectionApproved = useCallback(
+    (key: string) => sectionApprovals.has(key),
+    [sectionApprovals],
+  );
+  const getSectionApproval = useCallback(
+    (key: string) => sectionApprovals.get(key),
+    [sectionApprovals],
+  );
+  const approveSection = useCallback(
+    (key: string) => {
+      setSectionApprovals((prev) => {
+        const next = new Map(prev);
+        next.set(key, { at: MOCK_NOW, by: currentName });
+        return next;
+      });
+    },
+    [currentName],
+  );
+  const reopenSection = useCallback((key: string) => {
+    setSectionApprovals((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+  const getSectionEdit = useCallback(
+    (key: string) => sectionEdits.get(key),
+    [sectionEdits],
+  );
+  const updateSectionEdit = useCallback((key: string, patch: RiderSectionEdit) => {
+    setSectionEdits((prev) => {
+      const next = new Map(prev);
+      next.set(key, { ...next.get(key), ...patch });
+      return next;
+    });
+  }, []);
+
   const value = useMemo<AppState>(
     () => ({
       tour: mockTour,
@@ -158,8 +242,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       resolvedConflicts,
       resolveConflict,
       unresolveConflict,
+      isSectionApproved,
+      getSectionApproval,
+      approveSection,
+      reopenSection,
+      getSectionEdit,
+      updateSectionEdit,
     }),
-    [userKey, densityMode, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict],
+    [userKey, densityMode, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
