@@ -6,7 +6,7 @@ import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { MockBadge } from '@/components/provenance/MockBadge';
 import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
-import { dayTypeLabel, fmtDate } from '@/lib/format';
+import { dayTypeLabel } from '@/lib/format';
 import type { Day, DayType } from '@/types';
 import { cn } from '@/lib/cn';
 import { MOCK_TODAY } from '@/lib/today';
@@ -14,9 +14,14 @@ import { parseISO, format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, 
 
 const ALL_TYPES: DayType[] = ['show', 'off', 'travel', 'rehearsal', 'promo', 'hold'];
 
+type CalView = 'list' | 'grid';
+
 export function CalendarPage() {
   const { tour, isDayLocked, lockedDays } = useApp();
   const [filter, setFilter] = useState<Set<DayType>>(new Set(ALL_TYPES));
+  const [view, setView] = useState<CalView>(() =>
+    typeof window !== 'undefined' && window.innerWidth >= 768 ? 'grid' : 'list',
+  );
 
   const months = useMemo(() => {
     const map = new Map<string, Day[]>();
@@ -43,7 +48,8 @@ export function CalendarPage() {
     <div>
       <PageHeader
         title="Calendar"
-        description="Tour days by date. Desktop keeps the month grid; phones use a scannable list."
+        description="Tour days by date — switch between a scannable list and the month grid."
+        actions={<ViewToggle view={view} setView={setView} />}
         meta={
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] mr-1">
@@ -73,50 +79,130 @@ export function CalendarPage() {
         }
       />
 
-      <div className="hidden md:flex card px-5 py-3.5 mb-7 flex-wrap items-center gap-x-5 gap-y-2">
-        <div className="eyebrow mr-1">Legend</div>
-        {ALL_TYPES.map((t) => (
-          <div key={t} className="flex items-center gap-1.5 text-[12px] text-[var(--color-ink-2)]">
-            <span className="w-2.5 h-2.5 rounded-sm" style={{ background: `var(--color-day-${t})` }} />
-            {dayTypeLabel(t)}
-          </div>
-        ))}
-        <div className="flex items-center gap-1.5 text-[12px] text-[var(--color-ink-2)] border-l border-[var(--color-rule-soft)] pl-5 ml-2">
-          <Icon.Lock size={11} className="text-[var(--color-accent)]" />
-          Locked / closed out
-        </div>
-        <span className="font-mono text-[11px] tabular text-[var(--color-ink-3)] ml-auto">
-          {lockedDays.size} / {tour.days.length} locked
-        </span>
-      </div>
-
-      <div className="md:hidden space-y-2">
-        {tour.days
-          .filter((d) => filter.has(d.dayType))
-          .map((day) => (
-            <DayListRow key={day.id} day={day} locked={isDayLocked(day.id)} isToday={day.date === MOCK_TODAY} />
+      {view === 'grid' && (
+        <div className="card px-5 py-3.5 mb-7 flex flex-wrap items-center gap-x-5 gap-y-2">
+          <div className="eyebrow mr-1">Legend</div>
+          {ALL_TYPES.map((t) => (
+            <div key={t} className="flex items-center gap-1.5 text-[12px] text-[var(--color-ink-2)]">
+              <span className="w-2.5 h-2.5 rounded-sm" style={{ background: `var(--color-day-${t})` }} />
+              {dayTypeLabel(t)}
+            </div>
           ))}
-      </div>
+          <div className="flex items-center gap-1.5 text-[12px] text-[var(--color-ink-2)] sm:border-l border-[var(--color-rule-soft)] sm:pl-5">
+            <Icon.Lock size={11} className="text-[var(--color-accent)]" />
+            Locked / closed out
+          </div>
+          <span className="font-mono text-[11px] tabular text-[var(--color-ink-3)] ml-auto">
+            {lockedDays.size} / {tour.days.length} locked
+          </span>
+        </div>
+      )}
 
-      <div className="hidden md:block space-y-8">
-        {months.map(([monthKey, monthDays]) => (
-          <MonthGrid
-            key={monthKey}
-            monthKey={monthKey}
-            monthDays={monthDays}
-            allDays={dayByDate}
-            filter={filter}
-            isDayLocked={isDayLocked}
-            today={MOCK_TODAY}
-          />
-        ))}
-      </div>
+      {view === 'list' ? (
+        <div className="space-y-7">
+          {months.map(([monthKey, monthDays]) => {
+            const visible = monthDays.filter((d) => filter.has(d.dayType));
+            if (visible.length === 0) return null;
+            return (
+              <section key={monthKey}>
+                <h2 className="font-display text-[20px] font-bold text-[var(--color-ink)] mb-3">
+                  {format(parseISO(monthKey + '-01'), 'MMMM yyyy')}
+                </h2>
+                <div className="space-y-2">
+                  {visible.map((day) => (
+                    <DayListRow
+                      key={day.id}
+                      day={day}
+                      locked={isDayLocked(day.id)}
+                      isToday={day.date === MOCK_TODAY}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {months.map(([monthKey, monthDays]) => (
+            <MonthGrid
+              key={monthKey}
+              monthKey={monthKey}
+              monthDays={monthDays}
+              allDays={dayByDate}
+              filter={filter}
+              isDayLocked={isDayLocked}
+              today={MOCK_TODAY}
+            />
+          ))}
+        </div>
+      )}
 
       <DataSourcesPanel
         sourceKeys={['day', 'day_weather', 'venue', 'leg']}
         intro="The calendar is the spine. Days are auto-generated from the tour date range; the TM/PM sets the day type and confirms venue. All visible here is mocked."
       />
     </div>
+  );
+}
+
+function ViewToggle({ view, setView }: { view: CalView; setView: (v: CalView) => void }) {
+  return (
+    <div className="inline-flex rounded-[4px] border border-[var(--color-rule)] overflow-hidden bg-[var(--color-card)]">
+      {(['list', 'grid'] as const).map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => setView(v)}
+          aria-pressed={view === v}
+          className={cn(
+            'px-3.5 min-h-11 md:min-h-8 text-[11px] font-mono font-semibold uppercase tracking-[0.10em] transition-colors',
+            view === v
+              ? 'bg-[var(--color-ink)] text-[var(--color-paper)]'
+              : 'text-[var(--color-ink-3)] hover:bg-[var(--color-paper-2)]',
+          )}
+        >
+          {v}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function DayListRow({ day, locked, isToday }: { day: Day; locked: boolean; isToday: boolean }) {
+  const d = parseISO(day.date);
+  return (
+    <Link
+      to={`/calendar/${day.date}`}
+      className={cn(
+        'card flex items-center gap-3 px-4 py-3 min-h-[76px]',
+        isToday && 'border-[var(--color-accent)]',
+      )}
+    >
+      <div
+        className="w-1 self-stretch rounded-full shrink-0"
+        style={{ background: `var(--color-day-${day.dayType})` }}
+      />
+      <div className="flex-1 min-w-0">
+        <div className="eyebrow">{format(d, 'EEEE')}</div>
+        <div className="text-[15px] font-semibold text-[var(--color-ink)] leading-tight">
+          {format(d, 'MMMM d, yyyy')}
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <Chip tone={day.dayType} size="sm">{dayTypeLabel(day.dayType)}</Chip>
+          {isToday && <Chip tone="critical" variant="outline" size="sm">Today</Chip>}
+          {locked && (
+            <Chip tone="critical" variant="outline" size="sm">
+              <Icon.Lock size={9} /> Locked
+            </Chip>
+          )}
+          {day.city && (
+            <span className="text-[12.5px] text-[var(--color-ink-3)] truncate">{day.city}</span>
+          )}
+        </div>
+      </div>
+      <Icon.Chevron size={14} className="text-[var(--color-ink-4)] shrink-0" />
+    </Link>
   );
 }
 
@@ -165,7 +251,7 @@ function MonthGrid({
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
             <div
               key={d}
-              className="px-2 py-2 text-[10.5px] font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-ink-4)] text-center"
+              className="px-1 sm:px-2 py-2 text-[10.5px] font-mono font-semibold uppercase tracking-[0.10em] sm:tracking-[0.14em] text-[var(--color-ink-4)] text-center"
             >
               {d}
             </div>
@@ -197,7 +283,7 @@ function MonthGrid({
 
 function CellEmpty({ date }: { date: Date }) {
   return (
-    <div className="border border-[var(--color-rule-soft)] min-h-[88px] p-2 bg-[var(--color-paper)]/30 text-[var(--color-ink-5)]">
+    <div className="border border-[var(--color-rule-soft)] min-h-[56px] sm:min-h-[88px] p-1.5 sm:p-2 bg-[var(--color-paper)]/30 text-[var(--color-ink-5)]">
       <div className="text-[11px] font-mono tabular">{format(date, 'd')}</div>
     </div>
   );
@@ -219,9 +305,9 @@ function DayCell({
   const iso = format(date, 'yyyy-MM-dd');
   if (!day) {
     return (
-      <div className="border border-[var(--color-rule-soft)] min-h-[88px] p-2 bg-[var(--color-paper)]/40">
+      <div className="border border-[var(--color-rule-soft)] min-h-[56px] sm:min-h-[88px] p-1.5 sm:p-2 bg-[var(--color-paper)]/40">
         <div className="text-[11px] font-mono tabular text-[var(--color-ink-4)]">{format(date, 'd')}</div>
-        <div className="mt-1 text-[10px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-5)]">
+        <div className="mt-1 hidden sm:block text-[10px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-5)]">
           Not on tour
         </div>
       </div>
@@ -232,7 +318,7 @@ function DayCell({
     <Link
       to={`/calendar/${iso}`}
       className={cn(
-        'group block border border-[var(--color-rule-soft)] min-h-[88px] p-2 relative transition-all bg-[var(--color-card)] hover:bg-[var(--color-paper)]/40',
+        'group block border border-[var(--color-rule-soft)] min-h-[56px] sm:min-h-[88px] p-1.5 sm:p-2 relative transition-all bg-[var(--color-card)] hover:bg-[var(--color-paper)]/40',
         dimmed && 'opacity-30',
         locked && 'bg-[var(--color-paper)]/55',
         isToday && 'ring-2 ring-[var(--color-accent)]/40 ring-inset',
@@ -248,56 +334,19 @@ function DayCell({
           <span className="w-2 h-2 rounded-full" style={{ background: `var(--color-day-${day.dayType})` }} aria-label={dayTypeLabel(day.dayType)} />
         </span>
       </div>
-      <div className="text-[10.5px] font-mono font-semibold uppercase tracking-[0.10em]" style={{ color: `var(--color-day-${day.dayType})` }}>
+      <div className="hidden sm:block text-[10.5px] font-mono font-semibold uppercase tracking-[0.10em]" style={{ color: `var(--color-day-${day.dayType})` }}>
         {dayTypeLabel(day.dayType)}
       </div>
       {day.city && (
-        <div className="mt-1 text-[12px] font-semibold leading-tight text-[var(--color-ink)] line-clamp-2">
+        <div className="mt-1 hidden sm:block text-[12px] font-semibold leading-tight text-[var(--color-ink)] line-clamp-2">
           {day.city}
         </div>
       )}
       {isToday && (
-        <div className="absolute bottom-2 right-2 font-mono text-[9px] uppercase tracking-[0.10em] text-[var(--color-accent)]">
+        <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 font-mono text-[9px] uppercase tracking-[0.10em] text-[var(--color-accent)]">
           Today
         </div>
       )}
-    </Link>
-  );
-}
-
-function DayListRow({ day, locked, isToday }: { day: Day; locked: boolean; isToday: boolean }) {
-  return (
-    <Link
-      to={`/calendar/${day.date}`}
-      className={cn(
-        'card min-h-[76px] px-4 py-3 flex items-center gap-3',
-        isToday && 'border-[var(--color-accent)] bg-[var(--color-card)]',
-      )}
-    >
-      <div className="w-12 shrink-0 text-center">
-        <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-4)]">
-          {fmtDate(day.date, 'EEE')}
-        </div>
-        <div className="font-display text-[24px] font-bold leading-none tabular text-[var(--color-ink)]">
-          {fmtDate(day.date, 'd')}
-        </div>
-      </div>
-      <div className="w-1 self-stretch rounded-full" style={{ background: `var(--color-day-${day.dayType})` }} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Chip tone={day.dayType} size="sm">{dayTypeLabel(day.dayType)}</Chip>
-          {isToday && <Chip tone="critical" variant="outline" size="sm">Today</Chip>}
-          {locked && (
-            <Chip tone="critical" variant="outline" size="sm">
-              <Icon.Lock size={9} /> Locked
-            </Chip>
-          )}
-        </div>
-        <div className="mt-1 text-[13px] font-semibold text-[var(--color-ink)] truncate">
-          {day.city || dayTypeLabel(day.dayType)}
-        </div>
-      </div>
-      <Icon.Chevron size={14} className="text-[var(--color-ink-4)]" />
     </Link>
   );
 }

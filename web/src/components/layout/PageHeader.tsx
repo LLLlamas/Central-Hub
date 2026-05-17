@@ -23,7 +23,7 @@ export function PageHeader({ eyebrow, title, description, actions, meta }: PageH
             </p>
           )}
         </div>
-        {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
       {meta && <div className="mt-4">{meta}</div>}
     </header>

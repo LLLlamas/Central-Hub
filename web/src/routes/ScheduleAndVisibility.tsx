@@ -36,16 +36,6 @@ export function ScheduleAndVisibility() {
   const selected = tour.scheduleItems.find((i) => i.id === selectedId);
   const selectedVis = selected ? editedVis[selected.id] ?? selected.visibility : null;
 
-  // Preview matrix: how this item appears to each persona
-  const previewRoles = [
-    { key: 'tomas', label: 'Tomás · TM' },
-    { key: 'ramiro', label: 'Ramiro · PM' },
-    { key: 'andres', label: 'Andrés · FOH' },
-    { key: 'elena', label: 'Elena · Artist' },
-    { key: 'julio', label: 'Julio · Security' },
-    { key: 'ivan', label: 'Iván · Guitar Tech' },
-  ];
-
   return (
     <div>
       <PageHeader
@@ -66,7 +56,7 @@ export function ScheduleAndVisibility() {
 
       <div className="grid lg:grid-cols-[280px_1fr_360px] gap-5">
         {/* Day picker — left */}
-        <Card padded={false} className="overflow-hidden">
+        <Card padded={false} className="overflow-hidden min-w-0">
           <div className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
             <div className="eyebrow">Days with schedule</div>
             <div className="text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
@@ -110,7 +100,7 @@ export function ScheduleAndVisibility() {
                             >
                               {it.startTime}
                             </span>
-                            <span className="text-[12px] flex-1 truncate font-semibold">{it.title}</span>
+                            <span className="text-[12px] flex-1 min-w-0 truncate font-semibold">{it.title}</span>
                             {it.sensitive && <Icon.Lock size={10} className={active ? 'opacity-80' : 'text-[var(--color-accent)]'} />}
                           </button>
                         </li>
@@ -124,7 +114,7 @@ export function ScheduleAndVisibility() {
         </Card>
 
         {/* Center — item details + visibility editor */}
-        <div className="space-y-5">
+        <div className="space-y-5 min-w-0">
           {!selected ? (
             <EmptyState title="Select a schedule item" hint="Pick one from the left to inspect or edit." />
           ) : (
@@ -182,19 +172,20 @@ export function ScheduleAndVisibility() {
         </div>
 
         {/* Right — preview matrix */}
-        <div className="space-y-5">
+        <div className="space-y-5 min-w-0">
           <SectionCard title="Who sees this?" eyebrow="Live preview">
             {!selected || !selectedVis ? (
               <p className="text-[12px] text-[var(--color-ink-3)]">Select an item to preview.</p>
             ) : (
               <ul className="space-y-2 -my-1">
-                {previewRoles.map((r) => {
-                  const pseudo = allUsers[r.key as keyof typeof allUsers];
-                  if (!pseudo) return null;
+                {Object.values(allUsers).map((pseudo) => {
                   const lvl = resolveVisibility(selectedVis, pseudo);
                   return (
-                    <li key={r.key} className="flex items-center justify-between gap-2">
-                      <span className="text-[12.5px] text-[var(--color-ink)]">{r.label}</span>
+                    <li key={pseudo.tourPersonId} className="flex items-center justify-between gap-2">
+                      <span className="text-[12.5px] text-[var(--color-ink)] min-w-0 truncate">
+                        {pseudo.name}
+                        <span className="text-[var(--color-ink-4)]"> · {pseudo.role}</span>
+                      </span>
                       <LevelPill level={lvl} />
                     </li>
                   );

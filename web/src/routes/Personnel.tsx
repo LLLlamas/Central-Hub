@@ -121,7 +121,8 @@ export function Personnel() {
             <EmptyState title="No matches" hint="Adjust your filter or search query." />
           </div>
         ) : (
-          <table className="w-full text-[13px]">
+          <>
+          <table className="hidden md:table w-full text-[13px]">
             <thead>
               <tr className="text-left text-[10.5px] font-mono uppercase tracking-[0.14em] text-[var(--color-ink-3)] border-b border-[var(--color-rule-soft)]">
                 <th className="py-2 px-5">Person</th>
@@ -144,6 +145,17 @@ export function Personnel() {
               ))}
             </tbody>
           </table>
+          <ul className="md:hidden divide-y divide-[var(--color-rule-soft)]">
+            {filtered.map((m) => (
+              <PersonCardRow
+                key={m.id}
+                member={m}
+                group={tour.groups.find((g) => g.id === m.groupId)!}
+                tags={tour.groupTags.filter((t) => m.tagIds.includes(t.id))}
+              />
+            ))}
+          </ul>
+          </>
         )}
       </Card>
 
@@ -251,5 +263,53 @@ function PersonRow({
         </button>
       </td>
     </tr>
+  );
+}
+
+function PersonCardRow({
+  member,
+  group,
+  tags,
+}: {
+  member: TourPerson;
+  group: Group;
+  tags: { id: string; name: string }[];
+}) {
+  return (
+    <li className="px-4 py-3 flex items-start gap-3">
+      <span
+        className={cn(
+          'inline-flex items-center justify-center w-9 h-9 rounded-full text-[11px] font-mono font-bold text-[var(--color-paper)] shrink-0',
+          member.isPlaceholder && 'opacity-60',
+        )}
+        style={{ background: group.color }}
+      >
+        {member.isPlaceholder ? '?' : initials(member.person.name)}
+      </span>
+      <div className="flex-1 min-w-0">
+        <PersonName person={member} />
+        <div className="text-[12.5px] text-[var(--color-ink-2)]">{member.role}</div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <Chip size="sm" tone="neutral">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: group.color }} />
+            {group.name}
+          </Chip>
+          {tags.map((t) => (
+            <span
+              key={t.id}
+              className="px-1.5 py-[1px] text-[10px] font-mono uppercase tracking-[0.06em] rounded-[2px] bg-[var(--color-paper-2)] text-[var(--color-ink-3)]"
+            >
+              {t.name}
+            </span>
+          ))}
+        </div>
+        <div className="mt-1.5 font-mono text-[11px] tabular text-[var(--color-ink-4)]">
+          {member.startDate} → {member.endDate}
+        </div>
+      </div>
+      <button className="text-[11.5px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)] shrink-0">
+        Edit
+      </button>
+    </li>
   );
 }

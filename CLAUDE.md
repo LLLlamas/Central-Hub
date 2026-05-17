@@ -46,10 +46,11 @@ web/src/
 │   ├── visibility.ts              # ABAC resolver: persons > tags > groups > default
 │   ├── format.ts                  # Date/dayType/scheduleItem formatters
 │   ├── riderSections.ts           # §N → page-number map + RiderSectionType → §N
+│   ├── today.ts                   # Pinned demo clock — MOCK_TODAY / MOCK_NOW
 │   └── cn.ts                      # Tailwind class joiner
 ├── components/
 │   ├── ui/                        # Card, Chip, Button, Icon, Modal — primitives
-│   ├── layout/                    # Layout, PrintLayout, Sidebar, TopBar, PageHeader
+│   ├── layout/                    # Layout, PrintLayout, Sidebar, BottomNav, TopBar, PageHeader
 │   ├── provenance/                # MockTag, MockBadge, SourceTag, DataSourcesPanel, PersonName
 │   ├── CommandPalette.tsx         # Ctrl/⌘K palette + provider + hook
 │   ├── ConflictFeed.tsx           # Top-level conflict list + intro text
@@ -57,26 +58,30 @@ web/src/
 │   ├── RiderRef.tsx               # `Stage specs (p.4)` clickable link + linkifyRiderRefs helper
 │   ├── RouteMap.tsx               # SVG plot of show cities with numbered legend
 │   ├── LobbyCallLadder.tsx        # Back-cascade from doors → soundcheck → load-in → bus → lobby
+│   ├── TodaySurface.tsx           # Role-aware "Today" surface — desktop Overview hero + mobile home
+│   ├── LastUpdated.tsx            # "Last updated {date} by {name}" audit line
 │   └── VisibilityEditor.tsx
 └── routes/
     ├── TourOverview.tsx           # /
-    ├── Calendar.tsx               # /calendar (month grid with lock indicators)
+    ├── Calendar.tsx               # /calendar (List/Grid toggle; responsive month grid)
     ├── DayDetail.tsx              # /calendar/:date
     ├── Personnel.tsx              # /personnel
     ├── ScheduleAndVisibility.tsx  # /schedule
     ├── DaySheets.tsx              # /daysheet, /daysheet/:date (in-app sheet)
     ├── DaySheetPrint.tsx          # /print/daysheet/:date (printable, no chrome)
     ├── FlightIngest.tsx           # /ingest/flights
-    └── RiderIngest.tsx            # /ingest/riders
+    ├── RiderIngest.tsx            # /ingest/riders
+    └── More.tsx                   # /more (mobile overflow menu)
 ```
 
 ## The mock tour at a glance
 
-- **Tour:** `Elsa y Elmar · Full Band 2025`, 2025-09-22 → 2025-10-23, status `wrapped`
+- **Tour:** `Elsa y Elmar · Full Band 2025`, 2025-09-22 → 2025-10-23, status `in_progress`
+- **Pinned demo clock:** `lib/today.ts` hard-codes "today" as `MOCK_TODAY = 2025-09-25` (and `MOCK_NOW` 09:00). Every "today" lookup reads from it — never `new Date()`.
 - **Legs:** Mexico (`leg_mx`), USA (`leg_us`), South America (`leg_sa`)
 - **Show cities:** Mexico City, Monterrey, Guadalajara, Los Angeles, Oakland, Miami, Bogotá, Lima, Santiago, Buenos Aires
 - **Personnel (13):** 5 named from rider (Elsa Carvajal, Julian Bernal, Juan, Daniel, Manuel González PM) + 8 placeholders (Tour Manager, Audio Engineer, Lighting Engineer, VJ, MUA, Personal Asst, Staff #1, Staff #2). Last names for Juan/Daniel and full names for every placeholder are pending user input.
-- **Sep 25 (Mexico City show)** is the fully-fleshed day — most demos use it as the reference.
+- **Sep 25 (Mexico City show)** is the fully-fleshed day, and also the pinned "today" — most demos use it as the reference.
 - **Pre-locked days:** Sep 22–25 (seeded in `AppState`).
 
 ## Data quirks (worth knowing)
@@ -101,6 +106,8 @@ Rules:
 - Section-level tagging (e.g. `<MockTag source="schedule_item">` on the "Show clock" section title) is preferred over per-row when the source is uniform.
 - For free-text strings that mention `§N` (rider sections), use `linkifyRiderRefs(text)` from `components/RiderRef.tsx` — it converts each `§N` substring into a clickable `p.N` link that opens the rider PDF at that page.
 
+`<LastUpdated stamp={...} />` (`components/LastUpdated.tsx`) is a paired surface for the `audit_trail` mock source — it renders the "Last updated {date} by {name}" line and carries its own `<MockTag source="audit_trail">`. The line itself prints; only the MockTag self-hides.
+
 ## Rider section references (`§N`)
 
 Display rule: **don't show `§N` in the visible UI** (it's industry jargon). Use `<RiderRef>` to render `Stage specs (p.4)` (name + parenthesized page link) for structured refs, or `linkifyRiderRefs(text)` to swap inline `§N` substrings → `p.N` links inside descriptions/suggestions.
@@ -119,8 +126,10 @@ Lives in React Context (`state/AppState.tsx`). The single provider is mounted **
 
 Currently exposes:
 - `tour`, `user`, `userKey`, `setUserKey`, `allUsers`
+- `densityMode` (`'simple' | 'pro'`), `setDensityMode` — global Simple/Pro density toggle, persisted to localStorage, controls layout density only
 - `lockedDays`, `isDayLocked(id)`, `toggleDayLocked(id)`, `setDayLocked(id, locked)`
-- `resolvedConflicts`, `resolveConflict(id, {chosenValue, source?, note?})`, `unresolveConflict(id)`
+- `getDayLastUpdated(day)` — resolves a `Day`'s last-updated `UpdateStamp` against an in-memory `dayUpdates` overlay (falls back to seeded `day.lastUpdated`); locking/unlocking a day live-stamps it with `MOCK_NOW` + current viewer
+- `resolvedConflicts`, `resolveConflict(id, {chosenValue, source?, note?})`, `unresolveConflict(id)` — `resolveConflict` stamps `MOCK_NOW`
 
 When backend lands, replace with TanStack Query + Zustand or similar; the context shape is intentionally stable so callers don't have to change.
 
@@ -136,11 +145,12 @@ When backend lands, replace with TanStack Query + Zustand or similar; the contex
 /daysheet/:date            In-app day sheet for a date
 /ingest/flights            Flight ingest demo
 /ingest/riders             Rider ingest demo (the differentiator)
+/more                      Mobile overflow menu (links not in the bottom-nav)
 /print/daysheet/:date      PRINT route (no sidebar/topbar) — outside Layout
 ```
 
 Two layout wrappers in `router.tsx`:
-- `<Layout>` — sidebar + topbar + main content
+- `<Layout>` — sidebar (desktop) + mobile bottom-nav + topbar + main content
 - `<PrintLayout>` — bare wrapper, just paper background + Outlet (no chrome)
 
 If you add a route that should be printable / shareable / chrome-free, put it under `/print/...`.
@@ -153,6 +163,7 @@ If you add a route that should be printable / shareable / chrome-free, put it un
 - **Click handlers inside provenance tags + RiderRef use `e.stopPropagation()`** so they work when nested inside parent links.
 - **CSS Grid items that hold variable-width content need `min-w-0`** to prevent the column blowing out the grid (this bit us in `RiderIngest`'s section detail column — fixed but worth remembering).
 - **Print sheet is letter-size (8.5" wide, 816px @ 96 DPI).** `@media print` in `index.css` strips paper grain, gradients, action bar, and provenance markers. `print:hidden` on Tailwind utilities handles per-element hiding.
+- **Dense routes provide a real mobile layout, not a squeezed desktop one.** Personnel pairs a `md:hidden` card list with a `hidden md:table` table; DaySheets splits `lg:hidden` mobile vs `hidden lg:grid` desktop; Calendar exposes a user-facing List/Grid toggle (defaults to List on mobile). Navigation follows the same idea — desktop `Sidebar` vs mobile `BottomNav`.
 - **Don't write multi-line comments** unless explaining non-obvious WHY (project-wide style — keep code lean).
 
 ## How to add common things
@@ -179,11 +190,15 @@ If you add a route that should be printable / shareable / chrome-free, put it un
 
 ## Recent additions (most likely to need extension)
 
+- **Clarity + mobile redesign** (`redesign-plan.md`, landed) — `TodaySurface` is a role-aware "Today" surface used as both the desktop Tour Overview hero and the mobile home screen; `BottomNav` is the mobile tab bar (Today / Calendar / People / More) replacing the sidebar on small screens; `/more` is the mobile overflow menu. The pinned demo clock (`lib/today.ts`) makes "today" deterministic.
+- **Simple/Pro density toggle** — `densityMode` in `AppState`, toggle in the TopBar, persisted to localStorage. Affects layout density only; no data is hidden.
+- **Last-updated audit indicator** — `<LastUpdated>` renders "Last updated {date} by {name}" from a `Day.lastUpdated` `UpdateStamp` (resolved via `getDayLastUpdated`). Surfaced on TodaySurface, Day Sheet (desktop + mobile + tools-rail "Revision" card), the print day sheet, and Day Detail. Locking a day or resolving a conflict live-stamps with `MOCK_NOW`.
 - **Printable day sheet** (`/print/daysheet/:date`) — uses `mockVenues.ts` for venue/promoter info. If a new show city is added, also add a venue entry there or the print sheet's right column will be empty.
 - **Per-day lock state** — chips render in DaySheets day picker, Calendar grid, Tour Overview stat. Lock state is in-memory only; resets on refresh.
 - **Conflict feed + resolution flow** — surface on Tour Overview + drill-in on `/ingest/riders`. Resolve modal pre-fills mailto: with PM's email + conflict context.
 - **Cmd+K palette** — provider in `Layout`. Search index built from tour days + personnel + schedule items + venues + pages.
 - **Route map** — static SVG with hard-coded city lat/lngs in `RouteMap.tsx`. New cities need their lat/lng added there.
+- **Calendar List/Grid toggle** — `Calendar.tsx` defaults to Grid on desktop, List on mobile, switchable on both. List view groups days by month with headers; the month grid uses compact cells on mobile.
 - **Lobby-call ladder** — only renders for show days. Anchor is the `doors` schedule item; if missing, ladder shows a "set a doors time" empty state.
 
 ## Pending user-blocked items
@@ -199,13 +214,13 @@ Once provided, update `persons[]` in `web/src/data/mockTour.ts` and remove `isPl
 
 Tier 1 untouched:
 - Public read-only share link for day sheets (tokenized URL → `/print/daysheet/:date?token=...`)
-- Tap-to-call / WhatsApp deep links across the app (currently only on the print sheet)
 
 Tier 2:
-- Mobile-shaped day sheet view (today + tomorrow only)
 - Diff between rider versions
 - Catering allergy/diet aggregator
 - Promoter contact card as a first-class entity
 - Timezone-aware times throughout
+
+(Shipped from earlier backlogs — see "Recent additions": the mobile-shaped day sheet, mobile bottom-nav, Today screen, Simple/Pro toggle, last-updated indicator, and tap-to-call / WhatsApp / maps deep links on the Today surface, mobile day sheet, and print sheet.)
 
 See the original audit output / `potential-implementation.md` §9 for the full backlog.
