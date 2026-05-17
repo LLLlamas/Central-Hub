@@ -1,0 +1,240 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Design tokens — a tour-ops "field notebook" palette.
+   Warm paper, calm ink, accent reds for show-critical things.
+   Department colors are deliberate (not the rainbow).
+   ============================================================ */
+@theme {
+  /* Surfaces */
+  --color-paper: #f8f6f0;
+  --color-paper-2: #f1eadb;
+  --color-paper-3: #e8e0cd;
+  --color-card: #ffffff;
+
+  /* Ink */
+  --color-ink: #15130f;
+  --color-ink-2: #2a2722;
+  --color-ink-3: #55514a;
+  --color-ink-4: #8a8478;
+  --color-ink-5: #b8b1a0;
+
+  /* Rules + dividers */
+  --color-rule: #cfc8b4;
+  --color-rule-soft: #e0d9c4;
+
+  /* Accents */
+  --color-accent: #b8392b;     /* show / critical */
+  --color-accent-2: #d97a4a;
+  --color-ocean: #3c5a6a;      /* travel */
+  --color-gold: #a07a2e;       /* rehearsal */
+  --color-moss: #5a6638;       /* promo */
+  --color-sand: #e0d4ad;
+
+  /* DayType colors (semantic) */
+  --color-day-show: #b8392b;
+  --color-day-off: #8a8478;
+  --color-day-travel: #3c5a6a;
+  --color-day-rehearsal: #a07a2e;
+  --color-day-promo: #5a6638;
+  --color-day-hold: #b8b1a0;
+
+  /* Visibility colors (semantic) */
+  --color-vis-owns: #b8392b;
+  --color-vis-needs: #a07a2e;
+  --color-vis-sees: #3c5a6a;
+  --color-vis-blocked: #8a8478;
+
+  /* Fonts */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: "Fraunces", Georgia, serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", monospace;
+
+  /* Radii */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11", "cv02";
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-image:
+    radial-gradient(circle at 12% 8%, rgba(184, 57, 43, 0.025) 0, transparent 40%),
+    radial-gradient(circle at 88% 92%, rgba(60, 90, 106, 0.03) 0, transparent 45%);
+  background-attachment: fixed;
+}
+
+/* Subtle paper-grain overlay */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.22;
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(21, 19, 15, 0.05) 1px,
+    transparent 0
+  );
+  background-size: 24px 24px;
+}
+
+#root {
+  position: relative;
+  z-index: 2;
+}
+
+/* Typography helpers */
+.font-display {
+  font-family: var(--font-serif);
+  font-variation-settings: "SOFT" 50, "WONK" 1;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-rule) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--color-rule);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background-color: var(--color-ink-4); background-clip: padding-box; }
+
+/* Focus rings */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Selection */
+::selection {
+  background: var(--color-accent);
+  color: var(--color-paper);
+}
+
+/* Eyebrows — used everywhere */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+
+/* Numerics */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Page transitions */
+@keyframes pageFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-fade {
+  animation: pageFadeIn 0.24s ease-out;
+}
+
+/* ============================================================
+   Print
+   Used by /print/daysheet/:date — a clean letter-size sheet
+   handed to venues at load-in. The screen preview shows the
+   sheet centered with a paper shadow; @media print strips the
+   chrome (paper grain, gradients, action bar) and lets the
+   sheet fill the page.
+   ============================================================ */
+@page {
+  size: letter portrait;
+  margin: 0.4in 0.45in;
+}
+
+@media print {
+  /* Force a clean white background and remove the paper grain
+     + gradient layers from the global body. */
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  body::before {
+    display: none !important;
+  }
+
+  /* Hide every interactive surface that should not appear on paper. */
+  .no-print,
+  [data-no-print] {
+    display: none !important;
+  }
+
+  /* The sheet itself: edge-to-edge, no shadow, no border-radius. */
+  .print-sheet {
+    width: 100% !important;
+    max-width: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    page-break-after: avoid;
+  }
+
+  /* Keep sections together when possible. */
+  .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Page transitions are wasted on paper. */
+  .page-fade {
+    animation: none !important;
+  }
+}
+
+/* Hairline rule */
+.hairline {
+  border-top: 1px solid var(--color-rule);
+}
+
+/* Card */
+.card {
+  background: var(--color-card);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+}
+
+/* Subtle hover lift for clickable surfaces */
+.lift {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.lift:hover {
+  transform: translateY(-1px);
+  border-color: var(--color-ink-4);
+  box-shadow: 0 6px 18px rgba(21, 19, 15, 0.06);
+}

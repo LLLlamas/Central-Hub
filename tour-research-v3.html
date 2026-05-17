@@ -1,0 +1,2359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tour Operations — A Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,500..900,0..100,0..1&family=Inter:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #faf6ee;
+    --paper-2: #f1eadb;
+    --paper-3: #e8e0cd;
+    --ink: #15130f;          /* darker for contrast */
+    --ink-2: #2a2722;        /* darker body */
+    --ink-3: #55514a;        /* darker captions */
+    --ink-faint: #8a8478;
+    --rule: #cfc8b4;
+    --rule-soft: #ddd6c2;
+    --accent: #b8392b;
+    --accent-2: #d97a4a;
+    --gold: #a07a2e;
+    --moss: #5a6638;
+    --ocean: #3c5a6a;
+    --sand: #e0d4ad;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(circle at 12% 8%, rgba(184,57,43,0.03) 0, transparent 40%),
+      radial-gradient(circle at 88% 92%, rgba(60,90,106,0.04) 0, transparent 45%);
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.35;
+    background-image: radial-gradient(circle at 1px 1px, rgba(21,19,15,0.05) 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+  body > * { position: relative; z-index: 2; }
+
+  /* ===== HEADER ===== */
+  .top-bar {
+    border-bottom: 1px solid var(--rule);
+    padding: 14px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    background: var(--paper-2);
+  }
+  .top-bar .left { display: flex; gap: 18px; align-items: center; }
+
+  header.masthead {
+    padding: 72px 32px 56px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper);
+    position: relative;
+    overflow: hidden;
+  }
+  header.masthead::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    background: repeating-linear-gradient(90deg, var(--accent) 0, var(--accent) 12px, transparent 12px, transparent 24px);
+    opacity: 0.5;
+  }
+  .masthead-grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 48px;
+    align-items: end;
+  }
+  .masthead h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(48px, 9vw, 92px);
+    line-height: 0.92;
+    letter-spacing: -0.025em;
+    font-weight: 600;
+    font-variation-settings: "SOFT" 50, "WONK" 1;
+    color: var(--ink);
+  }
+  .masthead h1 em {
+    font-style: italic;
+    font-weight: 600;
+    font-variation-settings: "SOFT" 100, "WONK" 1;
+    color: var(--accent);
+  }
+  .masthead-meta {
+    text-align: right;
+    color: var(--ink-2);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.5;
+  }
+  .masthead-meta strong {
+    display: block;
+    font-family: 'Fraunces', serif;
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 4px;
+    letter-spacing: 0;
+  }
+  .masthead-tagline {
+    margin-top: 28px;
+    max-width: 700px;
+    font-size: 20px;
+    line-height: 1.45;
+    color: var(--ink);
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+  }
+
+  /* ===== NAV ===== */
+  nav.tabs {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    border-bottom: 1px solid var(--rule);
+    overflow-x: auto;
+    scrollbar-width: none;
+    backdrop-filter: blur(8px);
+    background: rgba(250, 246, 238, 0.96);
+  }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  .tabs-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    padding: 0 32px;
+  }
+  .tab {
+    flex: 0 0 auto;
+    padding: 18px 22px 16px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--ink-2);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab .num {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-faint);
+    margin-right: 8px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .tab.active .num { color: var(--accent); }
+
+  /* ===== MAIN ===== */
+  main {
+    padding: 64px 32px 96px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .panel { display: none; animation: fadeIn 0.4s ease-out; }
+  .panel.active { display: block; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ===== TYPOGRAPHY ===== */
+  h2.section-title {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(36px, 5vw, 56px);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    margin-bottom: 14px;
+    color: var(--ink);
+  }
+  h2.section-title em {
+    font-style: italic;
+    color: var(--accent);
+    font-variation-settings: "SOFT" 100, "WONK" 1;
+  }
+  .section-lede {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 20px;
+    line-height: 1.5;
+    color: var(--ink-2);
+    max-width: 720px;
+    margin-bottom: 48px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  h3 {
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 25px;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+    color: var(--ink);
+  }
+  h4 {
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 19px;
+    color: var(--ink);
+    margin-bottom: 4px;
+    line-height: 1.25;
+  }
+  p {
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+  p + p { margin-top: 12px; }
+  strong, b { font-weight: 700; color: var(--ink); }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  /* ===== CARDS ===== */
+  .grid {
+    display: grid;
+    gap: 24px;
+  }
+  .grid.g2 { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+  .grid.g3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .grid.g4 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+
+  .card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 28px;
+    transition: all 0.2s;
+  }
+  .card:hover {
+    border-color: var(--ink-faint);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(21,19,15,0.06);
+  }
+  .card .num-big {
+    font-family: 'Fraunces', serif;
+    font-size: 60px;
+    line-height: 1;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+  .card .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 12px;
+  }
+  .card p { font-size: 15px; line-height: 1.55; color: var(--ink-2); font-weight: 500; }
+
+  /* Pull-quote */
+  .pull-quote {
+    margin: 48px 0;
+    padding: 44px 56px;
+    background: var(--paper-2);
+    border-left: 4px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    position: relative;
+  }
+  .pull-quote::before {
+    content: '"';
+    position: absolute;
+    top: 0;
+    left: 24px;
+    font-family: 'Fraunces', serif;
+    font-size: 120px;
+    color: var(--accent);
+    opacity: 0.18;
+    line-height: 1;
+  }
+  .pull-quote p {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 23px;
+    line-height: 1.4;
+    color: var(--ink);
+    font-style: italic;
+  }
+  .pull-quote em {
+    font-style: normal;
+    background: linear-gradient(180deg, transparent 60%, rgba(184,57,43,0.22) 60%);
+    padding: 0 4px;
+  }
+
+  /* ===== DEPARTMENT GRID ===== */
+  .dept-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
+  .dept {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .dept:hover {
+    border-color: var(--accent);
+    background: var(--paper-2);
+  }
+  .dept.expanded {
+    background: var(--paper-2);
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px rgba(21,19,15,0.05);
+  }
+  .dept-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+  .dept-name {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    line-height: 1.1;
+    color: var(--ink);
+  }
+  .dept-roles {
+    font-size: 14.5px;
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--ink-2);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease, margin 0.35s ease;
+  }
+  .dept.expanded .dept-roles {
+    max-height: 400px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+  }
+  .dept-toggle {
+    float: right;
+    color: var(--ink-faint);
+    font-size: 18px;
+    line-height: 1;
+    transition: transform 0.2s;
+    font-weight: 600;
+  }
+  .dept.expanded .dept-toggle {
+    color: var(--accent);
+    transform: rotate(45deg);
+  }
+  .dept-section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin: 32px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  /* ===== RIDER ANATOMY ===== */
+  .rider-doc {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(21,19,15,0.06);
+  }
+  .rider-header {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 22px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .rider-header h3 {
+    color: var(--paper);
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    margin: 0;
+    font-weight: 700;
+  }
+  .rider-header .stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--sand);
+    border: 1px solid var(--sand);
+    padding: 4px 10px;
+    border-radius: 2px;
+  }
+  .rider-section { border-bottom: 1px solid var(--rule); }
+  .rider-section:last-child { border-bottom: none; }
+  .rider-section-head {
+    padding: 18px 32px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.2s;
+  }
+  .rider-section-head:hover { background: var(--paper-2); }
+  .rider-section.open .rider-section-head { background: var(--paper-2); }
+  .rider-section-head h4 {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin: 0;
+    font-size: 19px;
+  }
+  .rider-section-head h4 .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .rider-section-head .toggle {
+    color: var(--ink-faint);
+    font-size: 20px;
+    font-weight: 600;
+    transition: transform 0.2s;
+  }
+  .rider-section.open .toggle { transform: rotate(45deg); color: var(--accent); }
+  .rider-section-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease;
+    padding: 0 32px;
+  }
+  .rider-section.open .rider-section-body {
+    max-height: 1500px;
+    padding: 0 32px 24px;
+  }
+  .rider-section-body p {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+  .rider-list {
+    margin-top: 12px;
+    list-style: none;
+  }
+  .rider-list li {
+    padding: 8px 0 8px 26px;
+    position: relative;
+    font-size: 14.5px;
+    color: var(--ink-2);
+    line-height: 1.5;
+    border-bottom: 1px dashed var(--rule-soft);
+    font-weight: 500;
+  }
+  .rider-list li:last-child { border-bottom: none; }
+  .rider-list li::before {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 14px;
+    width: 12px;
+    height: 2px;
+    background: var(--accent);
+  }
+  .rider-list li strong {
+    color: var(--ink);
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 15.5px;
+  }
+
+  /* ===== APP DEEP-DIVE ===== */
+  .app-deep {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 32px;
+  }
+  .app-deep-head {
+    padding: 30px 32px;
+    border-bottom: 1px solid var(--rule);
+    background: linear-gradient(135deg, var(--paper) 0%, var(--paper-2) 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .app-deep-head h3 {
+    font-size: 38px;
+    line-height: 1;
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+  }
+  .app-deep-head .vendor {
+    font-size: 13px;
+    color: var(--ink-2);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+  }
+  .app-deep-head .badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 11px;
+    border-radius: 100px;
+    letter-spacing: 0.04em;
+    border: 1.5px solid;
+  }
+  .badge.incumbent { color: var(--ocean); border-color: var(--ocean); background: rgba(60,90,106,0.07); }
+  .badge.modern { color: var(--accent); border-color: var(--accent); background: rgba(184,57,43,0.07); }
+  .badge.niche { color: var(--ink-2); border-color: var(--ink-faint); background: var(--paper-2); }
+  .badge.gold { color: var(--gold); border-color: var(--gold); background: rgba(160,122,46,0.08); }
+
+  .app-deep-body { padding: 30px 32px; }
+  .app-section { margin-bottom: 26px; }
+  .app-section:last-child { margin-bottom: 0; }
+  .app-section h4 {
+    margin-bottom: 8px;
+    color: var(--accent);
+    font-size: 12.5px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .app-section p {
+    font-size: 15.5px;
+    line-height: 1.6;
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+  .app-section ul {
+    list-style: none;
+    margin-top: 8px;
+  }
+  .app-section ul li {
+    padding: 6px 0 6px 22px;
+    position: relative;
+    font-size: 15px;
+    color: var(--ink-2);
+    line-height: 1.5;
+    font-weight: 500;
+  }
+  .app-section ul li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .app-screen-mock {
+    background: var(--ink);
+    border-radius: 6px;
+    padding: 18px 20px;
+    margin-top: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    color: var(--paper);
+    line-height: 1.8;
+    font-weight: 500;
+  }
+  .app-screen-mock .mock-line { padding: 2px 0; }
+  .app-screen-mock .mock-line.head {
+    color: var(--accent-2);
+    font-weight: 700;
+    border-bottom: 1px dashed rgba(224,212,173,0.3);
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+    letter-spacing: 0.05em;
+  }
+  .app-screen-mock .mock-line.indent { padding-left: 18px; color: var(--sand); }
+
+  .pros-cons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 16px;
+  }
+  @media (max-width: 600px) { .pros-cons { grid-template-columns: 1fr; } }
+  .pros, .cons {
+    padding: 20px;
+    border-radius: 6px;
+  }
+  .pros { background: rgba(90,102,56,0.08); border: 1px solid rgba(90,102,56,0.25); }
+  .cons { background: rgba(184,57,43,0.06); border: 1px solid rgba(184,57,43,0.22); }
+  .pros h5, .cons h5 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    font-weight: 700;
+  }
+  .pros h5 { color: var(--moss); }
+  .cons h5 { color: var(--accent); }
+  .pros ul, .cons ul { list-style: none; }
+  .pros ul li, .cons ul li {
+    padding: 5px 0 5px 18px;
+    position: relative;
+    font-size: 14px;
+    color: var(--ink-2);
+    line-height: 1.45;
+    font-weight: 500;
+  }
+  .pros ul li::before { content: '+'; position: absolute; left: 0; color: var(--moss); font-weight: 800; }
+  .cons ul li::before { content: '−'; position: absolute; left: 0; color: var(--accent); font-weight: 800; }
+
+  /* ===== INGEST ===== */
+  .ingest-method {
+    display: grid;
+    grid-template-columns: 76px 1fr;
+    gap: 24px;
+    padding: 28px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    margin-bottom: 14px;
+    background: var(--paper);
+    transition: all 0.2s;
+  }
+  .ingest-method:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px rgba(21,19,15,0.05);
+  }
+  .ingest-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+  }
+  .ingest-method.featured {
+    background: linear-gradient(135deg, rgba(184,57,43,0.05), rgba(217,122,74,0.05));
+    border-color: var(--accent);
+  }
+  .ingest-method.featured .ingest-icon {
+    background: var(--accent);
+    color: var(--paper);
+    border-color: var(--accent);
+  }
+  .ingest-body h4 {
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+  .ingest-body .source-line {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ink-2);
+    margin-bottom: 12px;
+    letter-spacing: 0.04em;
+  }
+  .ingest-body p { font-size: 15px; line-height: 1.55; font-weight: 500; }
+  .ingest-flow {
+    margin-top: 14px;
+    padding: 14px 18px;
+    background: var(--paper-2);
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    color: var(--ink-2);
+    line-height: 1.85;
+    font-weight: 500;
+  }
+  .ingest-flow .step {
+    color: var(--accent);
+    margin-right: 10px;
+    font-weight: 700;
+  }
+
+  /* ===== CRITICALITY ===== */
+  .crit-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .crit-tile {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 20px;
+    background: var(--paper);
+    border-top-width: 5px;
+  }
+  .crit-tile.t1 { border-top-color: var(--accent); }
+  .crit-tile.t2 { border-top-color: var(--gold); }
+  .crit-tile.t3 { border-top-color: var(--ocean); }
+  .crit-tile.t4 { border-top-color: var(--ink-faint); }
+  .crit-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .t1 .crit-label { color: var(--accent); }
+  .t2 .crit-label { color: var(--gold); }
+  .t3 .crit-label { color: var(--ocean); }
+  .t4 .crit-label { color: var(--ink-faint); }
+  .crit-tile h4 { font-size: 19px; margin-bottom: 6px; }
+  .crit-tile p {
+    font-size: 14.5px;
+    line-height: 1.5;
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+  .crit-tile .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-2);
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--rule);
+    font-weight: 600;
+  }
+
+  /* ===== BUILD ROWS ===== */
+  .build-row {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    gap: 24px;
+    padding: 22px 26px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    background: var(--paper);
+    cursor: pointer;
+    transition: all 0.2s;
+    align-items: start;
+  }
+  .build-row:hover {
+    border-color: var(--accent);
+    background: var(--paper-2);
+  }
+  .build-row.open {
+    border-color: var(--accent);
+    background: var(--paper-2);
+  }
+  .build-num {
+    font-family: 'Fraunces', serif;
+    font-size: 36px;
+    line-height: 1;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .build-body { width: 100%; }
+  .build-title h4 {
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+  .build-blurb {
+    font-size: 14.5px;
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+  .build-detail {
+    grid-column: 2 / 4;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease, margin 0.4s ease;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+  .build-row.open .build-detail {
+    max-height: 600px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--rule);
+  }
+  .build-detail strong { color: var(--accent); font-weight: 700; }
+  .build-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    text-align: right;
+    align-self: center;
+  }
+  .build-tag span {
+    display: block;
+    color: var(--accent);
+    font-size: 14px;
+    font-family: 'Fraunces', serif;
+    margin-bottom: 2px;
+    font-weight: 700;
+  }
+
+  /* ===== TIMELINE ===== */
+  .timeline {
+    position: relative;
+    padding-left: 32px;
+    border-left: 2px solid var(--rule);
+    margin-left: 8px;
+  }
+  .tl-event {
+    margin-bottom: 28px;
+    position: relative;
+  }
+  .tl-event::before {
+    content: '';
+    position: absolute;
+    left: -41px;
+    top: 6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--paper);
+    border: 3px solid var(--accent);
+  }
+  .tl-time {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    color: var(--accent);
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .tl-event h4 { font-size: 18px; margin-bottom: 4px; }
+  .tl-event p {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+  .tl-event em {
+    background: rgba(184,57,43,0.14);
+    padding: 0 4px;
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  /* ===== FOOTER ===== */
+  footer {
+    border-top: 1px solid var(--rule);
+    padding: 40px 32px;
+    text-align: center;
+    background: var(--paper-2);
+  }
+  footer .credits {
+    font-family: 'Fraunces', serif;
+    font-size: 14.5px;
+    color: var(--ink-2);
+    font-style: italic;
+    font-weight: 500;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  footer .nav-hint {
+    margin-top: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--ink-3);
+  }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 700px) {
+    .top-bar { padding: 12px 20px; font-size: 11px; }
+    .top-bar .left .hide-mobile { display: none; }
+    header.masthead { padding: 48px 20px 36px; }
+    .masthead-grid { grid-template-columns: 1fr; gap: 24px; }
+    .masthead-meta { text-align: left; }
+    main { padding: 40px 20px 64px; }
+    .tabs-inner { padding: 0 20px; }
+    .tab { padding: 14px 14px 12px; font-size: 12px; }
+    .pull-quote { padding: 28px 24px; }
+    .pull-quote p { font-size: 18px; }
+    .ingest-method { grid-template-columns: 1fr; gap: 14px; padding: 22px; }
+    .build-row { grid-template-columns: 40px 1fr; padding: 18px 20px; }
+    .build-tag { display: none; }
+    .build-detail { grid-column: 1 / 3; }
+    .app-deep-head, .app-deep-body { padding: 24px; }
+    .rider-section-head, .rider-section.open .rider-section-body { padding-left: 20px; padding-right: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="left">
+    <span>A FIELD GUIDE</span>
+    <span class="hide-mobile">·</span>
+    <span class="hide-mobile">FOR BUILDING TOUR-OPS SOFTWARE</span>
+  </div>
+  <div>VOL. 03</div>
+</div>
+
+<header class="masthead">
+  <div class="masthead-grid">
+    <div>
+      <h1>How a tour <em>actually</em><br>moves information.</h1>
+    </div>
+    <div class="masthead-meta">
+      <strong>Edition Three</strong>
+      Arena &amp; stadium scale<br>
+      Workflow &amp; ingest focus<br>
+      Deep dives on riders,<br>
+      Master Tour, and Daysheets
+    </div>
+  </div>
+  <p class="masthead-tagline">
+    Where info lives on a modern tour. What's inside the documents. How the top apps work. Where a smarter hub fits in.
+  </p>
+</header>
+
+<nav class="tabs">
+  <div class="tabs-inner" id="tabs">
+    <button class="tab active" data-target="overview"><span class="num">01</span>Start here</button>
+    <button class="tab" data-target="people"><span class="num">02</span>Who's involved</button>
+    <button class="tab" data-target="riders"><span class="num">03</span>Riders</button>
+    <button class="tab" data-target="lifecycle"><span class="num">04</span>Lifecycle</button>
+    <button class="tab" data-target="apps"><span class="num">05</span>Apps</button>
+    <button class="tab" data-target="ingest"><span class="num">06</span>Easy input</button>
+    <button class="tab" data-target="critical"><span class="num">07</span>What matters</button>
+    <button class="tab" data-target="day"><span class="num">08</span>Show day</button>
+    <button class="tab" data-target="hub"><span class="num">09</span>The hub</button>
+  </div>
+</nav>
+
+<main>
+
+<!-- ============ 01 OVERVIEW ============ -->
+<section class="panel active" id="overview">
+  <h2 class="section-title">Start <em>here</em>.</h2>
+  <p class="section-lede">An arena tour moves 60–200 people and 50–90+ trucks city to city, rebuilding a temporary city every day. The info holding it together lives in a half-dozen disconnected places. The hub replaces that scatter with one role-aware system.</p>
+
+  <div class="grid g4">
+    <div class="card">
+      <div class="num-big">90+</div>
+      <div class="label">Trucks · Eras Tour</div>
+      <p>A modern stadium tour rivals regional freight carriers.</p>
+    </div>
+    <div class="card">
+      <div class="num-big">5</div>
+      <div class="label">Tour phases</div>
+      <p>Booking, advance, rehearsals, show day, settlement.</p>
+    </div>
+    <div class="card">
+      <div class="num-big">0</div>
+      <div class="label">Apps own all 5</div>
+      <p>Master Tour and Daysheets dominate phases 3–4. The rest is Excel.</p>
+    </div>
+    <div class="card">
+      <div class="num-big">3</div>
+      <div class="label">Permission tiers</div>
+      <p>Admin, dept head, crew. Plus per-item visibility.</p>
+    </div>
+  </div>
+
+  <div class="pull-quote">
+    <p>The hub's job isn't to add another tool. It's to <em>kill the tribal-knowledge gap</em> between phases — replacing the tour manager's mental stitching with structured data.</p>
+  </div>
+
+  <div class="grid g3" style="margin-top: 32px;">
+    <div>
+      <span class="eyebrow">How to read this</span>
+      <p style="font-size: 16px;">Tap the tabs above. Anything with a + sign expands. Keyboard 1–9 jumps tabs.</p>
+    </div>
+    <div>
+      <span class="eyebrow">New in v3</span>
+      <p style="font-size: 16px;">Tighter writing, thicker text, higher contrast. Same content depth.</p>
+    </div>
+    <div>
+      <span class="eyebrow">Read this one first</span>
+      <p style="font-size: 16px;">Section 06 — <strong>Easy Input</strong>. Data entry is where adoption is won or lost.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 PEOPLE ============ -->
+<section class="panel" id="people">
+  <h2 class="section-title">Who's <em>actually</em> on a tour.</h2>
+  <p class="section-lede">A tour is a small org with department heads who each own a slice of the data. Tap any card to see who's inside.</p>
+
+  <div class="dept-section-label">Leadership</div>
+  <div class="dept-grid">
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">LDR · 01</div>
+      <div class="dept-name">Tour Manager</div>
+      <div class="dept-roles">Runs the people side: travel, hotels, money, day sheets, the artist's day. Gets the band paid. Single point of accountability for the touring party.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">LDR · 02</div>
+      <div class="dept-name">Production Manager</div>
+      <div class="dept-roles">Runs the show side: load-in, trucking, labor, audio, lights, video, rigging, power, schedule. The crew's boss. Owns rehearsals, the truck pack, the show clock.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">LDR · 03</div>
+      <div class="dept-name">Stage Manager</div>
+      <div class="dept-roles">Runs the deck day-of. Load-in, on-site labor, truck pack, cues. Often hired by the artist on big tours.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">LDR · 04</div>
+      <div class="dept-name">Production Asst</div>
+      <div class="dept-roles">The "PA." Catering, hospitality, runners, laundry, the go-to for anything fast. Most TMs started here.</div>
+    </div>
+  </div>
+
+  <div class="dept-section-label">Technical departments</div>
+  <div class="dept-grid">
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">A · AUDIO</div>
+      <div class="dept-name">Audio</div>
+      <div class="dept-roles">FOH engineer mixes for the crowd. Monitor engineer mixes the band's in-ears. RF tech handles wireless. System techs fly and tune the PA.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">L · LIGHTS</div>
+      <div class="dept-name">Lighting</div>
+      <div class="dept-roles">LD programs the show. Board op runs cues live. Dimmer techs handle power. Followspot ops point spotlights at the artist.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">V · VIDEO</div>
+      <div class="dept-name">Video</div>
+      <div class="dept-roles">Director, camera ops, LED wall techs, IMAG. Often the most expensive department on a stadium tour.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">B · BACKLINE</div>
+      <div class="dept-name">Backline</div>
+      <div class="dept-roles">Guitar, drum, keys, bass techs. Prep instruments, make in-show changes, fix broken strings on the fly.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">RIG</div>
+      <div class="dept-name">Rigging</div>
+      <div class="dept-roles">Fly the entire rig from the venue's ceiling beams. First in, last out. Highest safety stakes.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">AUTO</div>
+      <div class="dept-name">Automation</div>
+      <div class="dept-roles">Moving scenic: lifts, winches, risers, automated set pieces. Driven by timecode with lights and video.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">SFX</div>
+      <div class="dept-name">Pyro &amp; SFX</div>
+      <div class="dept-roles">Pyro, cryo, confetti, lasers. Permits and fire-marshal sign-offs happen during advance.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">PB</div>
+      <div class="dept-name">Playback</div>
+      <div class="dept-roles">"Tracks." Runs supplemental audio (pads, vocal stacks, click) and often fires the timecode that drives lights and video.</div>
+    </div>
+  </div>
+
+  <div class="dept-section-label">Support &amp; logistics</div>
+  <div class="dept-grid">
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">WB</div>
+      <div class="dept-name">Wardrobe</div>
+      <div class="dept-roles">Costumes, quick changes, laundry. Often 2–4 people on big productions.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">SEC</div>
+      <div class="dept-name">Security</div>
+      <div class="dept-roles">Personal security for the artist plus venue/crowd interface. Holds threat assessments others shouldn't see.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">CTR</div>
+      <div class="dept-name">Catering</div>
+      <div class="dept-roles">Touring chef plus assistants. Two meals daily for 60–200 people. Tracks dietary restrictions per person.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">MRC</div>
+      <div class="dept-name">Merch</div>
+      <div class="dept-roles">Touring seller plus venue reps. Inventory, settlement, restocks. Meaningful revenue line.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">CTN</div>
+      <div class="dept-name">Content</div>
+      <div class="dept-roles">Touring photo and video for socials. On smaller tours, often replaces a dedicated LD.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">TRK</div>
+      <div class="dept-name">Trucking</div>
+      <div class="dept-roles">12 to 90+ CDL-A drivers in overnight convoys hauling rigging, audio, lights, video, scenic, backline.</div>
+    </div>
+  </div>
+
+  <div class="dept-section-label">Off-tour, involved daily</div>
+  <div class="dept-grid">
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">MGT</div>
+      <div class="dept-name">Artist Mgmt</div>
+      <div class="dept-roles">Career-level decision-makers. Sign off on the tour, weigh in on routing, get the nightly report.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">AGT</div>
+      <div class="dept-name">Booking Agent</div>
+      <div class="dept-roles">Sells the shows. Produces routing and deal memos. CAA, WME, UTA, Wasserman.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">BIZ</div>
+      <div class="dept-name">Business Mgmt</div>
+      <div class="dept-roles">Tour accountant. Budget, payroll, settlements. Usually a separate firm from artist management.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">PROM</div>
+      <div class="dept-name">Promoter Rep</div>
+      <div class="dept-roles">Live Nation or AEG. Paid by the promoter, often travels with the tour. Settles each show with the TM.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">TRV</div>
+      <div class="dept-name">Travel Agent</div>
+      <div class="dept-roles">Flights, ground, hotel blocks. Touring-specialized agents handle the chaos when plans collapse.</div>
+    </div>
+    <div class="dept" data-dept>
+      <span class="dept-toggle">+</span>
+      <div class="dept-code">PR</div>
+      <div class="dept-name">Publicist</div>
+      <div class="dept-roles">Press, radio, TV. Owns the artist's promo day at each stop.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 RIDERS ============ -->
+<section class="panel" id="riders">
+  <h2 class="section-title">The <em>rider</em>.</h2>
+  <p class="section-lede">The artist's contract addendum: technical and hospitality requirements the venue must fulfill. Legally binding, typically 5–15 pages. Where most version-control disasters happen — and where the hub can win biggest. Tap any section to expand.</p>
+
+  <div class="rider-doc">
+    <div class="rider-header">
+      <h3>Sample Tech &amp; Hospitality Rider</h3>
+      <span class="stamp">REV 8 · LIVE LINK</span>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">01</span> Cover &amp; preamble</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>The opening page. Who's playing, who to call, what era of the rider this is.</p>
+        <ul class="rider-list">
+          <li><strong>Artist name &amp; logo</strong> — bold, top of page</li>
+          <li><strong>Revision number &amp; date</strong> — critical; old revs cause real problems</li>
+          <li><strong>Contact block</strong> — TM, PM, FOH, backline tech (cell + email)</li>
+          <li><strong>Genre &amp; reference</strong> — link to a recording so the house engineer has a sonic reference</li>
+          <li><strong>Travel party size</strong> — people, buses, trucks</li>
+          <li><strong>Binding statement</strong> — "this rider is part of the contract"</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">02</span> Stage plot</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Bird's-eye diagram of the stage. Where every player stands, every instrument lives, every mic goes. Most-referenced page on show day.</p>
+        <ul class="rider-list">
+          <li><strong>Band positions</strong> — "Lead Vox," "Guitar 1," "Drums," oriented from performer's POV</li>
+          <li><strong>Backline placement</strong> — amps, cabs, drum kit, keys, to scale</li>
+          <li><strong>Monitor positions</strong> — wedges numbered ("Mix 1 — Lead Vox")</li>
+          <li><strong>Mics &amp; DI boxes</strong> — type and location</li>
+          <li><strong>Risers</strong> — drum, keys, dimensions noted</li>
+          <li><strong>AC drops</strong> — where power lands</li>
+          <li><strong>Cable runs</strong> — for tidiness and trip safety</li>
+          <li><strong>Sub-snake locations</strong> — stage boxes for fast cabling</li>
+          <li><strong>Audience direction</strong> — clearly marked so nobody flips the plot</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">03</span> Input list</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Numbered list of every audio source into the console. Arena rock: 40–80 inputs. Pop with playback: 120+.</p>
+        <ul class="rider-list">
+          <li><strong>Channel number</strong> — sequential, never skip</li>
+          <li><strong>Source</strong> — "Kick In," "Snare Top," "Lead Vox"</li>
+          <li><strong>Mic preference</strong> — Beta 91A, C414, e906</li>
+          <li><strong>Stand</strong> — boom, short, clip, none</li>
+          <li><strong>48V phantom</strong> — on/off (critical for condensers)</li>
+          <li><strong>Insert / outboard</strong> — gates, comps, EQs</li>
+          <li><strong>Stage box assignment</strong> — which sub-snake</li>
+          <li><strong>Notes</strong> — "Ride is left of kit," "Keys are stereo"</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">04</span> Front-of-house (FOH)</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>What the audience-mix engineer needs from the back of the room.</p>
+        <ul class="rider-list">
+          <li><strong>Console</strong> — DiGiCo SD12, Avid S6L, Yamaha CL5 (with acceptable alternates)</li>
+          <li><strong>PA</strong> — d&amp;b, L-Acoustics, Meyer; SPL targets; coverage</li>
+          <li><strong>Subs</strong> — quantity, config (cardioid, end-fire), placement</li>
+          <li><strong>Outboard</strong> — reverbs, delays, comps</li>
+          <li><strong>FOH position</strong> — in the audience field, never under a balcony</li>
+          <li><strong>Platform size</strong> — 10×10 minimum; larger for cameras</li>
+          <li><strong>Talkback to stage</strong> — to monitor world</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">05</span> Monitors</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Everything the band needs to hear themselves. Essentially a separate console world.</p>
+        <ul class="rider-list">
+          <li><strong>Monitor console</strong> — usually matched to FOH</li>
+          <li><strong>Wedges</strong> — number, model, mix assignment</li>
+          <li><strong>IEMs</strong> — Shure PSM or Sennheiser; number of mixes</li>
+          <li><strong>Drum-fill / side-fills</strong> — for stereo stage coverage</li>
+          <li><strong>RF coordination</strong> — frequencies, antenna placement, scan time</li>
+          <li><strong>Talkback to FOH</strong> — for the monitor engineer</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">06</span> Lighting</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Often a separate document. Owned by the LD.</p>
+        <ul class="rider-list">
+          <li><strong>Light plot</strong> — fixture types and truss positions</li>
+          <li><strong>Front / back wash</strong> — color and intensity targets</li>
+          <li><strong>Movers</strong> — quantity, brand, positions</li>
+          <li><strong>Followspots</strong> — number, throw distance, position</li>
+          <li><strong>Console</strong> — grandMA, Hog, ChamSys</li>
+          <li><strong>Haze / fog</strong> — required for beam visibility</li>
+          <li><strong>Power</strong> — total wattage, distro needs</li>
+          <li><strong>Truss height</strong> — minimum ceiling clearance</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">07</span> Rigging</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Where weight hangs from the ceiling. Approved by the venue's rigger before the truck rolls in.</p>
+        <ul class="rider-list">
+          <li><strong>Hang points</strong> — coordinates on a venue plan</li>
+          <li><strong>Point loads</strong> — weight per point (lbs/kg)</li>
+          <li><strong>Total load</strong> — within venue's certified capacity</li>
+          <li><strong>Motor count &amp; chain length</strong> — chain motors that fly the rig</li>
+          <li><strong>Bridles</strong> — when beams don't align with desired points</li>
+          <li><strong>Trim heights</strong> — final hung height per truss</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">08</span> Backline split</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Two lists: gear the tour brings, gear the venue must provide. The most-edited section between revs.</p>
+        <ul class="rider-list">
+          <li><strong>Drums</strong> — kit, sizes, hardware, throne, cymbals</li>
+          <li><strong>Guitar amps</strong> — Fender, Marshall, Mesa, Vox; specific models</li>
+          <li><strong>Bass rig</strong> — head and cab</li>
+          <li><strong>Keys</strong> — Nord, Yamaha; stand requirements</li>
+          <li><strong>Risers</strong> — dimensions</li>
+          <li><strong>Shared items</strong> — cymbal stands, mic stands, music stands</li>
+          <li><strong>Substitutions</strong> — clearly marked as OK or not</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">09</span> Power</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Crucial when the tour brings its own PA, lights, and video. Confirmed before trucks roll in.</p>
+        <ul class="rider-list">
+          <li><strong>Service amperage</strong> — 200A, 400A, 600A, three-phase</li>
+          <li><strong>Distribution</strong> — Cam-Lok, Powerlock; disconnect location</li>
+          <li><strong>Phase balance</strong> — even loading across legs</li>
+          <li><strong>Generator backup</strong> — required outdoors</li>
+          <li><strong>Stage drops</strong> — quad boxes for backline</li>
+          <li><strong>Isolated audio power</strong> — separate from lighting to avoid hum</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">10</span> Local labor</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Number of stagehands the venue must call, by department, with start times. Drives a chunk of show cost.</p>
+        <ul class="rider-list">
+          <li><strong>Riggers</strong> — 4–8 for arena, work first</li>
+          <li><strong>Loaders</strong> — cases off and on trucks</li>
+          <li><strong>Audio hands</strong> — PA setup</li>
+          <li><strong>Lighting hands</strong> — truss build, fixture hang</li>
+          <li><strong>Video hands</strong> — LED wall assembly</li>
+          <li><strong>Backline hands</strong> — wheel cases, set drums</li>
+          <li><strong>Stewards / push crew</strong> — changeover and scenic</li>
+          <li><strong>Followspot ops</strong> — for the show</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">11</span> Schedule &amp; load-in</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Proposed running order. Venue PM may push back. Final version becomes the day sheet.</p>
+        <ul class="rider-list">
+          <li><strong>Truck arrival</strong> — earliest hour</li>
+          <li><strong>Load-in start</strong> — when riggers begin</li>
+          <li><strong>Build phases</strong> — rigging, audio, lights, video</li>
+          <li><strong>Soundcheck</strong> — 60–90 min window</li>
+          <li><strong>Doors</strong> — public entry</li>
+          <li><strong>Opener set</strong> — start, length, changeover</li>
+          <li><strong>Headliner set</strong> — start, length, encore</li>
+          <li><strong>Curfew</strong> — hard stop</li>
+          <li><strong>Load-out</strong> — completion target</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">12</span> Dressing rooms</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Where the rider shifts from technical to personal.</p>
+        <ul class="rider-list">
+          <li><strong>Number of rooms</strong> — artist, band, crew, support, production office</li>
+          <li><strong>Furnishings</strong> — couches, tables, mirrors, hangers</li>
+          <li><strong>Climate</strong> — temperature targets</li>
+          <li><strong>Towels</strong> — clean white, specific count</li>
+          <li><strong>Showers</strong> — hot water, accessible</li>
+          <li><strong>Wi-Fi</strong> — credentials provided</li>
+          <li><strong>Signage</strong> — directions backstage</li>
+          <li><strong>Production office</strong> — desks, printer, internet</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">13</span> Food &amp; beverage</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Two crew meals daily on show days, plus dressing room snacks and drinks.</p>
+        <ul class="rider-list">
+          <li><strong>Crew lunch &amp; dinner</strong> — count, time windows, hot food, veg/vegan options</li>
+          <li><strong>Dietary</strong> — gluten-free, dairy-free, allergies, kosher, halal</li>
+          <li><strong>Dressing-room snacks</strong> — fruit, nuts, bars, deli platters</li>
+          <li><strong>Beverages</strong> — water, coffee, tea, soda, sometimes alcohol</li>
+          <li><strong>Post-show meal</strong> — for the band after</li>
+          <li><strong>Buy-out</strong> — cash per person if catering can't accommodate</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">14</span> Passes &amp; credentials</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Who gets what level of access. Printed laminates with photos on big tours.</p>
+        <ul class="rider-list">
+          <li><strong>All Access (AAA)</strong> — anywhere, any time</li>
+          <li><strong>Working pass</strong> — backstage during work hours</li>
+          <li><strong>VIP / meet-and-greet</strong> — limited pre-show access</li>
+          <li><strong>Crew laminates</strong> — by department</li>
+          <li><strong>Press / photo</strong> — pit-only, often time-limited</li>
+          <li><strong>Counts per pass type</strong> — how many of each</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">15</span> Parking, security, logistics</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Unglamorous but essential. Determines whether load-in goes smoothly.</p>
+        <ul class="rider-list">
+          <li><strong>Truck parking</strong> — count, shore power</li>
+          <li><strong>Bus parking</strong> — shore power, water, dump access</li>
+          <li><strong>Fuel</strong> — nearby diesel, gas station distance</li>
+          <li><strong>Truck routing</strong> — turning radius, height, dock height</li>
+          <li><strong>Security plan</strong> — barricade, pit security, t-shirt count</li>
+          <li><strong>Runner</strong> — local hire who drives crew on errands</li>
+          <li><strong>Hospital</strong> — nearest ER location</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rider-section" data-rider>
+      <div class="rider-section-head">
+        <h4><span class="num">16</span> Settlement</h4>
+        <span class="toggle">+</span>
+      </div>
+      <div class="rider-section-body">
+        <p>Often a separate doc. Terms for end-of-night settlement.</p>
+        <ul class="rider-list">
+          <li><strong>Deal terms</strong> — flat, percentage, or door deal</li>
+          <li><strong>Ticket scaling</strong> — price tiers, holds, comps</li>
+          <li><strong>Approved expenses</strong> — what's artist's vs promoter's</li>
+          <li><strong>Settlement timing</strong> — usually 30–45 min after curfew</li>
+          <li><strong>Payment method</strong> — wire, certified check, cash</li>
+          <li><strong>Tax docs</strong> — W-9, withholding for foreign acts</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="pull-quote" style="margin-top: 48px;">
+    <p>The biggest pain in the rider workflow is <em>version drift</em>. Artist updates rev 7. PM emails rev 7 to the venue. Venue's lighting sub still has rev 5. Show day, three versions of the truth show up. Whoever owns the rider's <em>live link</em> wins this category.</p>
+  </div>
+
+  <div class="grid g3" style="margin-top: 48px;">
+    <div class="card">
+      <span class="eyebrow">How it's stored today</span>
+      <h4 style="font-size: 19px; margin-bottom: 10px;">Dropbox folders</h4>
+      <p>PM keeps a folder per tour. Tech rider PDF, stage plot PDF, input list spreadsheet, hospitality Word doc. All emailed as attachments. New version goes in the folder; old versions don't get deleted.</p>
+    </div>
+    <div class="card">
+      <span class="eyebrow">Where it should live</span>
+      <h4 style="font-size: 19px; margin-bottom: 10px;">One live link per show</h4>
+      <p>Every show has a URL or QR code that always points to the current rider, plot, and input list. PM updates rev 9, holders see rev 9 next time they open it.</p>
+    </div>
+    <div class="card">
+      <span class="eyebrow">What this unlocks</span>
+      <h4 style="font-size: 19px; margin-bottom: 10px;">Send once, update forever</h4>
+      <p>Advance email goes out at week 8 with the link. Week 4, artist tweaks inputs. Week 1, truck count changes. Show day, venue opens the link, gets latest. No re-sends. No "which version?" calls.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 LIFECYCLE ============ -->
+<section class="panel" id="lifecycle">
+  <h2 class="section-title">Five <em>phases</em>.</h2>
+  <p class="section-lede">Each has its own source of truth. Hand-offs <em>between</em> phases are where info gets lost. A good hub owns the hand-offs.</p>
+
+  <div class="grid g2" style="gap: 24px;">
+    <div class="card">
+      <span class="eyebrow">Phase 01 · Booking</span>
+      <h3>Agent sells the shows</h3>
+      <p style="margin-top: 8px;"><strong>When:</strong> 12 → 6 months out</p>
+      <p><strong>Source of truth:</strong> deal memos + agent's routing spreadsheet</p>
+      <p><strong>Output:</strong> dates, venues, capacities, guarantees, splits</p>
+      <p style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--rule); color: var(--accent); font-size: 14px;"><strong>Pain:</strong> emailed spreadsheet → manually retyped into the tour app. First lossy hand-off.</p>
+    </div>
+
+    <div class="card">
+      <span class="eyebrow">Phase 02 · Advance</span>
+      <h3>PM prepares each show</h3>
+      <p style="margin-top: 8px;"><strong>When:</strong> 8–12 weeks out, intensifies at 2</p>
+      <p><strong>Source of truth:</strong> advance email threads + latest rider PDF</p>
+      <p><strong>What:</strong> tour PM contacts every venue. Sends rider, plot, input list. Confirms trucks, parking, labor, power, rigging.</p>
+      <p style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--rule); color: var(--accent); font-size: 14px;"><strong>Pain:</strong> rider versioning. Old PDFs float around. Showvella and RiderForge exist because the big apps don't fix this.</p>
+    </div>
+
+    <div class="card">
+      <span class="eyebrow">Phase 03 · Production rehearsals</span>
+      <h3>Build the show</h3>
+      <p style="margin-top: 8px;"><strong>When:</strong> 1–4 weeks before kickoff</p>
+      <p><strong>Source of truth:</strong> the rehearsal room itself</p>
+      <p><strong>What:</strong> full production loads into a soundstage or arena. Lighting cues programmed, video timecode locked, IEM mixes dialed, automation choreographed.</p>
+      <p style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--rule); color: var(--accent); font-size: 14px;"><strong>Pain:</strong> tribal knowledge generated here never makes it into any system.</p>
+    </div>
+
+    <div class="card">
+      <span class="eyebrow">Phase 04 · Show day</span>
+      <h3>Day sheet runs the day</h3>
+      <p style="margin-top: 8px;"><strong>When:</strong> every day on the road, for 4–18 months</p>
+      <p><strong>Source of truth:</strong> day sheet (one per role, customized)</p>
+      <p><strong>Contents:</strong> show clock, crew calls, catering, dressing rooms, contacts, Wi-Fi, hospital</p>
+      <p style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--rule); color: var(--accent); font-size: 14px;"><strong>Reality:</strong> artist's day sheet has press/hotel/security details audio crew shouldn't see. Audio's has stagehand calls artist doesn't need.</p>
+    </div>
+
+    <div class="card">
+      <span class="eyebrow">Phase 05 · Settlement</span>
+      <h3>Money gets reconciled</h3>
+      <p style="margin-top: 8px;"><strong>When:</strong> every night → end of tour</p>
+      <p><strong>Source of truth:</strong> box office sheet + tour accounting Excel</p>
+      <p><strong>What:</strong> ticket counts, walk-up, comps, fees, splits, taxes. Cash deposited. Per diems paid. Crew payroll. End of tour: full P&amp;L.</p>
+      <p style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--rule); color: var(--accent); font-size: 14px;"><strong>Reality:</strong> most tour accounting still lives in Excel. Wide open.</p>
+    </div>
+
+    <div class="card" style="background: var(--paper-2); border-color: var(--accent);">
+      <span class="eyebrow">The insight</span>
+      <h3 style="color: var(--accent);">Win the hand-offs</h3>
+      <p style="margin-top: 8px;">Most apps focus on phases 3–4. The friction users feel is at the seams: booking→advance, advance→rehearsal, show day→settlement.</p>
+      <p>A hub that ingests cleanly from phase 1, preserves data through phase 2, captures phase 3 decisions, runs phase 4 well, and exports cleanly to phase 5 wins on a different dimension than feature parity.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 APPS ============ -->
+<section class="panel" id="apps">
+  <h2 class="section-title">Apps in <em>detail</em>.</h2>
+  <p class="section-lede">Master Tour is the incumbent everyone loves to hate but can't replace. Daysheets is the modern challenger taking serious share. Niche apps fill the gaps.</p>
+
+  <!-- MASTER TOUR -->
+  <div class="app-deep">
+    <div class="app-deep-head">
+      <div>
+        <h3>Master Tour</h3>
+        <div class="vendor">by Eventric · founded 2009</div>
+      </div>
+      <div class="badges">
+        <span class="badge incumbent">Incumbent</span>
+        <span class="badge gold">Industry standard</span>
+      </div>
+    </div>
+
+    <div class="app-deep-body">
+      <div class="app-section">
+        <h4>What it is</h4>
+        <p>The long-standing standard for arena and stadium tours. Used by Beyoncé, Florida Georgia Line, Fleetwood Mac, Disney on Ice, Harlem Globetrotters. Desktop app (Mac/Windows/Linux) for the TM and PM to build the tour. Free mobile app where everyone else views it — 100,000+ users, 55,000+ monthly active.</p>
+      </div>
+
+      <div class="app-section">
+        <h4>Structure</h4>
+        <p><strong>Organization → Tour → Tour Date → Event.</strong> Inside an Org you create Tours. Inside a Tour, you create Tour Dates. Each Date is one of three types: <strong>Show Day</strong>, <strong>Day Off</strong>, or <strong>Travel Day</strong>. Show Days have an Event attached — the actual gig at a Venue.</p>
+      </div>
+
+      <div class="app-section">
+        <h4>Building a tour</h4>
+        <p>The Setup Wizard walks the TM through a date range. For each date: pick a Day Type. For Show Days, search the <strong>Venue Database</strong> (15,000+ venues). Found → name, address, phone, URL auto-fill. Not found → Google search fallback. Last resort → manual create. Schedule Templates pre-fill typical times.</p>
+        <div class="app-screen-mock">
+          <div class="mock-line head">SETUP WIZARD — DATE 12 OF 43</div>
+          <div class="mock-line">Day Type: ◉ Show Day  ◯ Day Off  ◯ Travel Day</div>
+          <div class="mock-line">Venue: [ Madison Square Garden________________ ] 🔍</div>
+          <div class="mock-line indent">↳ Found in MT DB · 4 Pennsylvania Plaza</div>
+          <div class="mock-line">Schedule Template: [ Arena Default ▾ ]</div>
+          <div class="mock-line indent">↳ Will populate: LI 08:00, SC 16:00, Doors 18:30, Show 20:00</div>
+        </div>
+      </div>
+
+      <div class="app-section">
+        <h4>Schedule section</h4>
+        <p>The heart of the app. Each Schedule Item has Title, Start/End Time, Day Of / Day After flag (for post-midnight items), Status (Unconfirmed grey → Confirmed blue → Done green), Time Display style, and <strong>Visibility</strong> controlling who sees it. Travel Items show up in the Schedule too — a separate Travel tab handles flights, drives, rail, sea, with Travel Party assignments (A Party, B Party).</p>
+      </div>
+
+      <div class="app-section">
+        <h4>Advance section</h4>
+        <p>Separate from Schedule. Each Show gets an <strong>Events Tab</strong> (local record: dimensions, contacts, production info) and an <strong>Advance Tab</strong> (customizable checklist). You design an Advance Template with any fields you need (rigging capacity, dock height, parking, runner contact). Anything already in Venue or Schedule auto-fills. Status sidebar shows progress per date. Templates save at Org level and reuse across tours. Custom fields merge into print templates for day sheets.</p>
+      </div>
+
+      <div class="app-section">
+        <h4>Print &amp; export</h4>
+        <p>Print Templates generate day sheets, tour books, advance docs. User builds a layout with Print Blocks (Venue Block, Schedule Block, Travel Block) and Merge Fields. Any date can produce a multi-page PDF. This is where the daily posted day sheet comes from.</p>
+      </div>
+
+      <div class="app-section">
+        <h4>Mobile companion</h4>
+        <p>Free, read-only for crew, limited editing for Managers/Admins. Long-press any item to copy details to clipboard. Share icon copies an entire day. Tags are a Yelp-for-touring layer (best coffee in Seattle, best guitar tech in Biloxi). FlightAware integrates for live flight tracking. TripIt imports travel.</p>
+      </div>
+
+      <div class="app-section">
+        <h4>Where data comes from</h4>
+        <ul>
+          <li><strong>Routing:</strong> manually entered, date by date</li>
+          <li><strong>Venues:</strong> auto-fill from MT's 15,000+ DB, fallback to Google</li>
+          <li><strong>Personnel:</strong> 150,000+ records — search and add</li>
+          <li><strong>Travel:</strong> manual + TripIt import + FlightAware tracking</li>
+          <li><strong>Schedule:</strong> manual + reusable templates</li>
+          <li><strong>Riders:</strong> attached files (PDF, image), not structured data</li>
+          <li><strong>Advance:</strong> custom forms filled by hand or via emailed back-and-forth</li>
+        </ul>
+      </div>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <h5>Strengths</h5>
+          <ul>
+            <li>Mature, comprehensive — accounting, guest list, set lists, venue DB</li>
+            <li>15,000+ venue database is a real moat</li>
+            <li>Real-time co-editing across desktop and mobile</li>
+            <li>Granular visibility on Schedule, Travel, Hotels, Tasks, Crew</li>
+            <li>Offline mode actually works</li>
+            <li>Powerful print template system</li>
+            <li>Tags create a community knowledge base</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h5>Weaknesses</h5>
+          <ul>
+            <li>Recent UI overhaul widely disliked</li>
+            <li>Attachments slow / unreliable</li>
+            <li>Desktop-first feels dated in 2026</li>
+            <li>Steep learning curve</li>
+            <li>Almost no AI / smart ingest</li>
+            <li>Riders are flat attachments — no versioning</li>
+            <li>Per-admin licensing gets expensive</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DAYSHEETS -->
+  <div class="app-deep">
+    <div class="app-deep-head">
+      <div>
+        <h3>Daysheets</h3>
+        <div class="vendor">by Daysheets, Inc. · modern challenger</div>
+      </div>
+      <div class="badges">
+        <span class="badge modern">Modern challenger</span>
+        <span class="badge gold">AI-forward</span>
+      </div>
+    </div>
+
+    <div class="app-deep-body">
+      <div class="app-section">
+        <h4>What it is</h4>
+        <p>The new player taking real share, especially with younger TMs. Mobile-first (iOS native, Mac native for tour creation; Android trails). Reviews are unusually positive: "far and away better than competitors" is a typical line. Founders ship updates frequently and respond to user feedback.</p>
+      </div>
+
+      <div class="app-section">
+        <h4>Structure</h4>
+        <p><strong>Organization → Tour → Day → Personnel + Reservations.</strong> Orgs group tours, billing, permissions. Each tour has Personnel (with Groups and Group Tags), Routing, Schedules, Flights, Transfers (bus/ferry/train), Lodging. Each day gets a Day Type (show, off, travel, rehearsal, promo, hold) — fully customizable with custom colors.</p>
+      </div>
+
+      <div class="app-section">
+        <h4>Groups &amp; Group Tags — the killer feature</h4>
+        <p>This is where Daysheets pulls ahead. <strong>Groups</strong> are travel parties (A Party = artist circle, B Party = band + key crew, Crew Party = production). When a party exceeds 10 people, split into groups for personalized itineraries.</p>
+        <p><strong>Group Tags</strong> are sub-groups inside a parent. Inside Crew Party: "Lighting," "Video," "Carps." Each tag gets its own filtered view. <strong>Advanced Group Tags</strong> pull people across parents — a "Production" tag could include the road manager from B Party, the production coord from Crew Party, the TM from A Party.</p>
+        <p>Toggle on "Request Information from Individuals Added to this Group" and every new person gets prompted for passport, frequent flyer, dietary, emergency contact. Data populates without the TM asking twice.</p>
+        <div class="app-screen-mock">
+          <div class="mock-line head">PERSONNEL GRID — GROUPS</div>
+          <div class="mock-line">▾ A Party (artist circle) · 4 people</div>
+          <div class="mock-line indent">Artist · Manager · Sec · Asst</div>
+          <div class="mock-line">▾ B Party (band &amp; key crew) · 11 people</div>
+          <div class="mock-line indent">Band (5) · TM · FOH · Mon · Backline (3)</div>
+          <div class="mock-line">▾ Crew Party · 24 people</div>
+          <div class="mock-line indent">▸ Tag: Lighting (5)</div>
+          <div class="mock-line indent">▸ Tag: Video (6)</div>
+          <div class="mock-line indent">▸ Tag: Carps (4)</div>
+          <div class="mock-line">▾ Adv Tag: Production · 5 people (cross-party)</div>
+          <div class="mock-line indent">↳ Pulls from A, B, and Crew</div>
+        </div>
+      </div>
+
+      <div class="app-section">
+        <h4>Adding personnel — three ways</h4>
+        <p>"Add Personnel" opens a drawer with three options:</p>
+        <ul>
+          <li><strong>Search or create</strong> — type a name. If they've toured with you before, they appear. If not, create with name + role (only required fields). Toggle on Travel Profile to request data from them.</li>
+          <li><strong>Import from CSV</strong> — drop a spreadsheet. Daysheets walks you through column mapping. If your CSV has a Group column, people auto-assign to groups. Preview lets you toggle rows on/off before importing.</li>
+          <li><strong>Import from previous tour</strong> — the killer feature. Pick a past tour, import roster, groups, tags, permissions, visibility — or just selected people. New tour set up in 10 minutes instead of 10 hours.</li>
+        </ul>
+      </div>
+
+      <div class="app-section">
+        <h4>Permissions &amp; Visibility</h4>
+        <p>Each person gets a Permission level (Read Only, Edit, Custom) and Visibility scope (All Events, Group-Only, Custom). Group defaults apply when you assign someone, but you override per individual. That's why Daysheets handles "the read-only A-Party member who needs C-Party insight" cleanly.</p>
+      </div>
+
+      <div class="app-section">
+        <h4>Daysheets AI — flight import is the demo</h4>
+        <p>Drop up to 100 flight itinerary PDFs into the app. AI parses departure/arrival airports, dates, times, flight numbers, passengers, record locators, seats. Matches passengers to existing personnel by name (with a "legal flying name" field for mismatches like "Mike" vs "Michael Anthony Smith"). Unmatched names go in a Guest Passengers pile you can swap.</p>
+        <p>Each flight enters in "ready for review" state. You eyeball parsed data side-by-side with the original, fix anything wrong, click Import. It lands in the right Day and shows up in the Flight Grid.</p>
+        <div class="app-screen-mock">
+          <div class="mock-line head">DAYSHEETS AI — IMPORT REVIEW (3 OF 14)</div>
+          <div class="mock-line">📄 united_itinerary_smith.pdf  · processed</div>
+          <div class="mock-line indent">UA 845 · LAX → JFK · Mar 14 · 10:15 → 18:42</div>
+          <div class="mock-line indent">Passengers found:</div>
+          <div class="mock-line indent">  ✓ Mike Smith → "Mike Smith" (B Party)</div>
+          <div class="mock-line indent">  ✓ Sarah Lee → via legal name "Sarah J Lee"</div>
+          <div class="mock-line indent">  ⚠ John Roberts → no match · [Swap to roster]</div>
+          <div class="mock-line">                                  [Cancel] [Import]</div>
+        </div>
+      </div>
+
+      <div class="app-section">
+        <h4>Schedule templates</h4>
+        <p>Reusable day-shapes. A typed list of items (Bus Call, Lobby, Load-in, Soundcheck) with times. Apply to any new show day → instant population. Multiple templates: Arena, Theater, Festival, Promo Day.</p>
+      </div>
+
+      <div class="app-section">
+        <h4>Where data comes from</h4>
+        <ul>
+          <li><strong>Routing:</strong> Tour Builder, manual</li>
+          <li><strong>Personnel:</strong> CSV import or "import from previous tour" — much faster than MT</li>
+          <li><strong>Travel profiles:</strong> auto-requested from individuals</li>
+          <li><strong>Flights:</strong> drag-and-drop AI parsing — the headline feature</li>
+          <li><strong>Hotels &amp; transfers:</strong> manual</li>
+          <li><strong>Schedules:</strong> templates + per-day edits</li>
+        </ul>
+      </div>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <h5>Strengths</h5>
+          <ul>
+            <li>Best-in-class mobile UX (especially iOS)</li>
+            <li>Group Tags model — deepest permission system in the category</li>
+            <li>Daysheets AI flight import: drag a PDF, get data</li>
+            <li>"Import from previous tour" makes setup instant</li>
+            <li>CSV personnel import with column mapping</li>
+            <li>Active dev cycle</li>
+            <li>Bus, ferry, train transfers added recently</li>
+            <li>Calendar feeds (Google/Apple/Outlook)</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h5>Weaknesses</h5>
+          <ul>
+            <li>Smaller user base than Master Tour</li>
+            <li>Android lags significantly</li>
+            <li>No Windows desktop yet</li>
+            <li>Weaker accounting/finance than MT</li>
+            <li>No deep booking integrations</li>
+            <li>Riders still attached files, not structured</li>
+            <li>AI is flight-only — no rider parsing</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NICHE -->
+  <div class="app-deep">
+    <div class="app-deep-head">
+      <div>
+        <h3>Showvella · RiderForge · TecRider</h3>
+        <div class="vendor">single-purpose tools that prove the gap</div>
+      </div>
+      <div class="badges">
+        <span class="badge niche">Gap exploit</span>
+      </div>
+    </div>
+
+    <div class="app-deep-body">
+      <div class="app-section">
+        <h4>What they do</h4>
+        <p>Stage plot + input list + tech rider with version control. Drag-and-drop plot builder. Channel-by-channel input list entry. Structured rider fields. Every show gets a URL pointing to the current revision. Exports stamp the rev number on every page. QR code on the printed plot always pulls latest.</p>
+      </div>
+      <div class="app-section">
+        <h4>Why they exist</h4>
+        <p>Master Tour and Daysheets treat riders as flat files. No concept of "rev 8 of the input list." These tools built whole businesses on that gap.</p>
+      </div>
+      <div class="app-section">
+        <h4>What to steal</h4>
+        <ul>
+          <li>QR code per show → live current rider</li>
+          <li>Revision stamps on every export</li>
+          <li>Drag-and-drop stage plot editor</li>
+          <li>"Every show gets its own plot" data model</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-deep">
+    <div class="app-deep-head">
+      <div>
+        <h3>Other players</h3>
+        <div class="vendor">org-level, mid-tier, adjacent</div>
+      </div>
+      <div class="badges">
+        <span class="badge niche">Worth watching</span>
+      </div>
+    </div>
+    <div class="app-deep-body">
+      <div class="app-section">
+        <h4>Tourmanagement.com</h4>
+        <p>Built for management/booking agencies running multiple artists. Permission scoping is a primary feature, not an afterthought.</p>
+      </div>
+      <div class="app-section">
+        <h4>Touring Pro (YourTempo)</h4>
+        <p>Mid-tier. Custom user roles, auto-generated PDF day sheets with email distribution, Google Calendar integration, guest list workflow.</p>
+      </div>
+      <div class="app-section">
+        <h4>HET Hub</h4>
+        <p>Real-time truck tracking for production teams. No big tour app integrates truck telemetry. Embedding this in a PM dashboard differentiates at arena scale.</p>
+      </div>
+      <div class="app-section">
+        <h4>StudioBinder (film, not music)</h4>
+        <p>Film call sheets — department-specific notes, weather, walkie channels, page breaks, send-status tracking. Touring's day-sheet UX is generations behind film's. Steal patterns here, not from competitors.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 INGEST ============ -->
+<section class="panel" id="ingest">
+  <h2 class="section-title">Easy <em>input</em>.</h2>
+  <p class="section-lede">The real adoption barrier isn't features — it's how painful it is to get data <em>in</em>. TMs default to Excel because Excel doesn't ask anything of them. Here are the input patterns the hub must nail, ranked by impact.</p>
+
+  <div class="ingest-method featured">
+    <div class="ingest-icon">📎</div>
+    <div class="ingest-body">
+      <h4>Drag a PDF, get data</h4>
+      <div class="source-line">FOR → flights · riders · hotel confirmations · advance docs</div>
+      <p>The most powerful input pattern. Daysheets pioneered it for flights — drag up to 100 itinerary PDFs, AI parses every flight, passenger, locator, seat. User reviews side-by-side, clicks Import. The hub should extend this to every doc type.</p>
+      <div class="ingest-flow">
+        <span class="step">1</span>Drag PDF into hub<br>
+        <span class="step">2</span>AI parses structured fields<br>
+        <span class="step">3</span>System matches against existing records<br>
+        <span class="step">4</span>User reviews, fixes mismatches<br>
+        <span class="step">5</span>Import → data lands in right Day, right Show, right person
+      </div>
+      <p style="margin-top: 14px;"><strong>The extension nobody has built:</strong> apply this to <em>riders</em>. Drop in a rider PDF — AI extracts input list, stage plot positions, hospitality, schedule. User reviews and accepts.</p>
+    </div>
+  </div>
+
+  <div class="ingest-method featured">
+    <div class="ingest-icon">📧</div>
+    <div class="ingest-body">
+      <h4>Forward an email, get a record</h4>
+      <div class="source-line">FOR → deal memos · venue confirmations · hotels · advance replies</div>
+      <p>Every TM gets a unique forwarding address. Forward any tour-related email → hub parses it. Deal memo → Show with venue, date, terms. Hotel confirmation → Hotel record on the right night. Venue advance reply → notes attached to that show.</p>
+      <div class="ingest-flow">
+        <span class="step">1</span>Forward email to tour-specific address<br>
+        <span class="step">2</span>AI classifies and parses<br>
+        <span class="step">3</span>System proposes records to create<br>
+        <span class="step">4</span>"Parsed 3 hotels and 1 flight. Review?"<br>
+        <span class="step">5</span>One-click approve, records created
+      </div>
+    </div>
+  </div>
+
+  <div class="ingest-method">
+    <div class="ingest-icon">📋</div>
+    <div class="ingest-body">
+      <h4>Import from a previous tour</h4>
+      <div class="source-line">FOR → past tour data already in the hub</div>
+      <p>Daysheets does this beautifully. New tour → "Import from Previous Tour" → pick which past tour, choose what to bring (roster, groups, tags, permissions, schedule templates, venues). Setup goes from 10 hours to 10 minutes.</p>
+      <p style="margin-top: 8px;"><strong>What carries over:</strong> roster, roles, group structure, permission templates, schedule templates, custom field schemas. <strong>What doesn't:</strong> specific dates, hotels, flights — those would be wrong.</p>
+    </div>
+  </div>
+
+  <div class="ingest-method">
+    <div class="ingest-icon">📊</div>
+    <div class="ingest-body">
+      <h4>CSV import with smart mapping</h4>
+      <div class="source-line">FOR → existing Excel sheets · agency routing exports · accounting workbooks</div>
+      <p>Most TMs and accountants start in Excel. The hub should accept any CSV, walk them through column mapping with smart defaults. Daysheets does this for personnel; the hub should do it for routing, hotels, rosters.</p>
+      <p style="margin-top: 8px;"><strong>Wins:</strong> recognize column names ("Name," "Full Name," "First Name"). Auto-map common patterns. Preview with toggle-on/off per row before committing.</p>
+    </div>
+  </div>
+
+  <div class="ingest-method">
+    <div class="ingest-icon">👥</div>
+    <div class="ingest-body">
+      <h4>Self-service profiles</h4>
+      <div class="source-line">FOR → the crew themselves</div>
+      <p>The TM shouldn't enter travel profiles. When a person is added to a group with "Request Information" on, they get an invite to fill in their own passport, frequent flyer, dietary, emergency contact, t-shirt size. Saves hours and the data is more accurate.</p>
+      <p style="margin-top: 8px;"><strong>Bonus:</strong> auto-reminders for expiring passports and visas.</p>
+    </div>
+  </div>
+
+  <div class="ingest-method">
+    <div class="ingest-icon">🤝</div>
+    <div class="ingest-body">
+      <h4>Vendors fill it in themselves</h4>
+      <div class="source-line">FOR → venue PMs · promoter reps · catering</div>
+      <p>The PM advances 50 venues today by sending 50 emails and typing replies into Master Tour. What if each venue PM got a magic link to a tailored form? Open link → fill in load-in time, parking, runner contact, hospital → submit → data lands in the Show record.</p>
+      <p style="margin-top: 8px;">Shifts work from the tour to the venue (where the data already lives) and skips the transcription step. Builds the venue database over time as every venue self-enters.</p>
+    </div>
+  </div>
+
+  <div class="ingest-method">
+    <div class="ingest-icon">📱</div>
+    <div class="ingest-body">
+      <h4>Mobile capture in the moment</h4>
+      <div class="source-line">FOR → things happening live, on the bus or backstage</div>
+      <p>One-tap captures: photo of receipt → categorized expense. Voice memo → transcribed note. Quick schedule edit with diff highlighting so the team sees what changed.</p>
+    </div>
+  </div>
+
+  <div class="ingest-method">
+    <div class="ingest-icon">🔌</div>
+    <div class="ingest-body">
+      <h4>Direct integrations</h4>
+      <div class="source-line">FOR → third-party tools already in use</div>
+      <p>TripIt for travel. FlightAware for live flight tracking. Google/Outlook calendar feeds. Slack/iMessage forwarding for casual updates. QuickBooks/Xero for accounting export. Removes "but I already use X" objections.</p>
+    </div>
+  </div>
+
+  <div class="pull-quote" style="margin-top: 48px;">
+    <p>Master Tour shipped in 2009 with manual entry as the only option. Daysheets made one ingest pattern (flight PDFs) magical. The next hub should make <em>every</em> data type that magical. Adoption follows ease.</p>
+  </div>
+
+  <div style="margin-top: 32px; padding: 32px; background: var(--paper-2); border-radius: 6px; border: 1px solid var(--rule);">
+    <span class="eyebrow">For the head user (TM / PM)</span>
+    <h3 style="font-size: 28px; margin-bottom: 12px;">Broadcast, don't type.</h3>
+    <p style="font-size: 17px; line-height: 1.55; color: var(--ink-2);">Stop thinking of the head user as a typist. They're a <strong>broadcaster and curator</strong>. They send one email to all venue contacts with a form link. They forward the agent's deal memo to a single inbox. They drop the rider PDF in once and it powers every advance. They press one button to push tomorrow's day sheet to 60 phones, each personalized.</p>
+    <p style="margin-top: 12px; font-size: 17px; line-height: 1.55; color: var(--ink-2);">The hub absorbs info from wherever it naturally lives, structures it, and redistributes it. Every minute saved on data entry turns a skeptic into a user.</p>
+  </div>
+</section>
+
+<!-- ============ 07 CRITICALITY ============ -->
+<section class="panel" id="critical">
+  <h2 class="section-title">What <em>matters</em> most.</h2>
+  <p class="section-lede">Every info type the hub handles, ranked from "show stops without it" to "nice to have eventually." Build T1 first.</p>
+
+  <h3 style="font-size: 24px; margin-bottom: 12px; color: var(--accent);">Tier 1 — Mission critical</h3>
+  <p style="margin-bottom: 20px; font-size: 15px;">Wrong = show doesn't happen. Hundreds of people in the wrong place.</p>
+  <div class="crit-grid">
+    <div class="crit-tile t1">
+      <div class="crit-label">T1 · Show Clock</div>
+      <h4>Load-in, soundcheck, doors, set times, curfew, load-out</h4>
+      <p>The skeleton of every day.</p>
+      <div class="meta">FROM — PM + Venue PM</div>
+    </div>
+    <div class="crit-tile t1">
+      <div class="crit-label">T1 · Venue Access</div>
+      <h4>Loading dock, bus parking, artist entrance</h4>
+      <p>Truckers and buses arrive at 6 AM in unfamiliar cities. Wrong address = lost hours.</p>
+      <div class="meta">FROM — Venue PM</div>
+    </div>
+    <div class="crit-tile t1">
+      <div class="crit-label">T1 · Crew Roster</div>
+      <h4>Who's on tour, role, dates</h4>
+      <p>Powers permissions, day sheets, travel.</p>
+      <div class="meta">FROM — TM + PM</div>
+    </div>
+    <div class="crit-tile t1">
+      <div class="crit-label">T1 · Rider · Plot · Inputs</div>
+      <h4>Audio, lighting, stage setup specs</h4>
+      <p>Wrong input list = soundcheck eats the doors window.</p>
+      <div class="meta">FROM — Tour PM + dept heads</div>
+    </div>
+  </div>
+
+  <h3 style="font-size: 24px; margin: 40px 0 12px; color: var(--gold);">Tier 2 — Daily critical</h3>
+  <p style="margin-bottom: 20px; font-size: 15px;">Wrong = show is miserable. People miss buses, eat at wrong times, can't reach the right person.</p>
+  <div class="crit-grid">
+    <div class="crit-tile t2">
+      <div class="crit-label">T2 · Travel · Hotels · Buses</div>
+      <h4>Flight numbers, hotel addresses, bus &amp; lobby calls</h4>
+      <p>Personal info — needs sensitive permissions.</p>
+      <div class="meta">FROM — Travel Agent + TM</div>
+    </div>
+    <div class="crit-tile t2">
+      <div class="crit-label">T2 · Local Crew Calls</div>
+      <h4>Stagehand counts and start times by dept</h4>
+      <p>Wrong count = budget blown or load stalls.</p>
+      <div class="meta">FROM — PM + Venue PM</div>
+    </div>
+    <div class="crit-tile t2">
+      <div class="crit-label">T2 · Hospitality &amp; Catering</div>
+      <h4>Dressing rooms, dietary, meal times</h4>
+      <p>Crew morale depends on this more than people admit.</p>
+      <div class="meta">FROM — PA + Catering</div>
+    </div>
+    <div class="crit-tile t2">
+      <div class="crit-label">T2 · Per-Show Contacts</div>
+      <h4>Venue PM, FOH, monitors, runner, security, hospital</h4>
+      <p>Speed-dial when something breaks.</p>
+      <div class="meta">FROM — Advance phase</div>
+    </div>
+  </div>
+
+  <h3 style="font-size: 24px; margin: 40px 0 12px; color: var(--ocean);">Tier 3 — Business critical</h3>
+  <p style="margin-bottom: 20px; font-size: 15px;">Show runs without it, but artist loses money or misses opportunities.</p>
+  <div class="crit-grid">
+    <div class="crit-tile t3">
+      <div class="crit-label">T3 · Guest List</div>
+      <h4>Comps, all-access, working creds</h4>
+      <p>Request → approve → BO workflow.</p>
+      <div class="meta">FROM — TM + Promoter</div>
+    </div>
+    <div class="crit-tile t3">
+      <div class="crit-label">T3 · Settlement</div>
+      <h4>Ticket counts, expenses, per diems, payroll</h4>
+      <p>Critical financially, doesn't stop the show.</p>
+      <div class="meta">FROM — TM + Tour Acct</div>
+    </div>
+    <div class="crit-tile t3">
+      <div class="crit-label">T3 · Press &amp; Promo</div>
+      <h4>Interviews, radio, TV, meet &amp; greets</h4>
+      <p>Visible only to artist, mgmt, publicist.</p>
+      <div class="meta">FROM — Publicist</div>
+    </div>
+    <div class="crit-tile t3">
+      <div class="crit-label">T3 · Trucking Status</div>
+      <h4>Where each truck is, ETA</h4>
+      <p>Real-time via HET Hub or similar telemetry.</p>
+      <div class="meta">FROM — Trucking company</div>
+    </div>
+  </div>
+
+  <h3 style="font-size: 24px; margin: 40px 0 12px; color: var(--ink-3);">Tier 4 — Nice to have</h3>
+  <p style="margin-bottom: 20px; font-size: 15px;">Defer or partner with niche tools. Not v1.</p>
+  <div class="crit-grid">
+    <div class="crit-tile t4">
+      <div class="crit-label">T4 · Set List &amp; Cues</div>
+      <h4>Songs, transitions, cue calls</h4>
+      <p>Lives in consoles. App role: shareable read-only.</p>
+      <div class="meta">FROM — Artist + LD</div>
+    </div>
+    <div class="crit-tile t4">
+      <div class="crit-label">T4 · Inventory · Merch · Wardrobe</div>
+      <h4>Reorder points, cases, costumes</h4>
+      <p>Specialized. Defer or integrate.</p>
+      <div class="meta">FROM — Dept heads</div>
+    </div>
+    <div class="crit-tile t4">
+      <div class="crit-label">T4 · Cross-Tour Analytics</div>
+      <h4>"Last time at MSG, load-in took 5 hrs"</h4>
+      <p>Long-term moat. Needs multiple tours of data first.</p>
+      <div class="meta">FROM — Historical data</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 DAY ============ -->
+<section class="panel" id="day">
+  <h2 class="section-title">A show day, <em>by role</em>.</h2>
+  <p class="section-lede">Pressure-testing the data model. One arena show day, every event filtered per role.</p>
+
+  <div class="timeline">
+    <div class="tl-event">
+      <div class="tl-time">06:00</div>
+      <h4>Trucks arrive</h4>
+      <p>PM dashboard shows truck tracking confirming arrival. Stagehand crew chief sees load-in schedule, rigging plot, PM contact. Nothing else.</p>
+    </div>
+    <div class="tl-event">
+      <div class="tl-time">08:00</div>
+      <h4>Riggers up, truss build</h4>
+      <p>Lighting head sees rig schedule, truss build, FOH position. Edit rights on lighting; view rights on the rest. No hotel or artist info.</p>
+    </div>
+    <div class="tl-event">
+      <div class="tl-time">12:00</div>
+      <h4>Soundcheck setup</h4>
+      <p>FOH engineer sees set list, IEM mixes, current input list (rev 8), stage plot. QR on the printed plot still pulls latest.</p>
+    </div>
+    <div class="tl-event">
+      <div class="tl-time">15:00</div>
+      <h4>Artist arrives</h4>
+      <p>TM sees the full day. Artist sees personal schedule + set list. Driver sees route to hotel after show.</p>
+    </div>
+    <div class="tl-event">
+      <div class="tl-time">16:00</div>
+      <h4>Press runs 30 min late</h4>
+      <p>TM updates the press block. System pushes the change <em>only</em> to people watching it (publicist, artist, security lead). Audio crew sees nothing. <strong>This is the visibility model paying off.</strong></p>
+    </div>
+    <div class="tl-event">
+      <div class="tl-time">18:30</div>
+      <h4>Doors</h4>
+      <p>Security head sees pass sheet, post locations, briefing notes. Promoter rep sees ticket count screen ready for settlement.</p>
+    </div>
+    <div class="tl-event">
+      <div class="tl-time">20:30</div>
+      <h4>Headliner show</h4>
+      <p>Stage manager has run-of-show open. Cue list, call times. App is passive — the show runs on consoles.</p>
+    </div>
+    <div class="tl-event">
+      <div class="tl-time">23:00</div>
+      <h4>Load-out</h4>
+      <p>Crew reverts to trucking view. Drivers see convoy departure + next venue address. Truck-pack order on screen.</p>
+    </div>
+    <div class="tl-event">
+      <div class="tl-time">24:00</div>
+      <h4>Settlement</h4>
+      <p>Promoter rep settles with TM. Screen pre-populated. Splits and taxes computed. Cash deposit recorded with photo. Signature captured.</p>
+    </div>
+    <div class="tl-event">
+      <div class="tl-time">01:00</div>
+      <h4>Tomorrow's day sheet ships</h4>
+      <p>Each person gets a push with their personalized version. Hotel addresses redacted on the public-posted copy.</p>
+    </div>
+  </div>
+
+  <div class="pull-quote">
+    <p>The app's job: make this loop <em>fast, correct, role-appropriate</em>, 200 times in a row.</p>
+  </div>
+</section>
+
+<!-- ============ 09 HUB ============ -->
+<section class="panel" id="hub">
+  <h2 class="section-title">Building the <em>hub</em>.</h2>
+  <p class="section-lede">Nine steps. Each is a real product on its own. Together they're a Master Tour competitor. Tap to expand.</p>
+
+  <div class="build-row" data-build>
+    <div class="build-num">01</div>
+    <div class="build-body">
+      <div class="build-title"><h4>Calendar + day sheet engine</h4></div>
+      <div class="build-blurb">Show calendar with day types, role-based day sheets</div>
+      <div class="build-detail">
+        <p><strong>Why first:</strong> the daily-use surface. Everything else hangs off it. The day sheet is touring's canonical document.</p>
+        <p><strong>Features:</strong> Group Tag-style permissions, per-role personalized sheets, auto-redaction of sensitive items on public copies, push notifications, printable PDF with rev stamps.</p>
+        <p><strong>Tech:</strong> Events as first-class objects with arbitrary tag/group/person visibility. Attribute-based access. PWA target.</p>
+      </div>
+    </div>
+    <div class="build-tag"><span>★★★</span>Foundation</div>
+  </div>
+
+  <div class="build-row" data-build>
+    <div class="build-num">02</div>
+    <div class="build-body">
+      <div class="build-title"><h4>Personnel + venue databases</h4></div>
+      <div class="build-blurb">Reusable across tours, with import-from-previous</div>
+      <div class="build-detail">
+        <p><strong>Why second:</strong> new tours shouldn't be re-entry slogs. MT's 150,000 personnel and 15,000 venue DB is a real moat. Combined with Daysheets' "import from previous tour," tours start in 10 minutes.</p>
+        <p><strong>Features:</strong> persistent person records, venue records (dock photos, parking, power, contact history), "last time we were here" view, CSV import, smart dedup.</p>
+      </div>
+    </div>
+    <div class="build-tag"><span>★★</span>Scaffolding</div>
+  </div>
+
+  <div class="build-row" data-build>
+    <div class="build-num">03</div>
+    <div class="build-body">
+      <div class="build-title"><h4>AI ingest layer</h4></div>
+      <div class="build-blurb">Drop a PDF, forward an email — get structured data</div>
+      <div class="build-detail">
+        <p><strong>Why third (the wedge):</strong> Daysheets' AI flight import is the killer demo. Extending that to riders, hotels, deal memos, advance emails wins the category.</p>
+        <p><strong>Features:</strong> drag-and-drop PDF with side-by-side review, tour-specific email inbox, batch import (100 docs), legal-name matching, "ready for review" queue.</p>
+        <p><strong>Tech:</strong> Anthropic API server-side. Each doc type is a structured-output prompt. Review UI: source on left, parsed data on right, edit per field.</p>
+      </div>
+    </div>
+    <div class="build-tag"><span>★★★</span>The wedge</div>
+  </div>
+
+  <div class="build-row" data-build>
+    <div class="build-num">04</div>
+    <div class="build-body">
+      <div class="build-title"><h4>Riders, plots, inputs — with versioning</h4></div>
+      <div class="build-blurb">One live link per show, QR aware, auto-revisioned</div>
+      <div class="build-detail">
+        <p><strong>Why fourth:</strong> the clearest market gap. Showvella exists only because the big apps don't own this.</p>
+        <p><strong>Features:</strong> drag-and-drop stage plot editor, structured input list, rider templates, rev stamps on every export, QR per show points to current, PDF with timestamps.</p>
+      </div>
+    </div>
+    <div class="build-tag"><span>★★★</span>Gap exploit</div>
+  </div>
+
+  <div class="build-row" data-build>
+    <div class="build-num">05</div>
+    <div class="build-body">
+      <div class="build-title"><h4>Travel + hotel grid</h4></div>
+      <div class="build-blurb">Flight grid, transfer grid, lodging lists</div>
+      <div class="build-detail">
+        <p><strong>Why now:</strong> Daysheets' Flight Grid is one of the most-praised features. Power users live in it.</p>
+        <p><strong>Features:</strong> flight grid (departure, airport, airline, passengers, connections), transfer grid (bus/ferry/train), per-night rooming lists, calendar feed export.</p>
+      </div>
+    </div>
+    <div class="build-tag"><span>★★</span>Power feature</div>
+  </div>
+
+  <div class="build-row" data-build>
+    <div class="build-num">06</div>
+    <div class="build-body">
+      <div class="build-title"><h4>Guest list workflow</h4></div>
+      <div class="build-blurb">Request → approve → BO list</div>
+      <div class="build-detail">
+        <p><strong>Why now:</strong> standard feature. Both MT and Daysheets do it well. Match the bar, don't differentiate.</p>
+        <p><strong>Features:</strong> per-person allotment, request submission from any crew member, TM/PM approval queue, cutoff enforcement, BO export.</p>
+      </div>
+    </div>
+    <div class="build-tag"><span>★★</span>Standard</div>
+  </div>
+
+  <div class="build-row" data-build>
+    <div class="build-num">07</div>
+    <div class="build-body">
+      <div class="build-title"><h4>Settlement &amp; accounting</h4></div>
+      <div class="build-blurb">The Excel killer · mobile-friendly · photo cash counts</div>
+      <div class="build-detail">
+        <p><strong>Why now:</strong> T3 critical, but everyone still uses Excel because nothing nails it. Wide open.</p>
+        <p><strong>Features:</strong> settlement screen pre-populated from advance, ticket counts, expense entry with receipts, split calculations, signatures, export to QBO/Xero/CSV.</p>
+      </div>
+    </div>
+    <div class="build-tag"><span>★★★</span>Wide open</div>
+  </div>
+
+  <div class="build-row" data-build>
+    <div class="build-num">08</div>
+    <div class="build-body">
+      <div class="build-title"><h4>Truck tracking + PM dashboard</h4></div>
+      <div class="build-blurb">Truck telemetry, crew calls, load-in countdown</div>
+      <div class="build-detail">
+        <p><strong>Why now:</strong> differentiates at arena/stadium tier. Smaller tours don't need it.</p>
+        <p><strong>Features:</strong> live truck map, ETA, convoy status, load-in clock with department checkpoints, stagehand call countdown.</p>
+      </div>
+    </div>
+    <div class="build-tag"><span>★★</span>Arena tier</div>
+  </div>
+
+  <div class="build-row" data-build>
+    <div class="build-num">09</div>
+    <div class="build-body">
+      <div class="build-title"><h4>Cross-tour analytics</h4></div>
+      <div class="build-blurb">Venue history, "last time we were here," KPIs</div>
+      <div class="build-detail">
+        <p><strong>Why last:</strong> compounds with data. Only valuable after multiple tours. But once you have it, hardest to copy.</p>
+        <p><strong>Features:</strong> per-venue history (load-in time, crew called, runner name, common issues), per-tour KPIs, cost trends, auto P&amp;L.</p>
+      </div>
+    </div>
+    <div class="build-tag"><span>★★★</span>Long moat</div>
+  </div>
+
+  <div style="margin-top: 48px; padding: 40px; background: linear-gradient(135deg, var(--paper-2) 0%, var(--sand) 100%); border-radius: 8px; border: 1px solid var(--rule);">
+    <span class="eyebrow">If you build one thing first</span>
+    <h3 style="font-size: 32px; margin-bottom: 16px;">Make data entry effortless.</h3>
+    <p style="font-size: 17px; line-height: 1.55; color: var(--ink);">Master Tour is fat and slow. Daysheets is good but only does AI ingest for flights. Nobody owns rider ingest, email-forward parsing, or venue self-service forms.</p>
+    <p style="font-size: 17px; line-height: 1.55; color: var(--ink); margin-top: 12px;">Build the <strong style="color: var(--accent);">role-aware day sheet</strong> as the spine. Build <strong style="color: var(--accent);">AI-powered ingest</strong> as the differentiator. Drag a rider → structured data. Forward a deal memo → a show. Share a venue link → the venue fills it in. That's the wedge.</p>
+    <p style="margin-top: 24px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--ink-2);">Win the wedge → rider versioning → settlement → analytics → central hub.</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <p class="credits">Compiled from Master Tour and Daysheets product docs, App Store reviews, practitioner blogs (TourManager.info, The Efficient Hustle, Backstage Culture), Berklee careers material, and trucking-industry coverage of the Eras Tour and similar arena productions.</p>
+  <div class="nav-hint">Tap any tab · expandables have a + sign · keyboard 1–9 jumps tabs</div>
+</footer>
+
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('.panel');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.target;
+      tabs.forEach(t => t.classList.remove('active'));
+      panels.forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(target).classList.add('active');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  document.querySelectorAll('[data-dept]').forEach(d => {
+    d.addEventListener('click', () => d.classList.toggle('expanded'));
+  });
+
+  document.querySelectorAll('[data-rider]').forEach(r => {
+    r.querySelector('.rider-section-head').addEventListener('click', () => r.classList.toggle('open'));
+  });
+
+  document.querySelectorAll('[data-build]').forEach(b => {
+    b.addEventListener('click', () => b.classList.toggle('open'));
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key >= '1' && e.key <= '9') {
+      const idx = parseInt(e.key) - 1;
+      if (tabs[idx]) tabs[idx].click();
+    }
+  });
+</script>
+
+</body>
+</html>

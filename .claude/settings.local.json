@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(curl -s \"http://localhost:5173/src/components/ui/Modal.tsx\")",
+      "Bash(npx tsc *)"
+    ]
+  }
+}
