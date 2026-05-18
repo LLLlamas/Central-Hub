@@ -53,7 +53,9 @@ export function DayDetail() {
     );
   }
 
-  const items = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
+  const allItems = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const items = managerView ? allItems : allItems.filter((it) => resolveVisibility(it.visibility, user) !== 'blocked');
   const travel = getTravelForDay(day.id);
   const hotels = getHotelsForDay(day.id);
   const tasks = getTasksForDay(day.id);
@@ -114,9 +116,11 @@ export function DayDetail() {
           action={
             <div className="flex items-center gap-2">
               <MockTag source="schedule_item" field="Schedule items + times" />
-              <Button size="sm" variant="outline" leading={<Icon.Plus size={12} />}>
-                Add item
-              </Button>
+              {managerView && (
+                <Button size="sm" variant="outline" leading={<Icon.Plus size={12} />}>
+                  Add item
+                </Button>
+              )}
             </div>
           }
         >
@@ -131,7 +135,7 @@ export function DayDetail() {
                 const lvl = resolveVisibility(it.visibility, user);
                 const visible = lvl !== 'blocked';
                 return (
-                  <li key={it.id} className={!visible ? 'opacity-40' : ''}>
+                  <li key={it.id} className={managerView && !visible ? 'opacity-40' : ''}>
                     <div className="px-6 py-3 flex items-start gap-4">
                       <div className="font-mono tabular text-[13px] font-semibold text-[var(--color-ink)] w-16 shrink-0 pt-0.5">
                         {it.startTime}

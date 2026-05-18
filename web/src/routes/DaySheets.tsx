@@ -50,6 +50,8 @@ export function DaySheets() {
     getDayLastUpdated,
     densityMode,
   } = useApp();
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
+
   const { date } = useParams();
   const navigate = useNavigate();
 
@@ -62,6 +64,7 @@ export function DaySheets() {
 
   const day = getDay(defaultDate);
   const [mode, setMode] = useState<Mode>('edit');
+  const effectiveMode: Mode = managerView ? mode : 'personal';
   const locked = day ? isDayLocked(day.id) : false;
 
   if (!day) {
@@ -93,22 +96,26 @@ export function DaySheets() {
             >
               <Icon.Print size={14} /> Print / PDF
             </Link>
-            <button
-              type="button"
-              onClick={() => toggleDayLocked(day.id)}
-              className={cn(
-                'min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] border transition-colors',
-                locked
-                  ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/8 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/14'
-                  : 'border-[var(--color-rule)] bg-[var(--color-card)] text-[var(--color-ink)] hover:border-[var(--color-ink-4)]',
-              )}
-              title={locked ? 'Locked - click to unlock and resume editing' : 'Lock the day - marks it closed-out / ready to publish'}
-            >
-              <Icon.Lock size={14} /> {locked ? 'Locked' : 'Lock day'}
-            </button>
-            <Button variant="primary" leading={<Icon.Sparkle size={14} />} className="min-h-11 md:min-h-9">
-              Publish
-            </Button>
+            {managerView && (
+              <button
+                type="button"
+                onClick={() => toggleDayLocked(day.id)}
+                className={cn(
+                  'min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] border transition-colors',
+                  locked
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/8 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/14'
+                    : 'border-[var(--color-rule)] bg-[var(--color-card)] text-[var(--color-ink)] hover:border-[var(--color-ink-4)]',
+                )}
+                title={locked ? 'Locked - click to unlock and resume editing' : 'Lock the day - marks it closed-out / ready to publish'}
+              >
+                <Icon.Lock size={14} /> {locked ? 'Locked' : 'Lock day'}
+              </button>
+            )}
+            {managerView && (
+              <Button variant="primary" leading={<Icon.Sparkle size={14} />} className="min-h-11 md:min-h-9">
+                Publish
+              </Button>
+            )}
           </>
         }
         meta={
@@ -123,7 +130,7 @@ export function DaySheets() {
             ) : (
               <Chip tone="neutral" variant="outline">Draft</Chip>
             )}
-            <ModeToggle mode={mode} setMode={setMode} />
+            {managerView && <ModeToggle mode={mode} setMode={setMode} />}
             <MockBadge source="schedule_item" className="ml-auto hidden sm:inline-flex" />
           </div>
         }
@@ -139,7 +146,7 @@ export function DaySheets() {
       />
 
       <div className="lg:hidden mt-5">
-        <MobileDaySheet day={day} mode={mode} nextDay={nextDay} />
+        <MobileDaySheet day={day} mode={effectiveMode} nextDay={nextDay} />
       </div>
 
       <div
@@ -151,14 +158,15 @@ export function DaySheets() {
         {densityMode === 'pro' && (
           <ToolsRail
             day={day}
-            mode={mode}
+            mode={effectiveMode}
+            managerView={managerView}
             userKey={userKey}
             allUsers={allUsers}
             setUserKey={setUserKey}
             lastUpdated={getDayLastUpdated(day)}
           />
         )}
-        <DaySheet day={day} mode={mode} />
+        <DaySheet day={day} mode={effectiveMode} />
       </div>
 
       <DataSourcesPanel
@@ -263,6 +271,7 @@ function DateStepper({
 function ToolsRail({
   day,
   mode,
+  managerView,
   userKey,
   allUsers,
   setUserKey,
@@ -270,6 +279,7 @@ function ToolsRail({
 }: {
   day: Day;
   mode: Mode;
+  managerView: boolean;
   userKey: string;
   allUsers: ReturnType<typeof useApp>['allUsers'];
   setUserKey: ReturnType<typeof useApp>['setUserKey'];
@@ -277,7 +287,7 @@ function ToolsRail({
 }) {
   return (
     <aside className="space-y-4">
-      {mode === 'personal' && (
+      {mode === 'personal' && managerView && (
         <Card>
           <div className="eyebrow mb-2">Viewer</div>
           <p className="text-[11.5px] text-[var(--color-ink-3)] mb-3 leading-relaxed">
@@ -580,11 +590,14 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
                 const hiddenForUser = lvl === 'blocked';
                 const ruleKey = realRuleFor(it);
                 return (
-                  <li key={it.id} className="py-2.5 flex items-baseline gap-4">
-                    <span className="font-mono text-[14px] tabular font-semibold w-16 shrink-0 text-[var(--color-ink)]">
-                      {it.startTime}
-                    </span>
-                    <div className="flex-1 min-w-0">
+                  <li key={it.id} className="py-2.5 flex items-start gap-4">
+                    <div className="font-mono tabular shrink-0 w-16 leading-snug">
+                      <div className="text-[14px] font-semibold text-[var(--color-ink)]">{it.startTime}</div>
+                      {it.endTime && (
+                        <div className="text-[11px] text-[var(--color-ink-4)]">{it.endTime}</div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 pt-px">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[13.5px] font-semibold text-[var(--color-ink)] inline-flex items-baseline gap-1">
                           {it.title}
@@ -607,11 +620,6 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
                       </div>
                       {it.location && <div className="text-[12px] text-[var(--color-ink-3)] mt-0.5">{it.location}</div>}
                     </div>
-                    {it.endTime && (
-                      <span className="font-mono text-[11.5px] tabular text-[var(--color-ink-4)] shrink-0">
-                        to {it.endTime}
-                      </span>
-                    )}
                   </li>
                 );
               })}
@@ -695,12 +703,12 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
               {tour.personnel.map((m) => {
                 const g = tour.groups.find((gr) => gr.id === m.groupId)!;
                 return (
-                  <div key={m.id} className="flex items-center justify-between gap-2 py-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: g.color }} />
-                      <span className="font-semibold text-[var(--color-ink)] truncate">{m.person.name}</span>
+                  <div key={m.id} className="flex items-start gap-2 py-1">
+                    <span className="w-1.5 h-1.5 rounded-full mt-[5px] shrink-0" style={{ background: g.color }} />
+                    <div className="min-w-0">
+                      <div className="font-semibold text-[var(--color-ink)] truncate">{m.person.name}</div>
+                      <div className="text-[11.5px] text-[var(--color-ink-3)] truncate">{m.role}</div>
                     </div>
-                    <span className="text-[var(--color-ink-3)] truncate">{m.role}</span>
                   </div>
                 );
               })}

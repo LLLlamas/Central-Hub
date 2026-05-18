@@ -32,6 +32,13 @@ export interface RiderSectionEdit {
   freeTextEn?: string;
 }
 
+/** A correction proposed by a non-manager, awaiting manager approval. */
+export interface PendingEdit {
+  key: string;
+  patch: RiderSectionEdit;
+  proposedAt: UpdateStamp;
+}
+
 interface AppState {
   tour: Tour;
   user: CurrentUser;
@@ -62,6 +69,12 @@ interface AppState {
   reopenSection: (key: string) => void;
   getSectionEdit: (key: string) => RiderSectionEdit | undefined;
   updateSectionEdit: (key: string, patch: RiderSectionEdit) => void;
+  // Non-manager proposed corrections pending manager approval.
+  // keyed by `${sectionType}-${index}`, same as sectionEdits.
+  getPendingEdit: (key: string) => PendingEdit | undefined;
+  proposeSectionEdit: (key: string, patch: RiderSectionEdit) => void;
+  approvePendingEdit: (key: string) => void;
+  rejectPendingEdit: (key: string) => void;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -109,6 +122,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     initialSectionApprovals,
   );
   const [sectionEdits, setSectionEdits] = useState<ReadonlyMap<string, RiderSectionEdit>>(
+    () => new Map(),
+  );
+  const [pendingEdits, setPendingEdits] = useState<ReadonlyMap<string, PendingEdit>>(
     () => new Map(),
   );
 
@@ -225,6 +241,48 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const getPendingEdit = useCallback(
+    (key: string) => pendingEdits.get(key),
+    [pendingEdits],
+  );
+
+  const proposeSectionEdit = useCallback((key: string, patch: RiderSectionEdit) => {
+    setPendingEdits((prev) => {
+      const next = new Map(prev);
+      const existing = next.get(key);
+      next.set(key, {
+        key,
+        patch: { ...existing?.patch, ...patch },
+        proposedAt: { at: MOCK_NOW, by: currentName },
+      });
+      return next;
+    });
+  }, [currentName]);
+
+  const approvePendingEdit = useCallback((key: string) => {
+    setPendingEdits((prev) => {
+      const pending = prev.get(key);
+      if (!pending) return prev;
+      setSectionEdits((ePrev) => {
+        const next = new Map(ePrev);
+        next.set(key, { ...next.get(key), ...pending.patch });
+        return next;
+      });
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const rejectPendingEdit = useCallback((key: string) => {
+    setPendingEdits((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
   const value = useMemo<AppState>(
     () => ({
       tour: mockTour,
@@ -248,8 +306,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       reopenSection,
       getSectionEdit,
       updateSectionEdit,
+      getPendingEdit,
+      proposeSectionEdit,
+      approvePendingEdit,
+      rejectPendingEdit,
     }),
-    [userKey, densityMode, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit],
+    [userKey, densityMode, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

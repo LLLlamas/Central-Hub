@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/state/AppState';
+import type { PendingEdit } from '@/state/AppState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, SectionCard, EmptyState } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
@@ -52,7 +53,7 @@ const SECTION_LABELS: Record<RiderSectionType, string> = {
 };
 
 export function RiderIngest() {
-  const { tour, isSectionApproved } = useApp();
+  const { tour, isSectionApproved, getPendingEdit } = useApp();
   const { openPdf } = usePdfViewer();
   const imp = tour.riderImports[0];
   const [activeSection, setActiveSection] = useState<string | null>(() => {
@@ -136,6 +137,7 @@ export function RiderIngest() {
               const key = `${s.type}-${i}`;
               const active = key === activeSection;
               const hasConflicts = (s.conflicts?.length ?? 0) > 0;
+              const hasPending = !!getPendingEdit(key);
               return (
                 <li key={key}>
                   <button
@@ -148,6 +150,13 @@ export function RiderIngest() {
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[12.5px] font-semibold">{SECTION_LABELS[s.type]}</span>
                       <div className="flex items-center gap-1.5">
+                        {hasPending && (
+                          <span
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{ background: 'var(--color-accent)' }}
+                            title="Proposed edit pending approval"
+                          />
+                        )}
                         {hasConflicts && (
                           <span
                             className="w-1.5 h-1.5 rounded-full"
@@ -367,6 +376,39 @@ function SectionStatusChip({ status }: { status: RiderSectionStatus }) {
   return <Chip tone={m.tone}>{m.label}</Chip>;
 }
 
+function PendingEditBanner({
+  pending,
+  managerView,
+  onApprove,
+  onReject,
+}: {
+  pending: PendingEdit;
+  managerView: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  return (
+    <div className="mb-4 flex items-center justify-between gap-3 flex-wrap rounded-[3px] border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/6 px-2.5 py-1.5">
+      <div className="flex items-center gap-2">
+        <Icon.Alert size={12} className="text-[var(--color-accent)] shrink-0" />
+        <LastUpdated label="Proposed" stamp={pending.proposedAt} />
+      </div>
+      {managerView ? (
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={onReject}>Reject</Button>
+          <Button size="sm" variant="primary" leading={<Icon.Check size={12} />} onClick={onApprove}>
+            Approve edit
+          </Button>
+        </div>
+      ) : (
+        <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--color-accent)]">
+          Awaiting approval
+        </span>
+      )}
+    </div>
+  );
+}
+
 function SectionView({
   section,
   sectionKey,
@@ -377,26 +419,37 @@ function SectionView({
   sourceLang: string;
 }) {
   const {
+    user,
     getSectionEdit,
     updateSectionEdit,
     isSectionApproved,
     getSectionApproval,
     approveSection,
     reopenSection,
+    getPendingEdit,
+    proposeSectionEdit,
+    approvePendingEdit,
+    rejectPendingEdit,
   } = useApp();
 
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const edit = getSectionEdit(sectionKey);
+  const pending = getPendingEdit(sectionKey);
   const approved = isSectionApproved(sectionKey);
   const approval = getSectionApproval(sectionKey);
 
-  // Effective payload = the AI extraction with any inline corrections layered on.
-  const inputList = edit?.inputList ?? section.inputList;
-  const monitorMix = edit?.monitorMix ?? section.monitorMix;
-  const fohOutputs = edit?.fohOutputs ?? section.fohOutputs;
-  const freeText = edit?.freeText ?? section.freeText;
-  const freeTextEn = edit?.freeTextEn ?? section.freeTextEn;
+  // Effective payload: pending proposal (if any) over approved edits over AI extraction.
+  const inputList = pending?.patch.inputList ?? edit?.inputList ?? section.inputList;
+  const monitorMix = pending?.patch.monitorMix ?? edit?.monitorMix ?? section.monitorMix;
+  const fohOutputs = pending?.patch.fohOutputs ?? edit?.fohOutputs ?? section.fohOutputs;
+  const freeText = pending?.patch.freeText ?? edit?.freeText ?? section.freeText;
+  const freeTextEn = pending?.patch.freeTextEn ?? edit?.freeTextEn ?? section.freeTextEn;
   const effStatus: RiderSectionStatus = approved ? 'approved' : section.status;
   const eff: RiderSection = { ...section, inputList, monitorMix, fohOutputs, freeText, freeTextEn };
+
+  // Route onChange to direct edit (managers) or proposal (everyone else).
+  const editOrPropose = (patch: Parameters<typeof updateSectionEdit>[1]) =>
+    managerView ? updateSectionEdit(sectionKey, patch) : proposeSectionEdit(sectionKey, patch);
 
   return (
     <>
@@ -415,10 +468,12 @@ function SectionView({
               </Chip>
             )}
             <SectionStatusChip status={effStatus} />
-            <Button size="sm" variant="outline" leading={<Icon.X size={12} />}>
-              Re-extract
-            </Button>
-            {approved ? (
+            {managerView && (
+              <Button size="sm" variant="outline" leading={<Icon.X size={12} />}>
+                Re-extract
+              </Button>
+            )}
+            {managerView && (approved ? (
               <Button size="sm" variant="outline" onClick={() => reopenSection(sectionKey)}>
                 Reopen
               </Button>
@@ -431,38 +486,48 @@ function SectionView({
               >
                 Approve section
               </Button>
-            )}
+            ))}
           </div>
         }
       >
-        {approved && approval ? (
+        {pending && (
+          <PendingEditBanner
+            pending={pending}
+            managerView={managerView}
+            onApprove={() => approvePendingEdit(sectionKey)}
+            onReject={() => rejectPendingEdit(sectionKey)}
+          />
+        )}
+        {!pending && approved && approval ? (
           <div className="mb-4 inline-flex items-center gap-2 rounded-[3px] border border-[var(--color-moss)]/35 bg-[var(--color-moss)]/8 px-2.5 py-1.5">
             <Icon.Check size={12} className="text-[var(--color-moss)] shrink-0" />
             <LastUpdated label="Approved" stamp={approval} />
           </div>
-        ) : (
+        ) : !pending ? (
           <p className="mb-4 text-[11.5px] text-[var(--color-ink-3)] leading-relaxed">
-            Click any field to correct what the AI extracted. Approve the section once it matches the source.
+            {managerView
+              ? 'Click any field to correct what the AI extracted. Approve the section once it matches the source.'
+              : 'Click any field to propose a correction. Your changes will be reviewed by the production manager before taking effect.'}
           </p>
-        )}
+        ) : null}
 
         {inputList ? (
           <InputListReview
             channels={inputList}
             disabled={approved}
-            onChange={(v) => updateSectionEdit(sectionKey, { inputList: v })}
+            onChange={(v) => editOrPropose({ inputList: v })}
           />
         ) : monitorMix ? (
           <MonitorMixReview
             mixes={monitorMix}
             disabled={approved}
-            onChange={(v) => updateSectionEdit(sectionKey, { monitorMix: v })}
+            onChange={(v) => editOrPropose({ monitorMix: v })}
           />
         ) : fohOutputs ? (
           <FOHOutputsReview
             outputs={fohOutputs}
             disabled={approved}
-            onChange={(v) => updateSectionEdit(sectionKey, { fohOutputs: v })}
+            onChange={(v) => editOrPropose({ fohOutputs: v })}
           />
         ) : section.backline ? (
           <BacklineReview backline={section.backline} />
@@ -477,8 +542,8 @@ function SectionView({
             es={freeText}
             en={freeTextEn}
             disabled={approved}
-            onChangeEs={(v) => updateSectionEdit(sectionKey, { freeText: v })}
-            onChangeEn={(v) => updateSectionEdit(sectionKey, { freeTextEn: v })}
+            onChangeEs={(v) => editOrPropose({ freeText: v })}
+            onChangeEn={(v) => editOrPropose({ freeTextEn: v })}
           />
         )}
       </SectionCard>
