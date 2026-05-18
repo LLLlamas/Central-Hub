@@ -1083,7 +1083,8 @@ function CateringReview({ catering }: { catering: NonNullable<RiderSection['cate
 }
 
 function ConflictsReview({ conflicts }: { conflicts: Conflict[] }) {
-  const { resolvedConflicts } = useApp();
+  const { resolvedConflicts, getPendingConflictResolution, user } = useApp();
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const [active, setActive] = useState<Conflict | null>(null);
 
   if (conflicts.length === 0) {
@@ -1100,6 +1101,7 @@ function ConflictsReview({ conflicts }: { conflicts: Conflict[] }) {
       </p>
       {conflicts.map((c) => {
         const res = resolvedConflicts.get(c.id);
+        const pending = getPendingConflictResolution(c.id);
         return (
           <div
             key={c.id}
@@ -1124,6 +1126,10 @@ function ConflictsReview({ conflicts }: { conflicts: Conflict[] }) {
                 {res ? (
                   <Chip tone="success" size="sm">
                     <Icon.Check size={9} /> Resolved
+                  </Chip>
+                ) : pending ? (
+                  <Chip tone="rehearsal" size="sm" variant="outline">
+                    Pending
                   </Chip>
                 ) : (
                   <Chip
@@ -1150,7 +1156,7 @@ function ConflictsReview({ conflicts }: { conflicts: Conflict[] }) {
                 onClick={() => setActive(c)}
                 className="inline-flex items-center gap-1 h-7 px-2.5 text-[11.5px] font-semibold rounded-[3px] border border-[var(--color-rule)] bg-[var(--color-card)] hover:border-[var(--color-ink-4)] text-[var(--color-ink)] shrink-0"
               >
-                {res ? 'View resolution' : 'Resolve'} <Icon.Arrow size={11} />
+                {res ? 'View resolution' : pending ? 'View' : managerView ? 'Resolve' : 'Propose'} <Icon.Arrow size={11} />
               </button>
             </div>
             <div className={cn('text-[13px] font-semibold text-[var(--color-ink)]', res && 'line-through')}>
@@ -1167,6 +1173,11 @@ function ConflictsReview({ conflicts }: { conflicts: Conflict[] }) {
             </ul>
             {res ? (
               <div className="mt-2 pt-2 border-t border-[var(--color-rule-soft)] text-[12px]">
+                {res.proposedAt && (
+                  <div className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-ink-3)] mb-0.5">
+                    Proposed by {res.proposedAt.by} · {new Date(res.proposedAt.at).toLocaleString()}
+                  </div>
+                )}
                 <span className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-moss)] mr-1.5">
                   ✓ Resolved
                 </span>
@@ -1177,6 +1188,16 @@ function ConflictsReview({ conflicts }: { conflicts: Conflict[] }) {
                 {res.note && (
                   <div className="text-[11.5px] text-[var(--color-ink-3)] italic mt-0.5">"{res.note}"</div>
                 )}
+              </div>
+            ) : pending ? (
+              <div className="mt-2 pt-2 border-t border-[var(--color-rule-soft)] text-[12px]">
+                <span className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-accent)] mr-1.5">
+                  ⏳ Pending
+                </span>
+                <span className="font-semibold text-[var(--color-ink)]">{pending.chosenValue}</span>
+                <span className="text-[var(--color-ink-3)] ml-1.5 text-[11px]">
+                  · proposed by {pending.proposedAt.by} · {new Date(pending.proposedAt.at).toLocaleString()}
+                </span>
               </div>
             ) : (
               c.suggestedResolution && (

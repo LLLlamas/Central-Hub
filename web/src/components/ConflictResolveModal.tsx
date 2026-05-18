@@ -22,12 +22,24 @@ interface ConflictResolveModalProps {
  * in AppState; resolved conflicts collapse out of the active feed.
  */
 export function ConflictResolveModal({ conflict, onClose }: ConflictResolveModalProps) {
-  const { tour, resolveConflict, unresolveConflict, resolvedConflicts } = useApp();
+  const {
+    tour,
+    user,
+    resolveConflict,
+    unresolveConflict,
+    resolvedConflicts,
+    getPendingConflictResolution,
+    proposeConflictResolution,
+    approvePendingConflictResolution,
+    rejectPendingConflictResolution,
+  } = useApp();
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const [choiceIdx, setChoiceIdx] = useState<number | 'custom' | null>(null);
   const [customValue, setCustomValue] = useState('');
   const [note, setNote] = useState('');
 
   const existing = conflict ? resolvedConflicts.get(conflict.id) : undefined;
+  const pending = conflict ? getPendingConflictResolution(conflict.id) : undefined;
   const pm = tour.riderImports[0]?.productionManager;
 
   // Reset form when conflict changes.
@@ -45,16 +57,18 @@ export function ConflictResolveModal({ conflict, onClose }: ConflictResolveModal
     : conflict.severity === 'medium' ? 'rehearsal'
     : 'neutral';
 
-  const canResolve = choiceIdx !== null && (choiceIdx !== 'custom' || customValue.trim().length > 0);
+  const canSubmit = choiceIdx !== null && (choiceIdx !== 'custom' || customValue.trim().length > 0);
 
-  const onResolve = () => {
+  const onSubmit = () => {
     if (choiceIdx === null) return;
     const chosen = choiceIdx === 'custom' ? customValue.trim() : conflict.values[choiceIdx]?.value ?? '';
-    resolveConflict(conflict.id, {
-      chosenValue: chosen,
-      source: choiceIdx === 'custom' ? 'TM override' : conflict.values[choiceIdx]?.section,
-      note: note.trim() || undefined,
-    });
+    const source = choiceIdx === 'custom' ? 'TM override' : conflict.values[choiceIdx]?.section;
+    if (managerView) {
+      resolveConflict(conflict.id, { chosenValue: chosen, source, note: note.trim() || undefined });
+      if (pending) rejectPendingConflictResolution(conflict.id);
+    } else {
+      proposeConflictResolution(conflict.id, { chosenValue: chosen, source, note: note.trim() || undefined });
+    }
     onClose();
   };
 
@@ -83,7 +97,11 @@ export function ConflictResolveModal({ conflict, onClose }: ConflictResolveModal
       open={!!conflict}
       onClose={onClose}
       eyebrow={`Rider conflict · ${conflict.type.replace('_', ' ')}`}
-      title={existing ? 'Conflict already resolved' : 'Resolve this conflict'}
+      title={
+        existing ? 'Conflict already resolved'
+        : pending ? (managerView ? 'Pending proposal' : 'Proposal awaiting approval')
+        : 'Resolve this conflict'
+      }
       size="lg"
     >
       <div className="space-y-4">
@@ -106,8 +124,8 @@ export function ConflictResolveModal({ conflict, onClose }: ConflictResolveModal
           {linkifyRiderRefs(conflict.description)}
         </p>
 
-        {/* If already resolved → show resolution status */}
         {existing ? (
+          /* RESOLVED */
           <div className="border border-[var(--color-rule)] rounded-[4px] p-4 bg-[var(--color-paper-2)]/40">
             <div className="flex items-center gap-2 mb-2">
               <Icon.Check size={14} className="text-[var(--color-moss)]" />
@@ -115,6 +133,11 @@ export function ConflictResolveModal({ conflict, onClose }: ConflictResolveModal
                 Resolved by {existing.resolvedBy} · {new Date(existing.resolvedAt).toLocaleString()}
               </span>
             </div>
+            {existing.proposedAt && (
+              <div className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-ink-3)] mb-2">
+                Proposed by {existing.proposedAt.by} · {new Date(existing.proposedAt.at).toLocaleString()}
+              </div>
+            )}
             <div className="text-[13px] font-semibold text-[var(--color-ink)]">{existing.chosenValue}</div>
             {existing.source && (
               <div className="font-mono text-[10.5px] uppercase tracking-[0.10em] text-[var(--color-ink-3)] mt-1">
@@ -126,18 +149,58 @@ export function ConflictResolveModal({ conflict, onClose }: ConflictResolveModal
                 "{existing.note}"
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                if (conflict) unresolveConflict(conflict.id);
-                onClose();
-              }}
-              className="mt-3 inline-flex items-center gap-1.5 h-8 px-3 text-[12px] font-semibold rounded-[3px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] text-[var(--color-ink-2)]"
-            >
-              Re-open conflict
-            </button>
+            {managerView && (
+              <button
+                type="button"
+                onClick={() => { unresolveConflict(conflict.id); onClose(); }}
+                className="mt-3 inline-flex items-center gap-1.5 h-8 px-3 text-[12px] font-semibold rounded-[3px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] text-[var(--color-ink-2)]"
+              >
+                Re-open conflict
+              </button>
+            )}
+          </div>
+        ) : pending ? (
+          /* PENDING PROPOSAL */
+          <div className="border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/6 rounded-[4px] p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Icon.Alert size={13} className="text-[var(--color-accent)]" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-accent)]">
+                {managerView ? 'Pending proposal' : 'Awaiting manager approval'}
+              </span>
+            </div>
+            <div className="text-[13px] font-semibold text-[var(--color-ink)]">{pending.chosenValue}</div>
+            {pending.source && (
+              <div className="font-mono text-[10.5px] uppercase tracking-[0.10em] text-[var(--color-ink-3)]">
+                Source: {pending.source}
+              </div>
+            )}
+            {pending.note && (
+              <div className="text-[12px] text-[var(--color-ink-2)] italic">"{pending.note}"</div>
+            )}
+            <div className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-ink-3)]">
+              Proposed by {pending.proposedAt.by} · {new Date(pending.proposedAt.at).toLocaleString()}
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => { rejectPendingConflictResolution(conflict.id); onClose(); }}
+                className="inline-flex items-center gap-1.5 h-8 px-3 text-[12px] font-semibold rounded-[3px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] text-[var(--color-ink-2)]"
+              >
+                {managerView ? 'Reject' : 'Cancel proposal'}
+              </button>
+              {managerView && (
+                <button
+                  type="button"
+                  onClick={() => { approvePendingConflictResolution(conflict.id); onClose(); }}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 text-[12px] font-semibold rounded-[3px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]"
+                >
+                  <Icon.Check size={12} /> Approve
+                </button>
+              )}
+            </div>
           </div>
         ) : (
+          /* FORM — unresolved, no pending */
           <>
             {/* Choose a value */}
             <div>
@@ -241,16 +304,16 @@ export function ConflictResolveModal({ conflict, onClose }: ConflictResolveModal
               </button>
               <button
                 type="button"
-                disabled={!canResolve}
-                onClick={onResolve}
+                disabled={!canSubmit}
+                onClick={onSubmit}
                 className={cn(
                   'inline-flex items-center gap-1.5 h-9 px-3.5 text-[13px] font-semibold rounded-[3px]',
-                  canResolve
+                  canSubmit
                     ? 'bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]'
                     : 'bg-[var(--color-paper-3)] text-[var(--color-ink-4)] cursor-not-allowed',
                 )}
               >
-                <Icon.Check size={13} /> Mark resolved
+                <Icon.Check size={13} /> {managerView ? 'Mark resolved' : 'Propose resolution'}
               </button>
             </div>
           </>

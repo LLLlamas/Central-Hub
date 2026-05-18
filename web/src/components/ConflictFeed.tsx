@@ -18,7 +18,8 @@ import type { Conflict } from '@/types';
  * a Resolve → action per row that opens the resolution flow.
  */
 export function ConflictFeed({ limit, compact = false }: { limit?: number; compact?: boolean }) {
-  const { resolvedConflicts } = useApp();
+  const { resolvedConflicts, getPendingConflictResolution, user } = useApp();
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const [active, setActive] = useState<Conflict | null>(null);
 
   const all = getAllConflicts();
@@ -97,6 +98,8 @@ export function ConflictFeed({ limit, compact = false }: { limit?: number; compa
                 conflict={c}
                 compact={compact}
                 onResolve={() => setActive(c)}
+                pending={!!getPendingConflictResolution(c.id)}
+                managerView={managerView}
               />
             ))}
           </ul>
@@ -127,10 +130,14 @@ function ConflictRow({
   conflict,
   compact,
   onResolve,
+  pending,
+  managerView,
 }: {
   conflict: Conflict;
   compact: boolean;
   onResolve: () => void;
+  pending: boolean;
+  managerView: boolean;
 }) {
   const sevColor =
     conflict.severity === 'high'
@@ -161,13 +168,20 @@ function ConflictRow({
               ))}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={onResolve}
-            className="inline-flex items-center gap-1 h-7 px-2.5 text-[11.5px] font-semibold rounded-[3px] border border-[var(--color-rule)] bg-[var(--color-card)] hover:border-[var(--color-ink-4)] text-[var(--color-ink)] shrink-0"
-          >
-            Resolve <Icon.Arrow size={11} />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {pending && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-accent)]">
+                pending
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={onResolve}
+              className="inline-flex items-center gap-1 h-7 px-2.5 text-[11.5px] font-semibold rounded-[3px] border border-[var(--color-rule)] bg-[var(--color-card)] hover:border-[var(--color-ink-4)] text-[var(--color-ink)]"
+            >
+              {managerView ? 'Resolve' : pending ? 'View' : 'Propose'} <Icon.Arrow size={11} />
+            </button>
+          </div>
         </div>
         <p className="text-[12.5px] text-[var(--color-ink)] leading-snug">
           {linkifyRiderRefs(conflict.description)}
@@ -225,6 +239,7 @@ function ResolvedConflicts({
                     {c.description}
                   </div>
                   <div className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-ink-4)]">
+                    {res.proposedAt && <span>Proposed by {res.proposedAt.by} · </span>}
                     Resolved by {res.resolvedBy} → {res.chosenValue}
                   </div>
                 </div>

@@ -21,6 +21,7 @@ export interface ConflictResolution {
   chosenValue: string;      // free-text — picked from a value or typed in
   source?: string;          // optional label, e.g. "Confirmed with PM via email"
   note?: string;
+  proposedAt?: UpdateStamp; // set when a non-manager proposed it; approved by resolvedBy
 }
 
 /** Inline corrections to an extracted rider section, keyed by `${type}-${index}`. */
@@ -36,6 +37,15 @@ export interface RiderSectionEdit {
 export interface PendingEdit {
   key: string;
   patch: RiderSectionEdit;
+  proposedAt: UpdateStamp;
+}
+
+/** A conflict resolution proposed by a non-manager, awaiting manager approval. */
+export interface PendingConflictResolution {
+  conflictId: ID;
+  chosenValue: string;
+  source?: string;
+  note?: string;
   proposedAt: UpdateStamp;
 }
 
@@ -75,6 +85,11 @@ interface AppState {
   proposeSectionEdit: (key: string, patch: RiderSectionEdit) => void;
   approvePendingEdit: (key: string) => void;
   rejectPendingEdit: (key: string) => void;
+  pendingConflictResolutions: ReadonlyMap<ID, PendingConflictResolution>;
+  getPendingConflictResolution: (id: ID) => PendingConflictResolution | undefined;
+  proposeConflictResolution: (id: ID, resolution: Omit<PendingConflictResolution, 'conflictId' | 'proposedAt'>) => void;
+  approvePendingConflictResolution: (id: ID) => void;
+  rejectPendingConflictResolution: (id: ID) => void;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -125,6 +140,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     () => new Map(),
   );
   const [pendingEdits, setPendingEdits] = useState<ReadonlyMap<string, PendingEdit>>(
+    () => new Map(),
+  );
+  const [pendingConflictResolutions, setPendingConflictResolutions] = useState<ReadonlyMap<ID, PendingConflictResolution>>(
     () => new Map(),
   );
 
@@ -283,6 +301,51 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const getPendingConflictResolution = useCallback(
+    (id: ID) => pendingConflictResolutions.get(id),
+    [pendingConflictResolutions],
+  );
+  const proposeConflictResolution = useCallback(
+    (id: ID, resolution: Omit<PendingConflictResolution, 'conflictId' | 'proposedAt'>) => {
+      setPendingConflictResolutions((prev) => {
+        const next = new Map(prev);
+        next.set(id, { conflictId: id, ...resolution, proposedAt: { at: MOCK_NOW, by: currentName } });
+        return next;
+      });
+    },
+    [currentName],
+  );
+  const approvePendingConflictResolution = useCallback(
+    (id: ID) => {
+      const pending = pendingConflictResolutions.get(id);
+      if (!pending) return;
+      resolveConflict(id, {
+        chosenValue: pending.chosenValue,
+        source: pending.source,
+        note: pending.note,
+        proposedAt: pending.proposedAt,
+      });
+      setPendingConflictResolutions((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Map(prev);
+        next.delete(id);
+        return next;
+      });
+    },
+    [pendingConflictResolutions, resolveConflict],
+  );
+  const rejectPendingConflictResolution = useCallback(
+    (id: ID) => {
+      setPendingConflictResolutions((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Map(prev);
+        next.delete(id);
+        return next;
+      });
+    },
+    [],
+  );
+
   const value = useMemo<AppState>(
     () => ({
       tour: mockTour,
@@ -310,8 +373,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       proposeSectionEdit,
       approvePendingEdit,
       rejectPendingEdit,
+      pendingConflictResolutions,
+      getPendingConflictResolution,
+      proposeConflictResolution,
+      approvePendingConflictResolution,
+      rejectPendingConflictResolution,
     }),
-    [userKey, densityMode, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit],
+    [userKey, densityMode, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
