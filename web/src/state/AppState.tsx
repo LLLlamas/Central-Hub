@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import { createScratchTour, scratchUsers, scratchDefaultUserKey } from '@/data/scratchTour';
 import { loadScratchTour, saveScratchTour } from '@/lib/scratchStorage';
+import { loadOverlays, saveOverlays, clearOverlays } from '@/lib/overlayStorage';
 import * as tourQueries from '@/lib/tourQueries';
 import type { ParsedRoute } from '@/lib/routeCsv';
 import { vis } from '@/lib/visibility';
@@ -115,6 +116,12 @@ interface AppState {
    *  defaults editor. Returns the count of items synced. Records per-item
    *  history entries so the audit trail shows the bulk sync. */
   applyTypeTemplateToAllItems: (type: ScheduleItemType) => number;
+  /** Save a visibility blob and cascade it to every schedule item of the same
+   *  type — the schedule-grouping save. Updates each matching item's entry in
+   *  `visibilityEdits` AND bumps the tour-level template so future items of
+   *  this type inherit the same. Records a history entry per affected item.
+   *  Returns the count of items affected. */
+  saveVisibilityForType: (type: ScheduleItemType, patch: Visibility) => number;
 
   // Tour query helpers, bound to the active tour.
   getDay: (date: string) => Day | undefined;
@@ -283,44 +290,53 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // The tour is restored from localStorage, or a fresh empty shell when none
   // was stored — the build-from-scratch onboarding starts from the shell.
   const [tour, setTour] = useState<Tour>(() => loadScratchTour() ?? createScratchTour());
-  const [userKey, setUserKey] = useState<string>(() => scratchDefaultUserKey(tour));
-  const [densityMode, setDensityMode] = useState<DensityMode>(getInitialDensityMode);
-  // The tour starts with nothing locked — the user builds up lock state.
-  const [lockedDays, setLockedDays] = useState<ReadonlySet<ID>>(() => new Set());
-  const [resolvedConflicts, setResolvedConflicts] = useState<ReadonlyMap<ID, ConflictResolution>>(
-    () => new Map(),
+  // Restore the overlay bundle (visibility edits, lock state, section
+  // approvals / history, conflict resolutions, viewer choice). One read,
+  // distributed into each state slot below.
+  const initialOverlays = useMemo(() => loadOverlays(), []);
+  const [userKey, setUserKey] = useState<string>(
+    () => initialOverlays?.userKey ?? scratchDefaultUserKey(tour),
   );
-  const [dayUpdates, setDayUpdates] = useState<ReadonlyMap<ID, UpdateStamp>>(() => new Map());
+  const [densityMode, setDensityMode] = useState<DensityMode>(getInitialDensityMode);
+  const [lockedDays, setLockedDays] = useState<ReadonlySet<ID>>(
+    () => new Set(initialOverlays?.lockedDays ?? []),
+  );
+  const [resolvedConflicts, setResolvedConflicts] = useState<ReadonlyMap<ID, ConflictResolution>>(
+    () => new Map(initialOverlays?.resolvedConflicts ?? []),
+  );
+  const [dayUpdates, setDayUpdates] = useState<ReadonlyMap<ID, UpdateStamp>>(
+    () => new Map(initialOverlays?.dayUpdates ?? []),
+  );
   const [sectionApprovals, setSectionApprovals] = useState<ReadonlyMap<string, UpdateStamp>>(
-    () => new Map(),
+    () => new Map(initialOverlays?.sectionApprovals ?? []),
   );
   const [sectionEdits, setSectionEdits] = useState<ReadonlyMap<string, RiderSectionEdit>>(
-    () => new Map(),
+    () => new Map(initialOverlays?.sectionEdits ?? []),
   );
   const [pendingEdits, setPendingEdits] = useState<ReadonlyMap<string, PendingEdit>>(
-    () => new Map(),
+    () => new Map(initialOverlays?.pendingEdits ?? []),
   );
   const [pendingConflictResolutions, setPendingConflictResolutions] = useState<ReadonlyMap<ID, PendingConflictResolution>>(
-    () => new Map(),
+    () => new Map(initialOverlays?.pendingConflictResolutions ?? []),
   );
   const [sectionEditHistory, setSectionEditHistory] = useState<ReadonlyMap<string, SectionEditRecord[]>>(
-    () => new Map(),
+    () => new Map(initialOverlays?.sectionEditHistory ?? []),
   );
   const [dayLockHistory, setDayLockHistory] = useState<ReadonlyMap<ID, DayLockRecord[]>>(
-    () => new Map(),
+    () => new Map(initialOverlays?.dayLockHistory ?? []),
   );
   const [visibilityEdits, setVisibilityEdits] = useState<ReadonlyMap<ID, Visibility>>(
-    () => new Map(),
+    () => new Map(initialOverlays?.visibilityEdits ?? []),
   );
   const [pendingVisibilityEdits, setPendingVisibilityEdits] = useState<ReadonlyMap<ID, PendingVisibilityEdit>>(
-    () => new Map(),
+    () => new Map(initialOverlays?.pendingVisibilityEdits ?? []),
   );
   const [visibilityEditHistory, setVisibilityEditHistory] = useState<ReadonlyMap<ID, VisibilityEditRecord[]>>(
-    () => new Map(),
+    () => new Map(initialOverlays?.visibilityEditHistory ?? []),
   );
   const [flightPassengerResolutions, setFlightPassengerResolutionsMap] = useState<
     ReadonlyMap<string, FlightPassengerResolution>
-  >(() => new Map());
+  >(() => new Map(initialOverlays?.flightPassengerResolutions ?? []));
 
   useEffect(() => {
     window.localStorage.setItem(DENSITY_STORAGE_KEY, densityMode);
@@ -331,17 +347,69 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     saveScratchTour(tour);
   }, [tour]);
 
+  // Persist the overlay bundle — every Map/Set above. Each write replaces the
+  // whole bundle (small payload — entry arrays of typed records).
+  useEffect(() => {
+    saveOverlays({
+      lockedDays: [...lockedDays],
+      resolvedConflicts: [...resolvedConflicts.entries()],
+      dayUpdates: [...dayUpdates.entries()],
+      sectionApprovals: [...sectionApprovals.entries()],
+      sectionEdits: [...sectionEdits.entries()],
+      pendingEdits: [...pendingEdits.entries()],
+      pendingConflictResolutions: [...pendingConflictResolutions.entries()],
+      sectionEditHistory: [...sectionEditHistory.entries()],
+      dayLockHistory: [...dayLockHistory.entries()],
+      visibilityEdits: [...visibilityEdits.entries()],
+      pendingVisibilityEdits: [...pendingVisibilityEdits.entries()],
+      visibilityEditHistory: [...visibilityEditHistory.entries()],
+      flightPassengerResolutions: [...flightPassengerResolutions.entries()],
+      userKey,
+    });
+  }, [
+    lockedDays,
+    resolvedConflicts,
+    dayUpdates,
+    sectionApprovals,
+    sectionEdits,
+    pendingEdits,
+    pendingConflictResolutions,
+    sectionEditHistory,
+    dayLockHistory,
+    visibilityEdits,
+    pendingVisibilityEdits,
+    visibilityEditHistory,
+    flightPassengerResolutions,
+    userKey,
+  ]);
+
   // Viewer-switcher options — derived from the tour's own personnel, so the
   // list grows as imports add crew.
   const allUsers = useMemo<Record<string, CurrentUser>>(() => scratchUsers(tour), [tour]);
   const user = allUsers[userKey] ?? Object.values(allUsers)[0];
   const currentName = user.name;
 
-  // Reset wipes the tour back to the empty onboarding shell.
+  // Reset wipes the tour back to the empty onboarding shell AND clears every
+  // overlay (lock state, visibility edits, section approvals, history, …) so
+  // the user truly starts from scratch.
   const resetScratchTour = useCallback(() => {
     const t = createScratchTour();
     setTour(t);
     setUserKey(scratchDefaultUserKey(t));
+    setLockedDays(new Set());
+    setResolvedConflicts(new Map());
+    setDayUpdates(new Map());
+    setSectionApprovals(new Map());
+    setSectionEdits(new Map());
+    setPendingEdits(new Map());
+    setPendingConflictResolutions(new Map());
+    setSectionEditHistory(new Map());
+    setDayLockHistory(new Map());
+    setVisibilityEdits(new Map());
+    setPendingVisibilityEdits(new Map());
+    setVisibilityEditHistory(new Map());
+    setFlightPassengerResolutionsMap(new Map());
+    clearOverlays();
   }, []);
 
   // ---- Tour mutators -------------------------------------------------------
@@ -715,6 +783,41 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       return matching.length;
     },
     [getScheduleTypeDefault, tour.scheduleItems, visibilityEdits, currentName],
+  );
+
+  const saveVisibilityForType = useCallback(
+    (type: ScheduleItemType, patch: Visibility): number => {
+      const matching = tour.scheduleItems.filter((i) => i.type === type);
+      if (matching.length === 0) return 0;
+      // Cascade to every existing item of this type.
+      setVisibilityEdits((prev) => {
+        const next = new Map(prev);
+        for (const item of matching) next.set(item.id, patch);
+        return next;
+      });
+      // Per-item history entries so the audit trail captures the cascade.
+      setVisibilityEditHistory((prev) => {
+        const next = new Map(prev);
+        for (const item of matching) {
+          const before = visibilityEdits.get(item.id) ?? item.visibility;
+          const record: VisibilityEditRecord = {
+            patch,
+            changes: computeVisibilityChanges(before, patch),
+            status: 'direct',
+            resolvedAt: { at: MOCK_NOW, by: currentName },
+          };
+          next.set(item.id, [...(prev.get(item.id) ?? []), record]);
+        }
+        return next;
+      });
+      // Bump the tour-level template so future items of this type inherit.
+      updateScratchTour((t) => ({
+        ...t,
+        visibilityDefaultsByType: { ...(t.visibilityDefaultsByType ?? {}), [type]: patch },
+      }));
+      return matching.length;
+    },
+    [tour.scheduleItems, visibilityEdits, currentName, updateScratchTour],
   );
 
   const cancelHotelImport = useCallback(
@@ -1168,6 +1271,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       getScheduleTypeDefault,
       setScheduleTypeDefault,
       applyTypeTemplateToAllItems,
+      saveVisibilityForType,
       getDay,
       getDayById,
       getScheduleItemsForDay,

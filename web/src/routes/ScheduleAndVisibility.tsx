@@ -24,6 +24,7 @@ export function ScheduleAndVisibility() {
     allUsers,
     getVisibilityEdit,
     updateVisibilityEdit,
+    saveVisibilityForType,
     getPendingVisibilityEdit,
     proposeVisibilityEdit,
     approvePendingVisibilityEdit,
@@ -66,13 +67,22 @@ export function ScheduleAndVisibility() {
   const isDirty =
     draftVis !== null && committedVis !== null && JSON.stringify(draftVis) !== JSON.stringify(committedVis);
 
+  // Manager Save cascades to every schedule item of the same type — "schedule
+  // grouping": one save configures all `lobby_call` / `lunch` / etc. items at
+  // once. Non-managers still propose per-item via the pending workflow.
   const handleSaveVis = () => {
     if (!selected || !draftVis || !committedVis) return;
-    if (managerView) updateVisibilityEdit(selected.id, draftVis, committedVis);
+    if (managerView) saveVisibilityForType(selected.type, draftVis);
     else proposeVisibilityEdit(selected.id, draftVis, committedVis);
     setDraftVis(null);
   };
   const handleDiscardVis = () => setDraftVis(null);
+
+  // Cascade count — how many items the Save will affect. Used to label the
+  // Save button so the manager knows the scope of the action.
+  const cascadeCount = selected
+    ? tour.scheduleItems.filter((i) => i.type === selected.type).length
+    : 0;
 
   if (!managerView) {
     return (
@@ -139,14 +149,23 @@ export function ScheduleAndVisibility() {
                   <ul className="border-t border-[var(--color-rule-soft)]/50">
                     {items.map((it) => {
                       const active = it.id === selectedId;
+                      // "Sibling" = same type as the selected item, but not
+                      // the selected one. These get a soft tint so the user
+                      // can see exactly which other items Save will affect.
+                      const isSibling = !active && selected && it.type === selected.type;
                       return (
                         <li key={it.id}>
                           <button
                             onClick={() => setSelectedId(it.id)}
                             className={cn(
-                              'w-full text-left flex items-center gap-2 px-4 py-1.5 hover:bg-[var(--color-paper-2)]/60 transition-colors',
-                              active && 'bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]',
+                              'w-full text-left flex items-center gap-2 px-4 py-1.5 transition-colors',
+                              active
+                                ? 'bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]'
+                                : isSibling
+                                ? 'bg-[var(--color-paper-2)]/70 hover:bg-[var(--color-paper-2)]'
+                                : 'hover:bg-[var(--color-paper-2)]/60',
                             )}
+                            title={isSibling ? `Same type as the selected item — Save will apply to this too.` : undefined}
                           >
                             <span
                               className={cn(
@@ -157,6 +176,12 @@ export function ScheduleAndVisibility() {
                               {it.startTime}
                             </span>
                             <span className="text-[12px] flex-1 min-w-0 truncate font-semibold">{it.title}</span>
+                            {isSibling && (
+                              <span
+                                className="w-1 h-1 rounded-full bg-[var(--color-ink-3)] shrink-0"
+                                aria-hidden
+                              />
+                            )}
                             {it.sensitive && <Icon.Lock size={10} className={active ? 'opacity-80' : 'text-[var(--color-accent)]'} />}
                           </button>
                         </li>
@@ -223,15 +248,27 @@ export function ScheduleAndVisibility() {
                       variant="primary"
                       onClick={handleSaveVis}
                       disabled={!isDirty}
+                      title={
+                        managerView
+                          ? `Save and apply to all ${cascadeCount} ${scheduleItemLabel(selected.type).toLowerCase()}${cascadeCount === 1 ? '' : 's'}`
+                          : undefined
+                      }
                     >
-                      {managerView ? 'Save' : 'Propose changes'}
+                      {managerView
+                        ? cascadeCount > 1
+                          ? `Save (× ${cascadeCount})`
+                          : 'Save'
+                        : 'Propose changes'}
                     </Button>
                     <MockBadge source="visibility" />
                   </div>
                 }
               >
                 <p className="text-[12.5px] text-[var(--color-ink-3)] mb-4 leading-relaxed">
-                  Visibility is per-item. Set a default and override for specific groups, tags, or persons.
+                  Visibility is grouped by item type. Edit one {scheduleItemLabel(selected.type).toLowerCase()}
+                  {' '}and Save — the same permissions apply to{' '}
+                  <strong>all {cascadeCount} {scheduleItemLabel(selected.type).toLowerCase()}{cascadeCount === 1 ? '' : 's'}</strong>
+                  {' '}across the tour, plus any future ones of this type.
                 </p>
                 {pendingVis && (
                   <PendingVisibilityBanner

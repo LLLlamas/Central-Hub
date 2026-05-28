@@ -1,10 +1,12 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getSource, realSourceLabels, phaseLabels, type SourceKey } from '@/data/sources';
 import { Chip } from '@/components/ui/Chip';
 import { cn } from '@/lib/cn';
 
 const POPOVER_WIDTH = 320;
 const VIEWPORT_PAD = 12;
+const POPOVER_GAP = 6;
 
 interface MockBadgeProps {
   source: SourceKey;
@@ -23,16 +25,21 @@ interface MockBadgeProps {
  */
 export function MockBadge({ source, label = 'Mock', variant = 'pill', className }: MockBadgeProps) {
   const [open, setOpen] = useState(false);
-  const [alignRight, setAlignRight] = useState(false);
+  const [popPos, setPopPos] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const prov = getSource(source);
 
-  // Flip the popover anchor when the badge sits too close to the right edge
-  // of the viewport for a 320px popover to fit.
+  // Compute the popover position in viewport (fixed) coordinates so the
+  // portaled element escapes any ancestor `overflow:hidden` / stacking
+  // contexts. Flip to the right edge if the popover would overflow.
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    setAlignRight(rect.left + POPOVER_WIDTH > window.innerWidth - VIEWPORT_PAD);
+    const wouldOverflowRight = rect.left + POPOVER_WIDTH > window.innerWidth - VIEWPORT_PAD;
+    const left = wouldOverflowRight
+      ? Math.max(VIEWPORT_PAD, rect.right - POPOVER_WIDTH)
+      : rect.left;
+    setPopPos({ top: rect.bottom + POPOVER_GAP, left });
   }, [open]);
 
   if (variant === 'strip') {
@@ -85,14 +92,15 @@ export function MockBadge({ source, label = 'Mock', variant = 'pill', className 
           {label}
         </Chip>
       </button>
-      {open && (
-        <span
+      {open && popPos && createPortal(
+        <div
           role="tooltip"
-          className={cn(
-            'absolute z-50 top-full mt-1.5 w-[320px] rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] p-3 shadow-lg text-left',
-            alignRight ? 'right-0' : 'left-0',
-          )}
-          style={{ boxShadow: '0 10px 30px rgba(21,19,15,0.10)' }}
+          className="fixed z-[200] w-[320px] rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] p-3 shadow-lg text-left"
+          style={{
+            top: popPos.top,
+            left: popPos.left,
+            boxShadow: '0 10px 30px rgba(21,19,15,0.10)',
+          }}
         >
           <div className="text-[10.5px] font-mono font-semibold tracking-[0.14em] uppercase text-[#7a5a8a]">
             Mocked · where it comes from
@@ -113,7 +121,8 @@ export function MockBadge({ source, label = 'Mock', variant = 'pill', className 
               {phaseLabels[prov.phase]}
             </Chip>
           </div>
-        </span>
+        </div>,
+        document.body,
       )}
     </span>
   );
