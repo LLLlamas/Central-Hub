@@ -4,7 +4,6 @@ import { Icon } from '@/components/ui/Icon';
 import { Chip } from '@/components/ui/Chip';
 import { MockTag } from '@/components/provenance/MockTag';
 import { SourceTag } from '@/components/provenance/SourceTag';
-import { getAllConflicts } from '@/data/mockTour';
 import { cn } from '@/lib/cn';
 import { fmtDate, daysBetween } from '@/lib/format';
 import { MOCK_TODAY } from '@/lib/today';
@@ -20,9 +19,9 @@ const nav: NavEntry[] = [
   { to: '/', label: 'Today', icon: 'Home', group: 'tour' },
   { to: '/calendar', label: 'Calendar', icon: 'Calendar', group: 'tour' },
   { to: '/personnel', label: 'People', icon: 'Users', group: 'tour' },
-  { to: '/schedule', label: 'Schedule', icon: 'Layers', group: 'ops' },
+  { to: '/schedule', label: 'Schedule Permissions', icon: 'Layers', group: 'ops' },
   { to: '/daysheet', label: 'Day Sheets', icon: 'Document', group: 'ops' },
-  { to: '/ingest/flights', label: 'Import flights', icon: 'Plane', group: 'ingest' },
+  { to: '/ingest/flights', label: 'Import route & travel', icon: 'Plane', group: 'ingest' },
   { to: '/ingest/riders', label: 'Import rider', icon: 'Sparkle', group: 'ingest' },
 ];
 
@@ -33,13 +32,14 @@ const groupLabels: Record<NavEntry['group'], string> = {
 };
 
 export function Sidebar() {
-  const { tour, lockedDays, resolvedConflicts } = useApp();
+  const { tour, user, lockedDays, resolvedConflicts, getAllConflicts } = useApp();
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const today = MOCK_TODAY;
   const dToStart = daysBetween(today, tour.startDate);
   const dToEnd = daysBetween(today, tour.endDate);
   const allConflicts = getAllConflicts();
   const unresolvedConflictCount = allConflicts.filter((c) => !resolvedConflicts.has(c.id)).length;
-  const lockedCount = lockedDays.size;
+  const lockedCount = tour.days.filter((d) => lockedDays.has(d.id)).length;
 
   const stateLabel =
     tour.status === 'wrapped'
@@ -116,7 +116,7 @@ export function Sidebar() {
               {groupLabels[groupKey]}
             </div>
             <ul className="space-y-0.5">
-              {nav.filter((n) => n.group === groupKey).map((entry) => {
+              {nav.filter((n) => n.group === groupKey && (n.to !== '/schedule' || managerView)).map((entry) => {
                 const I = Icon[entry.icon];
                 return (
                   <li key={entry.to}>

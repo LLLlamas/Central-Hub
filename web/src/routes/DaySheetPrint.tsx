@@ -1,4 +1,5 @@
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
 import { useApp } from '@/state/AppState';
 import { Icon } from '@/components/ui/Icon';
 import { Chip } from '@/components/ui/Chip';
@@ -13,15 +14,10 @@ import {
   travelModeIcon,
   travelModeLabel,
 } from '@/lib/format';
-import {
-  getDay,
-  getScheduleItemsForDay,
-  getTravelForDay,
-  getHotelsForDay,
-} from '@/data/mockTour';
 import { getMockVenue } from '@/data/mockVenues';
 import { cn } from '@/lib/cn';
 import { getGeneratedAtLabel } from '@/lib/today';
+import { buildShareUrl, verifyShareToken } from '@/lib/shareToken';
 import type { Day, ScheduleItem, Travel, Hotel } from '@/types';
 
 /**
@@ -33,7 +29,28 @@ import type { Day, ScheduleItem, Travel, Hotel } from '@/types';
  */
 export function DaySheetPrint() {
   const { date } = useParams();
-  const { tour, isDayLocked, getDayLastUpdated } = useApp();
+  const [searchParams] = useSearchParams();
+  const [copied, setCopied] = useState(false);
+  const token = searchParams.get('token') ?? '';
+  const isSharedView = !!token && !!date && verifyShareToken(date, token);
+
+  const handleCopyLink = () => {
+    if (!date) return;
+    navigator.clipboard.writeText(buildShareUrl(date)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const {
+    tour,
+    isDayLocked,
+    getDayLastUpdated,
+    getDay,
+    getScheduleItemsForDay,
+    getTravelForDay,
+    getHotelsForDay,
+  } = useApp();
 
   if (!date) return <NotFoundView />;
   const day = getDay(date);
@@ -54,22 +71,38 @@ export function DaySheetPrint() {
     <>
       {/* Action bar — hidden in print */}
       <div className="print:hidden sticky top-0 z-10 bg-[var(--color-paper)] border-b border-[var(--color-rule)] px-5 py-2.5 flex items-center gap-3">
-        <Link
-          to={`/daysheet/${date}`}
-          className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
-        >
-          ← Back to day sheet
-        </Link>
+        {isSharedView ? (
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-ink-3)]">
+            <Icon.Share size={12} /> Shared day sheet
+          </span>
+        ) : (
+          <Link
+            to={`/daysheet/${date}`}
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+          >
+            ← Back to day sheet
+          </Link>
+        )}
         <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-4)] hidden sm:inline">
           Print preview · letter
         </span>
-        <DayJumper day={day} />
-        <button
-          onClick={() => window.print()}
-          className="ml-auto inline-flex items-center gap-1.5 h-8 px-3 text-[12.5px] font-semibold rounded-[3px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]"
-        >
-          <Icon.Print size={13} /> Print / Save as PDF
-        </button>
+        {!isSharedView && <DayJumper day={day} />}
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={handleCopyLink}
+            title="Copy shareable link"
+            className="inline-flex items-center gap-1.5 h-8 px-3 text-[12.5px] font-semibold rounded-[3px] border border-[var(--color-rule)] text-[var(--color-ink-2)] hover:border-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+          >
+            <Icon.Share size={13} />
+            {copied ? 'Copied!' : 'Copy link'}
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 h-8 px-3 text-[12.5px] font-semibold rounded-[3px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]"
+          >
+            <Icon.Print size={13} /> Print / Save as PDF
+          </button>
+        </div>
       </div>
 
       {/* Sheet area — centered on screen, full-bleed in print */}

@@ -25,7 +25,7 @@ const personToSource: Record<string, RealSourceKey> = {
  *
  * - Placeholders (no real name yet) → italic + (mock) tag.
  * - Real persons → bold + (i) tag pointing to the rider page where the name
- *   appears (or "user entry" for user-provided records like Lorenzo).
+ *   appears (or "user entry" for user-provided records like the TM).
  */
 export function PersonName({ person, className, showRole }: PersonNameProps) {
   const isPlaceholder = !!person.isPlaceholder;

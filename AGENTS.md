@@ -111,7 +111,7 @@ Display rule: **don't show `§N` in the visible UI** (it's industry jargon). Use
 
 ABAC. Each schedule item / travel / hotel / task / doc carries a `Visibility` blob with `default + groups + tags + persons` overrides. **Most specific wins.** Levels: `blocked < sees < needs < owns`. The resolver lives in `lib/visibility.ts`.
 
-The TopBar viewer switcher (Lorenzo / Manuel / Audio / Elsa / Julian / MUA) re-renders the Day Detail and Day Sheets pages from that user's perspective. This is the killer demo for the visibility model — same data, different views.
+The TopBar viewer switcher (Tour Manager / Manuel / Audio / Elsa / Julian / MUA) re-renders the Day Detail and Day Sheets pages from that user's perspective. This is the killer demo for the visibility model — same data, different views.
 
 ## State (AppState)
 
@@ -188,12 +188,12 @@ If you add a route that should be printable / shareable / chrome-free, put it un
 
 ## Pending user-blocked items
 
-The tour roster has 8 placeholder names waiting for user input:
+The tour roster still has placeholder names waiting for user input:
 - Juan, Daniel — last names (drummer + bassist, named in rider §6 monitor mixes but no surnames)
-- Tour Manager — real name + contact info (the current `p_lorenzo`/`tp_lorenzo` is a placeholder; the role-switcher's `lorenzo` key is kept for stability)
+- Tour Manager — real name + contact info. The scratch TM is the placeholder name **"Tour Manager"** (`scratchTour.ts`); the flight/hotel fixtures use the same literal string so passenger/rooming name-matching connects.
 - Audio Engineer (FOH + Monitors), Lighting Engineer, VJ, MUA, Personal Assistant, Staff #1, Staff #2 — full names
 
-Once provided, update `persons[]` in `web/src/data/mockTour.ts` and remove `isPlaceholder: true` from the corresponding `TourPerson` entries. For the TM, also update `currentUsers.lorenzo` (name + role label) and re-add a `realSources` entry if you want the `(i)` provenance modal to point to "user entry".
+Once provided, update `persons[]` in `web/src/data/mockTour.ts` and remove `isPlaceholder: true` from the corresponding `TourPerson` entries. For the TM, also update the scratch TM name in `web/src/data/scratchTour.ts` and the matching passenger/rooming names in `flightFixture.ts` / `hotelFixture.ts` (and re-run `gen-flight-pdfs.mjs`), and re-add a `realSources` entry if you want the `(i)` provenance modal to point to "user entry".
 
 ## What's still on the gap list (from the audit)
 

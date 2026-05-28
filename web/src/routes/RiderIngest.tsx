@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Modal } from '@/components/ui/Modal';
 import { useApp } from '@/state/AppState';
 import type { PendingEdit } from '@/state/AppState';
+import { MOCK_NOW } from '@/lib/today';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card, SectionCard, EmptyState } from '@/components/ui/Card';
+import { Card, SectionCard } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
@@ -14,7 +16,13 @@ import { ConflictResolveModal } from '@/components/ConflictResolveModal';
 import { ExplainTag, ConflictExplain, ExcludedBrandExplain } from '@/components/ExplainTag';
 import { LastUpdated } from '@/components/LastUpdated';
 import { usePdfViewer } from '@/components/PdfViewer';
+import { FileDropZone } from '@/components/ingest/FileDropZone';
+import { UploadResultNote } from '@/components/ingest/UploadResultNote';
+import type { UploadNote } from '@/components/ingest/UploadResultNote';
 import { RIDER_PDF_PATH } from '@/lib/riderSections';
+import { matchFixture, fixturesOfKind, nonMatchNote } from '@/lib/fixtureMatcher';
+import { buildScratchRiderImport, buildScratchRiderPersonnel } from '@/data/riderFixture';
+import { parseRiderPdf } from '@/lib/pdfParser';
 import { cn } from '@/lib/cn';
 import type {
   RiderImport,
@@ -25,6 +33,8 @@ import type {
   InputChannel,
   MonitorMix,
   FOHOutput,
+  SectionEditRecord,
+  UpdateStamp,
 } from '@/types';
 
 // Friendly labels for the canonical section types (handoff §1).
@@ -62,12 +72,19 @@ export function RiderIngest() {
     if (inputListIdx >= 0) return `input_list-${inputListIdx}`;
     return imp.sections[0] ? `${imp.sections[0].type}-0` : null;
   });
+  const [sectionFilter, setSectionFilter] = useState<'all' | 'needs-review' | 'conflicts'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'needs-review' | 'approved' | 'pending'>('all');
+  const [confSort, setConfSort] = useState<'desc' | 'asc'>('desc');
 
   if (!imp) {
     return (
       <div>
-        <PageHeader eyebrow="Import rider" title="Rider import" />
-        <EmptyState title="No riders uploaded yet" hint="Drop a rider PDF to start." />
+        <PageHeader
+          eyebrow="Import rider"
+          title="Rider import"
+          description="Drop a rider PDF and the AI ingest extracts every section for review."
+        />
+        <ScratchRiderUpload />
       </div>
     );
   }
@@ -78,6 +95,33 @@ export function RiderIngest() {
   imp.sections.forEach((s, i) => sectionMap.set(`${s.type}-${i}`, s));
   const section = activeSection ? sectionMap.get(activeSection) ?? null : null;
   const approvedCount = imp.sections.filter((s, i) => isSectionApproved(`${s.type}-${i}`)).length;
+
+  // Pipeline step (sectionFilter) and status chips (statusFilter) are two
+  // dimensions; only one is active at a time — selecting one resets the other.
+  const selectPipelineFilter = (f: 'all' | 'needs-review' | 'conflicts') => {
+    setSectionFilter(f);
+    setStatusFilter('all');
+  };
+  const selectStatusFilter = (f: 'all' | 'needs-review' | 'approved' | 'pending') => {
+    setStatusFilter(f);
+    setSectionFilter('all');
+  };
+
+  const filteredSections = imp.sections
+    .map((s, i) => ({ s, i, key: `${s.type}-${i}` }))
+    .filter(({ s, key }) => {
+      if (sectionFilter === 'needs-review' && isSectionApproved(key)) return false;
+      if (sectionFilter === 'conflicts' && (s.conflicts?.length ?? 0) === 0) return false;
+      if (statusFilter === 'needs-review' && (isSectionApproved(key) || !!getPendingEdit(key))) return false;
+      if (statusFilter === 'approved' && !isSectionApproved(key)) return false;
+      if (statusFilter === 'pending' && !getPendingEdit(key)) return false;
+      return true;
+    });
+  const sortedFilteredSections = [...filteredSections].sort((a, b) => {
+    const ca = a.s.confidence ?? 0;
+    const cb = b.s.confidence ?? 0;
+    return confSort === 'desc' ? cb - ca : ca - cb;
+  });
 
   return (
     <div>
@@ -121,20 +165,48 @@ export function RiderIngest() {
       {/* Cover & revision banner */}
       <CoverBanner imp={imp} />
 
-      <PipelineStrip sections={imp.sections} approvedCount={approvedCount} />
+      <PipelineStrip
+        sections={imp.sections}
+        approvedCount={approvedCount}
+        activeFilter={sectionFilter}
+        onFilter={selectPipelineFilter}
+      />
 
       <div className="grid lg:grid-cols-[260px_1fr] gap-5 mt-6">
         {/* Sections list */}
         <Card padded={false} className="overflow-hidden">
-          <div className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
+          <div data-tour="rider-sections" className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
             <div className="eyebrow">Detected sections</div>
             <div className="text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
               {imp.sections.length} found · {approvedCount} approved
             </div>
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+              {(['all', 'needs-review', 'approved', 'pending'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => selectStatusFilter(f)}
+                  className={cn(
+                    'h-6 px-2 text-[10.5px] font-mono uppercase tracking-[0.08em] rounded-[2px] border transition-colors',
+                    statusFilter === f
+                      ? 'bg-[var(--color-ink)] text-[var(--color-paper)] border-[var(--color-ink)]'
+                      : 'border-[var(--color-rule)] text-[var(--color-ink-3)] hover:border-[var(--color-ink-4)]',
+                  )}
+                >
+                  {f === 'all' ? 'All' : f === 'needs-review' ? 'Needs review' : f === 'approved' ? 'Approved' : 'Pending'}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2">
+              <button
+                onClick={() => setConfSort((cs) => (cs === 'desc' ? 'asc' : 'desc'))}
+                className="inline-flex items-center gap-1 text-[10.5px] font-mono uppercase tracking-[0.08em] text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+              >
+                Conf {confSort === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
           </div>
-          <ul className="divide-y divide-[var(--color-rule-soft)]">
-            {imp.sections.map((s, i) => {
-              const key = `${s.type}-${i}`;
+          <ul className="divide-y divide-[var(--color-rule-soft)] max-h-[600px] overflow-y-auto">
+            {sortedFilteredSections.map(({ s, i, key }) => {
               const active = key === activeSection;
               const hasConflicts = (s.conflicts?.length ?? 0) > 0;
               const hasPending = !!getPendingEdit(key);
@@ -175,11 +247,19 @@ export function RiderIngest() {
                     >
                       <span>{s.pages.length > 0 ? `pp. ${s.pages.join(', ')}` : 'derived'}</span>
                       {s.confidence != null && <span>· conf {(s.confidence * 100).toFixed(0)}%</span>}
+                      {s.type === 'input_list' && s.inputList?.length && (
+                        <span>· {s.inputList.length} ch{s.monitorMix?.length ? ` · ${s.monitorMix.length} mx` : ''}{s.fohOutputs?.length ? ` · ${s.fohOutputs.length} foh` : ''}</span>
+                      )}
                     </div>
                   </button>
                 </li>
               );
             })}
+            {sortedFilteredSections.length === 0 && (
+              <li className="px-4 py-6 text-[11.5px] text-[var(--color-ink-3)] text-center">
+                No sections match this filter.
+              </li>
+            )}
           </ul>
         </Card>
 
@@ -209,6 +289,8 @@ export function RiderIngest() {
 }
 
 function CoverBanner({ imp }: { imp: RiderImport }) {
+  const inputSec = imp.sections.find(s => s.type === 'input_list');
+  const bandMembers = (inputSec?.monitorMix ?? []).map(m => m.personName).filter(Boolean) as string[];
   return (
     <Card className="mb-5 border-l-4" padded={false}>
       <div
@@ -246,6 +328,17 @@ function CoverBanner({ imp }: { imp: RiderImport }) {
               sub={imp.productionManager.email ?? imp.productionManager.phone}
               sourceKey="rider_pm_contact"
             />
+          )}
+          {inputSec?.inputList?.length ? (
+            <Fact
+              label="Input list"
+              value={`${inputSec.inputList.length} ch`}
+              sub={[inputSec.monitorMix?.length && `${inputSec.monitorMix.length} mx`, inputSec.fohOutputs?.length && `${inputSec.fohOutputs.length} foh`].filter(Boolean).join(' · ') || undefined}
+              sourceKey="rider_input_list"
+            />
+          ) : null}
+          {bandMembers.length > 0 && (
+            <Fact label="Band (from mixes)" value={bandMembers.join(', ')} sourceKey="rider_input_list" />
           )}
           {imp.partySize && (
             <>
@@ -286,10 +379,12 @@ function ContactBlock({
 function Fact({
   label,
   value,
+  sub,
   sourceKey,
 }: {
   label: string;
   value: string;
+  sub?: string;
   sourceKey?: import('@/data/realSources').RealSourceKey;
 }) {
   return (
@@ -299,11 +394,22 @@ function Fact({
         {value}
         {sourceKey && <SourceTag source={sourceKey} field={label} />}
       </div>
+      {sub && <div className="font-mono text-[10.5px] text-[var(--color-ink-3)] mt-0.5">{sub}</div>}
     </div>
   );
 }
 
-function PipelineStrip({ sections, approvedCount }: { sections: RiderSection[]; approvedCount: number }) {
+function PipelineStrip({
+  sections,
+  approvedCount,
+  activeFilter,
+  onFilter,
+}: {
+  sections: RiderSection[];
+  approvedCount: number;
+  activeFilter: 'all' | 'needs-review' | 'conflicts';
+  onFilter: (f: 'all' | 'needs-review' | 'conflicts') => void;
+}) {
   const total = sections.length;
   const processed = sections.filter((s) => s.status !== 'pending').length;
   const avgConf = sections.reduce((a, s) => a + (s.confidence ?? 0), 0) / Math.max(1, sections.length);
@@ -312,10 +418,10 @@ function PipelineStrip({ sections, approvedCount }: { sections: RiderSection[]; 
   return (
     <Card padded={false}>
       <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-[var(--color-rule-soft)]">
-        <PipelineStep num="01" label="Classify" value={`${total} sections detected`} hint="Single API call. Returns sections present, page ranges, language, PM contact." status="done" />
-        <PipelineStep num="02" label="Extract" value={`${processed}/${total} extracted`} hint="One structured-output call per section. Schemas per type." status={processed < total ? 'doing' : 'done'} />
-        <PipelineStep num="03" label="Review" value={`${approvedCount}/${total} approved`} hint="Correct any wrong field inline, then approve the section." status={approvedCount < total ? 'doing' : 'done'} />
-        <PipelineStep num="04" label="Conflicts" value={`${conflictCount} flagged · avg conf ${(avgConf * 100).toFixed(0)}%`} hint="Never auto-resolved. Human always decides." status={conflictCount > 0 ? 'doing' : 'done'} />
+        <PipelineStep num="01" label="Classify" value={`${total} sections detected`} hint="Single API call. Returns sections present, page ranges, language, PM contact." status="done" filterTarget="all" activeFilter={activeFilter} onFilter={onFilter} />
+        <PipelineStep num="02" label="Extract" value={`${processed}/${total} extracted`} hint="One structured-output call per section. Schemas per type." status={processed < total ? 'doing' : 'done'} filterTarget="all" activeFilter={activeFilter} onFilter={onFilter} />
+        <PipelineStep num="03" label="Review" value={`${approvedCount}/${total} approved`} hint="Correct any wrong field inline, then approve the section." status={approvedCount < total ? 'doing' : 'done'} filterTarget="needs-review" activeFilter={activeFilter} onFilter={onFilter} />
+        <PipelineStep num="04" label="Conflicts" value={`${conflictCount} flagged · avg conf ${(avgConf * 100).toFixed(0)}%`} hint="Never auto-resolved. Human always decides." status={conflictCount > 0 ? 'doing' : 'done'} filterTarget="conflicts" activeFilter={activeFilter} onFilter={onFilter} />
       </div>
     </Card>
   );
@@ -327,31 +433,54 @@ function PipelineStep({
   value,
   hint,
   status,
+  filterTarget,
+  activeFilter,
+  onFilter,
 }: {
   num: string;
   label: string;
   value: string;
   hint: string;
   status: 'done' | 'doing' | 'pending';
+  filterTarget: 'all' | 'needs-review' | 'conflicts';
+  activeFilter: 'all' | 'needs-review' | 'conflicts';
+  onFilter: (f: 'all' | 'needs-review' | 'conflicts') => void;
 }) {
+  const isActive = activeFilter === filterTarget && filterTarget !== 'all';
   return (
-    <div className="px-4 py-4">
+    <button
+      type="button"
+      onClick={() => onFilter(filterTarget === activeFilter ? 'all' : filterTarget)}
+      className={cn(
+        'px-4 py-4 text-left w-full transition-colors',
+        isActive
+          ? 'bg-[var(--color-ink)] text-[var(--color-paper)]'
+          : 'hover:bg-[var(--color-paper-2)]/60',
+      )}
+    >
       <div className="flex items-baseline gap-2 mb-1">
         <span
           className="font-mono text-[11px] font-bold tracking-[0.10em]"
-          style={{ color: status === 'done' ? 'var(--color-day-promo)' : status === 'doing' ? 'var(--color-day-rehearsal)' : 'var(--color-ink-4)' }}
+          style={{
+            color: isActive
+              ? 'var(--color-paper)'
+              : status === 'done' ? 'var(--color-day-promo)'
+              : status === 'doing' ? 'var(--color-day-rehearsal)'
+              : 'var(--color-ink-4)',
+          }}
         >
           {num}
         </span>
-        <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.10em] text-[var(--color-ink-3)]">
+        <span className={cn('text-[11px] font-mono font-semibold uppercase tracking-[0.10em]', isActive ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-ink-3)]')}>
           {label}
         </span>
-        {status === 'doing' && <Chip tone="rehearsal" size="sm">Active</Chip>}
-        {status === 'done' && <Chip tone="success" size="sm">Done</Chip>}
+        {!isActive && status === 'doing' && <Chip tone="rehearsal" size="sm">Active</Chip>}
+        {!isActive && status === 'done' && <Chip tone="success" size="sm">Done</Chip>}
+        {isActive && <span className="font-mono text-[10px] text-[var(--color-paper)] opacity-60 ml-auto">filtered ×</span>}
       </div>
-      <div className="text-[15px] font-semibold text-[var(--color-ink)]">{value}</div>
-      <div className="text-[11.5px] text-[var(--color-ink-3)] mt-0.5 leading-relaxed">{hint}</div>
-    </div>
+      <div className={cn('text-[15px] font-semibold', isActive ? 'text-[var(--color-paper)]' : 'text-[var(--color-ink)]')}>{value}</div>
+      <div className={cn('text-[11.5px] mt-0.5 leading-relaxed', isActive ? 'text-[var(--color-paper)] opacity-70' : 'text-[var(--color-ink-3)]')}>{hint}</div>
+    </button>
   );
 }
 
@@ -430,6 +559,7 @@ function SectionView({
     proposeSectionEdit,
     approvePendingEdit,
     rejectPendingEdit,
+    getSectionHistory,
   } = useApp();
 
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
@@ -448,8 +578,15 @@ function SectionView({
   const eff: RiderSection = { ...section, inputList, monitorMix, fohOutputs, freeText, freeTextEn };
 
   // Route onChange to direct edit (managers) or proposal (everyone else).
-  const editOrPropose = (patch: Parameters<typeof updateSectionEdit>[1]) =>
-    managerView ? updateSectionEdit(sectionKey, patch) : proposeSectionEdit(sectionKey, patch);
+  // Captures the current effective state as `before` for the diff/history.
+  const editOrPropose = (patch: Parameters<typeof updateSectionEdit>[1]) => {
+    const before = { inputList, monitorMix, fohOutputs, freeText, freeTextEn };
+    if (managerView) {
+      updateSectionEdit(sectionKey, patch, before);
+    } else {
+      proposeSectionEdit(sectionKey, patch, before);
+    }
+  };
 
   return (
     <>
@@ -515,18 +652,24 @@ function SectionView({
           <InputListReview
             channels={inputList}
             disabled={approved}
+            history={getSectionHistory(sectionKey)}
+            userName={user.name}
             onChange={(v) => editOrPropose({ inputList: v })}
           />
         ) : monitorMix ? (
           <MonitorMixReview
             mixes={monitorMix}
             disabled={approved}
+            history={getSectionHistory(sectionKey)}
+            userName={user.name}
             onChange={(v) => editOrPropose({ monitorMix: v })}
           />
         ) : fohOutputs ? (
           <FOHOutputsReview
             outputs={fohOutputs}
             disabled={approved}
+            history={getSectionHistory(sectionKey)}
+            userName={user.name}
             onChange={(v) => editOrPropose({ fohOutputs: v })}
           />
         ) : section.backline ? (
@@ -670,21 +813,236 @@ const MONITOR_TYPE_OPTIONS = [
   { value: 'other', label: 'Other' },
 ] as const;
 
+// ---- Section edit history modal -------------------------
+
+function SectionHistoryModal({
+  history,
+  onClose,
+}: {
+  history: SectionEditRecord[];
+  onClose: () => void;
+}) {
+  return (
+    <Modal open title="Edit history" eyebrow="Section edits" onClose={onClose} size="lg">
+      {history.length === 0 ? (
+        <p className="text-[12.5px] text-[var(--color-ink-3)]">No recorded edits.</p>
+      ) : (
+        <ul className="space-y-4">
+          {[...history].reverse().map((rec, idx) => (
+            <li key={idx} className={cn(
+              'rounded-[4px] border px-4 py-3 space-y-2',
+              rec.status === 'approved' ? 'border-[var(--color-moss)]/35 bg-[var(--color-moss)]/5'
+              : rec.status === 'rejected' ? 'border-[var(--color-accent)]/35 bg-[var(--color-accent)]/5'
+              : 'border-[var(--color-rule)]',
+            )}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={cn(
+                  'font-mono text-[10px] uppercase tracking-[0.12em]',
+                  rec.status === 'approved' ? 'text-[var(--color-moss)]'
+                  : rec.status === 'rejected' ? 'text-[var(--color-accent)]'
+                  : 'text-[var(--color-ink-4)]',
+                )}>
+                  {rec.status === 'approved' ? '✓ Approved' : rec.status === 'rejected' ? '✕ Rejected' : '• Direct edit'}
+                </span>
+                {rec.proposedAt && (
+                  <span className="font-mono text-[10px] text-[var(--color-ink-3)]">
+                    Proposed by {rec.proposedAt.by} · {new Date(rec.proposedAt.at).toLocaleString()}
+                  </span>
+                )}
+                <span className="font-mono text-[10px] text-[var(--color-ink-3)]">
+                  {rec.status === 'direct' ? 'By' : rec.status === 'approved' ? 'Approved by' : 'Rejected by'}{' '}
+                  {rec.resolvedAt.by} · {new Date(rec.resolvedAt.at).toLocaleString()}
+                </span>
+              </div>
+              {rec.changes.length > 0 ? (
+                <table className="w-full text-[11.5px]">
+                  <thead>
+                    <tr className="text-left text-[10px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-4)]">
+                      <th className="pb-1 pr-3 w-[35%]">Row</th>
+                      <th className="pb-1 pr-3 w-[15%]">Field</th>
+                      <th className="pb-1 pr-3">Before</th>
+                      <th className="pb-1">After</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rec.changes.map((ch, ci) => (
+                      <tr key={ci} className="border-t border-[var(--color-rule-soft)]">
+                        <td className="py-1 pr-3 text-[var(--color-ink-3)] truncate max-w-[160px]">{ch.rowLabel}</td>
+                        <td className="py-1 pr-3 font-mono text-[10px] text-[var(--color-ink-4)] uppercase">{ch.field}</td>
+                        <td className="py-1 pr-3 line-through text-[var(--color-ink-4)] max-w-[140px] truncate">{ch.before || '—'}</td>
+                        <td className="py-1 text-[var(--color-ink)] font-semibold max-w-[140px] truncate">{ch.after || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-[11.5px] text-[var(--color-ink-3)] italic">No field-level diff recorded.</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Modal>
+  );
+}
+
+// ---- Last-edited cell chip --------------------------------
+
+function LastEditedCell({
+  stamp,
+  history,
+}: {
+  stamp: UpdateStamp | undefined;
+  history: SectionEditRecord[];
+}) {
+  const [showHistory, setShowHistory] = useState(false);
+  if (!stamp && history.length === 0) return <span className="text-[var(--color-ink-4)]">—</span>;
+  const count = history.length;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => count > 0 && setShowHistory(true)}
+        className={cn(
+          'inline-flex flex-col items-start text-left gap-0.5',
+          count > 0 ? 'cursor-pointer hover:opacity-70' : 'cursor-default',
+        )}
+      >
+        {stamp ? (
+          <>
+            <span className="font-mono text-[10px] text-[var(--color-ink-3)]">{stamp.by}</span>
+            <span className="font-mono text-[9.5px] text-[var(--color-ink-4)]">{new Date(stamp.at).toLocaleString()}</span>
+          </>
+        ) : (
+          <span className="font-mono text-[10px] text-[var(--color-ink-4)]">pending</span>
+        )}
+        {count > 0 && (
+          <span className="font-mono text-[9.5px] text-[var(--color-ocean)] underline underline-offset-2">
+            {count} edit{count !== 1 ? 's' : ''} →
+          </span>
+        )}
+      </button>
+      {showHistory && (
+        <SectionHistoryModal history={history} onClose={() => setShowHistory(false)} />
+      )}
+    </>
+  );
+}
+
+// ---- Column filter popup ---------------------------------
+
+function ColumnFilterPopup({
+  label,
+  active,
+  onClear,
+  children,
+}: {
+  label: React.ReactNode;
+  active: boolean;
+  onClear: () => void;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          'inline-flex items-center gap-0.5 font-mono text-[10px] uppercase tracking-[0.14em] rounded-[2px] px-1 py-0.5',
+          active
+            ? 'text-[var(--color-ocean)] bg-[var(--color-ocean)]/10'
+            : 'text-[var(--color-ink-3)] hover:text-[var(--color-ink)]',
+        )}
+      >
+        {label}
+        <Icon.Chevron size={9} className={cn('transition-transform', open && 'rotate-90')} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 z-50 mt-1 min-w-[160px] rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] shadow-md p-2 space-y-1.5">
+          {children}
+          {active && (
+            <button
+              type="button"
+              onClick={() => { onClear(); setOpen(false); }}
+              className="w-full text-left text-[11px] text-[var(--color-accent)] font-semibold pt-1 border-t border-[var(--color-rule-soft)]"
+            >
+              Clear filter
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilterOption({
+  label,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        'w-full text-left text-[11.5px] px-1.5 py-1 rounded-[2px]',
+        selected ? 'bg-[var(--color-ink)] text-[var(--color-paper)]' : 'hover:bg-[var(--color-paper-2)]',
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ---- Table review components ----------------------------
+
 function InputListReview({
   channels,
   onChange,
   disabled,
+  history,
+  userName,
 }: {
   channels: InputChannel[];
   onChange: (channels: InputChannel[]) => void;
   disabled: boolean;
+  history: SectionEditRecord[];
+  userName: string;
 }) {
-  const update = (i: number, patch: Partial<InputChannel>) =>
-    onChange(channels.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const [flagFilter, setFlagFilter] = useState<'all' | 'flagged' | 'clean'>('all');
+  const [editedFilter, setEditedFilter] = useState<'all' | 'edited' | 'unedited'>('all');
+
+  const update = (i: number, patch: Partial<InputChannel>) => {
+    const updated = channels.map((c, idx) => idx === i ? { ...c, ...patch, lastEditedAt: { at: MOCK_NOW, by: userName } } : c);
+    onChange(updated);
+  };
+
+  const sorted = [...channels].sort((a, b) => {
+    const af = (a.extractionFlags?.length ?? 0) > 0 ? 0 : 1;
+    const bf = (b.extractionFlags?.length ?? 0) > 0 ? 0 : 1;
+    if (af !== bf) return af - bf;
+    return a.channelNumber - b.channelNumber;
+  });
+
+  const visible = sorted.filter((c) => {
+    const hasFlags = (c.extractionFlags?.length ?? 0) > 0;
+    const hasEdit = !!c.lastEditedAt;
+    if (flagFilter === 'flagged' && !hasFlags) return false;
+    if (flagFilter === 'clean' && hasFlags) return false;
+    if (editedFilter === 'edited' && !hasEdit) return false;
+    if (editedFilter === 'unedited' && hasEdit) return false;
+    return true;
+  });
+
   return (
     <div>
       <p className="text-[12.5px] text-[var(--color-ink-3)] mb-3 leading-relaxed">
-        {channels.length} channels. Mic and DI model numbers are preserved verbatim — never translated. Flags surface ambiguities for human review.
+        {channels.length} channels. Mic and DI model numbers are preserved verbatim — never translated. Flagged rows sort to top.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-[12px] border border-[var(--color-rule-soft)] rounded-[3px] overflow-hidden">
@@ -696,18 +1054,39 @@ function InputListReview({
               <th className="px-2.5 py-2 w-28">Stand</th>
               <th className="px-2.5 py-2 w-12 text-center">+48V</th>
               <th className="px-2.5 py-2 w-28">Wireless</th>
-              <th className="px-2.5 py-2">Flags</th>
+              <th className="px-2.5 py-2 w-40">
+                <ColumnFilterPopup
+                  label="Flags"
+                  active={flagFilter !== 'all'}
+                  onClear={() => setFlagFilter('all')}
+                >
+                  <FilterOption label="All" selected={flagFilter === 'all'} onSelect={() => setFlagFilter('all')} />
+                  <FilterOption label="Flagged only" selected={flagFilter === 'flagged'} onSelect={() => setFlagFilter('flagged')} />
+                  <FilterOption label="Clean only" selected={flagFilter === 'clean'} onSelect={() => setFlagFilter('clean')} />
+                </ColumnFilterPopup>
+              </th>
+              <th className="px-2.5 py-2 w-36">
+                <ColumnFilterPopup
+                  label="Last edited"
+                  active={editedFilter !== 'all'}
+                  onClear={() => setEditedFilter('all')}
+                >
+                  <FilterOption label="All" selected={editedFilter === 'all'} onSelect={() => setEditedFilter('all')} />
+                  <FilterOption label="Edited" selected={editedFilter === 'edited'} onSelect={() => setEditedFilter('edited')} />
+                  <FilterOption label="Not edited" selected={editedFilter === 'unedited'} onSelect={() => setEditedFilter('unedited')} />
+                </ColumnFilterPopup>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {channels.map((c, i) => {
+            {visible.map((c) => {
+              const i = channels.indexOf(c);
               const hasFlags = (c.extractionFlags?.length ?? 0) > 0;
               return (
                 <tr
                   key={c.channelNumber}
                   className={cn(
                     'border-t border-[var(--color-rule-soft)]',
-                    i % 2 === 1 && !hasFlags && 'bg-[var(--color-paper)]/40',
                     hasFlags && 'bg-[rgba(184,57,43,0.04)]',
                   )}
                 >
@@ -766,21 +1145,15 @@ function InputListReview({
                             ariaLabel="Explain this extraction flag"
                             riderLink={{ section: 'input_list', label: 'Open the input list in the rider' }}
                           >
-                            <p>
-                              The AI that read this rider wasn't fully sure about
-                              this line and flagged it for a person to
-                              double-check before the channel list is approved.
-                            </p>
-                            <p>
-                              The specific concern: <strong>{f.message}</strong>
-                            </p>
-                            <p>
-                              Open the rider to confirm what it actually says,
-                              then correct the row if needed.
-                            </p>
+                            <p>The AI that read this rider wasn't fully sure about this line and flagged it for review before the channel list is approved.</p>
+                            <p>The specific concern: <strong>{f.message}</strong></p>
+                            <p>Open the rider to confirm what it actually says, then correct the row if needed.</p>
                           </ExplainTag>
                         </span>
                       ))}
+                  </td>
+                  <td className="px-2.5 py-1.5 align-top">
+                    <LastEditedCell stamp={c.lastEditedAt} history={history} />
                   </td>
                 </tr>
               );
@@ -796,13 +1169,28 @@ function MonitorMixReview({
   mixes,
   onChange,
   disabled,
+  history,
+  userName,
 }: {
   mixes: MonitorMix[];
   onChange: (mixes: MonitorMix[]) => void;
   disabled: boolean;
+  history: SectionEditRecord[];
+  userName: string;
 }) {
-  const update = (i: number, patch: Partial<MonitorMix>) =>
-    onChange(mixes.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
+  const [editedFilter, setEditedFilter] = useState<'all' | 'edited' | 'unedited'>('all');
+
+  const update = (i: number, patch: Partial<MonitorMix>) => {
+    const updated = mixes.map((m, idx) => idx === i ? { ...m, ...patch, lastEditedAt: { at: MOCK_NOW, by: userName } } : m);
+    onChange(updated);
+  };
+
+  const visible = mixes.filter((m) => {
+    if (editedFilter === 'edited' && !m.lastEditedAt) return false;
+    if (editedFilter === 'unedited' && m.lastEditedAt) return false;
+    return true;
+  });
+
   return (
     <div>
       <p className="text-[12.5px] text-[var(--color-ink-3)] mb-3 leading-relaxed">
@@ -817,25 +1205,42 @@ function MonitorMixReview({
               <th className="px-3 py-2 min-w-[100px]">Person</th>
               <th className="px-3 py-2 w-32">Type</th>
               <th className="px-3 py-2 min-w-[100px]">Notes</th>
+              <th className="px-3 py-2 w-36">
+                <ColumnFilterPopup
+                  label="Last edited"
+                  active={editedFilter !== 'all'}
+                  onClear={() => setEditedFilter('all')}
+                >
+                  <FilterOption label="All" selected={editedFilter === 'all'} onSelect={() => setEditedFilter('all')} />
+                  <FilterOption label="Edited" selected={editedFilter === 'edited'} onSelect={() => setEditedFilter('edited')} />
+                  <FilterOption label="Not edited" selected={editedFilter === 'unedited'} onSelect={() => setEditedFilter('unedited')} />
+                </ColumnFilterPopup>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {mixes.map((m, i) => (
-              <tr key={i} className={cn('border-t border-[var(--color-rule-soft)]', i % 2 === 1 && 'bg-[var(--color-paper)]/40')}>
-                <td className="px-2 py-1"><EditableText value={m.outputs} mono disabled={disabled} onChange={(v) => update(i, { outputs: v })} /></td>
-                <td className="px-2 py-1"><EditableText value={m.mixName} disabled={disabled} onChange={(v) => update(i, { mixName: v })} className="font-semibold" /></td>
-                <td className="px-2 py-1"><EditableText value={m.personName ?? ''} placeholder="Input Here" disabled={disabled} onChange={(v) => update(i, { personName: v })} /></td>
-                <td className="px-2 py-1">
-                  <EditableSelect
-                    value={m.type}
-                    options={MONITOR_TYPE_OPTIONS}
-                    disabled={disabled}
-                    onChange={(v) => update(i, { type: (v || 'other') as MonitorMix['type'] })}
-                  />
-                </td>
-                <td className="px-2 py-1"><EditableText value={m.notes ?? ''} placeholder="Input Here" disabled={disabled} onChange={(v) => update(i, { notes: v })} className="text-[var(--color-ink-3)]" /></td>
-              </tr>
-            ))}
+            {visible.map((m) => {
+              const i = mixes.indexOf(m);
+              return (
+                <tr key={i} className={cn('border-t border-[var(--color-rule-soft)]', i % 2 === 1 && 'bg-[var(--color-paper)]/40')}>
+                  <td className="px-2 py-1"><EditableText value={m.outputs} mono disabled={disabled} onChange={(v) => update(i, { outputs: v })} /></td>
+                  <td className="px-2 py-1"><EditableText value={m.mixName} disabled={disabled} onChange={(v) => update(i, { mixName: v })} className="font-semibold" /></td>
+                  <td className="px-2 py-1"><EditableText value={m.personName ?? ''} placeholder="Input Here" disabled={disabled} onChange={(v) => update(i, { personName: v })} /></td>
+                  <td className="px-2 py-1">
+                    <EditableSelect
+                      value={m.type}
+                      options={MONITOR_TYPE_OPTIONS}
+                      disabled={disabled}
+                      onChange={(v) => update(i, { type: (v || 'other') as MonitorMix['type'] })}
+                    />
+                  </td>
+                  <td className="px-2 py-1"><EditableText value={m.notes ?? ''} placeholder="Input Here" disabled={disabled} onChange={(v) => update(i, { notes: v })} className="text-[var(--color-ink-3)]" /></td>
+                  <td className="px-2 py-1.5 align-top">
+                    <LastEditedCell stamp={m.lastEditedAt} history={history} />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -847,13 +1252,28 @@ function FOHOutputsReview({
   outputs,
   onChange,
   disabled,
+  history,
+  userName,
 }: {
   outputs: FOHOutput[];
   onChange: (outputs: FOHOutput[]) => void;
   disabled: boolean;
+  history: SectionEditRecord[];
+  userName: string;
 }) {
-  const update = (i: number, patch: Partial<FOHOutput>) =>
-    onChange(outputs.map((o, idx) => (idx === i ? { ...o, ...patch } : o)));
+  const [editedFilter, setEditedFilter] = useState<'all' | 'edited' | 'unedited'>('all');
+
+  const update = (i: number, patch: Partial<FOHOutput>) => {
+    const updated = outputs.map((o, idx) => idx === i ? { ...o, ...patch, lastEditedAt: { at: MOCK_NOW, by: userName } } : o);
+    onChange(updated);
+  };
+
+  const visible = outputs.filter((o) => {
+    if (editedFilter === 'edited' && !o.lastEditedAt) return false;
+    if (editedFilter === 'unedited' && o.lastEditedAt) return false;
+    return true;
+  });
+
   return (
     <div>
       <p className="text-[12.5px] text-[var(--color-ink-3)] mb-3 leading-relaxed">
@@ -866,16 +1286,33 @@ function FOHOutputsReview({
               <th className="px-3 py-2 w-20">Output</th>
               <th className="px-3 py-2 min-w-[140px]">Source</th>
               <th className="px-3 py-2 min-w-[120px]">Notes</th>
+              <th className="px-3 py-2 w-36">
+                <ColumnFilterPopup
+                  label="Last edited"
+                  active={editedFilter !== 'all'}
+                  onClear={() => setEditedFilter('all')}
+                >
+                  <FilterOption label="All" selected={editedFilter === 'all'} onSelect={() => setEditedFilter('all')} />
+                  <FilterOption label="Edited" selected={editedFilter === 'edited'} onSelect={() => setEditedFilter('edited')} />
+                  <FilterOption label="Not edited" selected={editedFilter === 'unedited'} onSelect={() => setEditedFilter('unedited')} />
+                </ColumnFilterPopup>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {outputs.map((o, i) => (
-              <tr key={i} className={cn('border-t border-[var(--color-rule-soft)]', i % 2 === 1 && 'bg-[var(--color-paper)]/40')}>
-                <td className="px-2 py-1"><EditableText value={o.outputNumber} mono disabled={disabled} onChange={(v) => update(i, { outputNumber: v })} /></td>
-                <td className="px-2 py-1"><EditableText value={o.source} disabled={disabled} onChange={(v) => update(i, { source: v })} /></td>
-                <td className="px-2 py-1"><EditableText value={o.notes ?? ''} placeholder="Input Here" disabled={disabled} onChange={(v) => update(i, { notes: v })} className="text-[var(--color-ink-3)]" /></td>
-              </tr>
-            ))}
+            {visible.map((o) => {
+              const i = outputs.indexOf(o);
+              return (
+                <tr key={i} className={cn('border-t border-[var(--color-rule-soft)]', i % 2 === 1 && 'bg-[var(--color-paper)]/40')}>
+                  <td className="px-2 py-1"><EditableText value={o.outputNumber} mono disabled={disabled} onChange={(v) => update(i, { outputNumber: v })} /></td>
+                  <td className="px-2 py-1"><EditableText value={o.source} disabled={disabled} onChange={(v) => update(i, { source: v })} /></td>
+                  <td className="px-2 py-1"><EditableText value={o.notes ?? ''} placeholder="Input Here" disabled={disabled} onChange={(v) => update(i, { notes: v })} className="text-[var(--color-ink-3)]" /></td>
+                  <td className="px-2 py-1.5 align-top">
+                    <LastEditedCell stamp={o.lastEditedAt} history={history} />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1278,6 +1715,49 @@ function KV({ k, v }: { k: string; v: string }) {
     <div>
       <Label>{k}</Label>
       <div className="text-[var(--color-ink-2)]">{v}</div>
+    </div>
+  );
+}
+
+// Scratch-mode upload zone, shown when no rider has been imported yet.
+function ScratchRiderUpload() {
+  const { addRiderImportToScratch } = useApp();
+  const [note, setNote] = useState<UploadNote | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
+  const riderFixture = fixturesOfKind('rider')[0];
+
+  const handleFiles = async (files: File[]) => {
+    const file = files[0];
+    if (!file) return;
+    setNote(null);
+    setIsParsing(true);
+    try {
+      const parsed = await parseRiderPdf(file);
+      addRiderImportToScratch(parsed, buildScratchRiderPersonnel());
+    } catch {
+      // Parsing failed — fall back to fixture if this looks like the right file.
+      const fixture = matchFixture(file.name);
+      if (fixture?.kind === 'rider') {
+        addRiderImportToScratch(buildScratchRiderImport(), buildScratchRiderPersonnel());
+      } else {
+        setNote(nonMatchNote(file, fixture, 'a rider PDF', riderFixture.filename));
+      }
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl">
+      <FileDropZone
+        accept=".pdf"
+        onFiles={handleFiles}
+        title={isParsing ? 'Parsing PDF…' : 'Drop the rider PDF'}
+        hint={isParsing ? 'Extracting sections — this takes a few seconds.' : `Upload "${riderFixture.filename}" — ${riderFixture.extracts}`}
+        icon={<Icon.Sparkle size={22} />}
+        tourAnchor="rider-dropzone"
+      />
+      {note && <UploadResultNote {...note} onDismiss={() => setNote(null)} />}
     </div>
   );
 }

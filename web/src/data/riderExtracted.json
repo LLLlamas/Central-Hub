@@ -1,0 +1,590 @@
+{
+  "id": "ri_extracted_1779639966222",
+  "filename": "RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf",
+  "uploadedAt": "2026-05-24T16:26",
+  "uploadedBy": "CLI parse-rider.mjs",
+  "sourceLanguage": "es",
+  "pageCount": 27,
+  "status": "review",
+  "artistName": "ELSA Y ELMAR",
+  "revisionInfo": {
+    "date": "septiembre 2025",
+    "warning": "FAVOR OMITIR VERSIONES ANTERIORES — please ignore previous versions"
+  },
+  "productionManager": {
+    "name": "Manuel Gonzalez",
+    "email": "magcs81@gmail.com",
+    "phone": "+52 55 54 74 70 48"
+  },
+  "sections": [
+    {
+      "type": "input_list",
+      "pages": [
+        7,
+        8,
+        9,
+        10
+      ],
+      "status": "extracted",
+      "confidence": 0.87,
+      "language": "es",
+      "inputList": [
+        {
+          "channelNumber": 1,
+          "source": "Kick in",
+          "micOrDi": "e901",
+          "standType": "none",
+          "wireless": false,
+          "notes": "e901"
+        },
+        {
+          "channelNumber": 2,
+          "source": "Kick out",
+          "micOrDi": "e902",
+          "standType": "mini_boom",
+          "wireless": false,
+          "notes": "Mini Boom"
+        },
+        {
+          "channelNumber": 3,
+          "source": "Snare top",
+          "micOrDi": "e906",
+          "standType": "short_boom",
+          "wireless": false,
+          "notes": "Short Boom"
+        },
+        {
+          "channelNumber": 4,
+          "source": "Snare bot",
+          "micOrDi": "e904",
+          "standType": "clamp",
+          "wireless": false,
+          "notes": "Clamp"
+        },
+        {
+          "channelNumber": 5,
+          "source": "Snare top 2",
+          "micOrDi": "e906",
+          "standType": "short_boom",
+          "wireless": false,
+          "notes": "Short Boom"
+        },
+        {
+          "channelNumber": 6,
+          "source": "Snare bot 2",
+          "micOrDi": "e904",
+          "standType": "clamp",
+          "wireless": false,
+          "notes": "Clamp"
+        },
+        {
+          "channelNumber": 7,
+          "source": "Hh",
+          "micOrDi": "e914",
+          "standType": "tall_boom",
+          "wireless": false,
+          "notes": "Tall Boom"
+        },
+        {
+          "channelNumber": 8,
+          "source": "Rack tom 13”",
+          "micOrDi": "e904",
+          "standType": "clamp",
+          "wireless": false,
+          "notes": "Clamp"
+        },
+        {
+          "channelNumber": 9,
+          "source": "Floor tom 16”",
+          "micOrDi": "e904",
+          "standType": "clamp",
+          "wireless": false,
+          "notes": "Clamp"
+        },
+        {
+          "channelNumber": 10,
+          "source": "Floor tom 18”",
+          "micOrDi": "e904",
+          "standType": "clamp",
+          "wireless": false,
+          "notes": "Clamp"
+        },
+        {
+          "channelNumber": 11,
+          "source": "Oh L",
+          "micOrDi": "e914",
+          "standType": "tall_boom",
+          "wireless": false,
+          "notes": "Tall Boom"
+        },
+        {
+          "channelNumber": 12,
+          "source": "Oh R",
+          "micOrDi": "e914",
+          "standType": "tall_boom",
+          "wireless": false,
+          "notes": "Tall Boom"
+        },
+        {
+          "channelNumber": 13,
+          "source": "Roland SPD L",
+          "micOrDi": "Radial PRO DI",
+          "standType": "none",
+          "wireless": false,
+          "notes": "Radial PRO DI"
+        },
+        {
+          "channelNumber": 14,
+          "source": "Roland SPD R",
+          "micOrDi": "Radial PRO DI",
+          "standType": "none",
+          "wireless": false,
+          "notes": "Radial PRO DI"
+        },
+        {
+          "channelNumber": 15,
+          "source": "Seq Perc L",
+          "micOrDi": "playaudio 1 XLR",
+          "standType": "none",
+          "wireless": false,
+          "notes": "playaudio 1 XLR"
+        },
+        {
+          "channelNumber": 16,
+          "source": "Seq Perc R",
+          "micOrDi": "playaudio 2 XLR",
+          "standType": "none",
+          "wireless": false,
+          "notes": "playaudio 2 XLR"
+        },
+        {
+          "channelNumber": 17,
+          "source": "Seq Arm L",
+          "micOrDi": "playaudio 3 XLR",
+          "standType": "none",
+          "wireless": false,
+          "notes": "playaudio 3 XLR"
+        },
+        {
+          "channelNumber": 18,
+          "source": "Seq Arm R",
+          "micOrDi": "playaudio 4 XLR",
+          "standType": "none",
+          "wireless": false,
+          "notes": "playaudio 4 XLR"
+        },
+        {
+          "channelNumber": 19,
+          "source": "Seq Bgv L",
+          "micOrDi": "playaudio 5 XLR",
+          "standType": "none",
+          "wireless": false,
+          "notes": "playaudio 5 XLR"
+        },
+        {
+          "channelNumber": 20,
+          "source": "Seq Bgv R",
+          "micOrDi": "playaudio 6 XLR",
+          "standType": "none",
+          "wireless": false,
+          "notes": "playaudio 6 XLR"
+        },
+        {
+          "channelNumber": 21,
+          "source": "Smpte",
+          "micOrDi": "playaudio 7 XLR",
+          "standType": "none",
+          "wireless": false,
+          "notes": "playaudio 7 XLR"
+        },
+        {
+          "channelNumber": 22,
+          "source": "Click",
+          "micOrDi": "playaudio 8 XLR",
+          "standType": "none",
+          "wireless": false,
+          "notes": "playaudio 8 XLR"
+        },
+        {
+          "channelNumber": 23,
+          "source": "Moog",
+          "micOrDi": "Radial PRO DI",
+          "standType": "none",
+          "wireless": false,
+          "notes": "Radial PRO DI"
+        },
+        {
+          "channelNumber": 24,
+          "source": "Radial PRO DI",
+          "micOrDi": "Unknown",
+          "standType": "none",
+          "wireless": false,
+          "notes": "Radial PRO DI"
+        },
+        {
+          "channelNumber": 25,
+          "source": "BASS",
+          "micOrDi": "Radial PRO DI",
+          "standType": "none",
+          "wireless": false,
+          "notes": "Radial PRO DI"
+        },
+        {
+          "channelNumber": 26,
+          "source": "GTR L",
+          "micOrDi": "SM57",
+          "standType": "short_boom",
+          "wireless": false,
+          "notes": "Short Boom"
+        },
+        {
+          "channelNumber": 27,
+          "source": "GTR L",
+          "micOrDi": "SM57",
+          "standType": "short_boom",
+          "wireless": false,
+          "notes": "Short Boom"
+        },
+        {
+          "channelNumber": 28,
+          "source": "Mini Juno L",
+          "micOrDi": "Radial PRO DI",
+          "standType": "none",
+          "wireless": false,
+          "notes": "Radial PRO DI"
+        },
+        {
+          "channelNumber": 29,
+          "source": "Mini Juno R",
+          "micOrDi": "Radial PRO DI",
+          "standType": "none",
+          "wireless": false,
+          "notes": "Radial PRO DI"
+        },
+        {
+          "channelNumber": 30,
+          "source": "Nord L",
+          "micOrDi": "Radial PRO DI",
+          "standType": "none",
+          "wireless": false,
+          "notes": "Radial PRO DI"
+        },
+        {
+          "channelNumber": 31,
+          "source": "Nord R",
+          "micOrDi": "Radial PRO DI",
+          "standType": "none",
+          "wireless": false,
+          "notes": "Radial PRO DI"
+        },
+        {
+          "channelNumber": 32,
+          "source": "Acoustic GTR",
+          "micOrDi": "Radial PRO RMP",
+          "standType": "other",
+          "standNotes": "wireless",
+          "wireless": true,
+          "notes": "Wireless"
+        },
+        {
+          "channelNumber": 33,
+          "source": "Electric GTR Elsa",
+          "micOrDi": "Radial PRO RMP",
+          "standType": "other",
+          "standNotes": "wireless",
+          "wireless": true,
+          "notes": "Wireless"
+        },
+        {
+          "channelNumber": 34,
+          "source": "Vox main ELSA",
+          "micOrDi": "Ew 500 G4 W/935",
+          "standType": "other",
+          "standNotes": "wireless",
+          "phantom48v": false,
+          "wireless": true,
+          "wirelessSystem": "Ew 500",
+          "notes": "Straight"
+        },
+        {
+          "channelNumber": 35,
+          "source": "Vox SPARE",
+          "micOrDi": "Ew 500 G4 W/935",
+          "standType": "other",
+          "standNotes": "wireless",
+          "phantom48v": false,
+          "wireless": true,
+          "wirelessSystem": "Ew 500",
+          "notes": "Tall Boom"
+        },
+        {
+          "channelNumber": 36,
+          "source": "Vox JULIAN (gtr)",
+          "micOrDi": "e935",
+          "standType": "tall_boom",
+          "wireless": false,
+          "notes": "Tall Boom"
+        },
+        {
+          "channelNumber": 37,
+          "source": "Talkback ELSA",
+          "micOrDi": "e835",
+          "standType": "tall_boom",
+          "wireless": false,
+          "notes": "Tall Boom"
+        },
+        {
+          "channelNumber": 38,
+          "source": "Talkback",
+          "micOrDi": "e835 w/",
+          "standType": "tall_boom",
+          "wireless": false,
+          "notes": "Tall Boom"
+        },
+        {
+          "channelNumber": 39,
+          "source": "Talkback BASS",
+          "micOrDi": "e835 w/",
+          "standType": "tall_boom",
+          "wireless": false,
+          "notes": "Tall Boom"
+        },
+        {
+          "channelNumber": 40,
+          "source": "Talkback GTR",
+          "micOrDi": "e835 w/",
+          "standType": "tall_boom",
+          "wireless": false,
+          "notes": "Tall Boom"
+        },
+        {
+          "channelNumber": 41,
+          "source": "Talkback Stage L",
+          "micOrDi": "e835s Switch",
+          "standType": "tall_boom",
+          "wireless": false,
+          "notes": "Tall Boom"
+        },
+        {
+          "channelNumber": 42,
+          "source": "Talkback Stage R",
+          "micOrDi": "e835s Switch",
+          "standType": "tall_boom",
+          "wireless": false,
+          "notes": "Tall Boom"
+        },
+        {
+          "channelNumber": 43,
+          "source": "Talkback PROD",
+          "micOrDi": "e835s Switch",
+          "standType": "tall_boom",
+          "wireless": false,
+          "notes": "Tall Boom"
+        },
+        {
+          "channelNumber": 44,
+          "source": "LOCAL FOH 1",
+          "micOrDi": "e835s Switch",
+          "standType": "tall_boom",
+          "wireless": false,
+          "notes": "Tall Boom"
+        }
+      ],
+      "monitorMix": [
+        {
+          "outputs": "1 & 2",
+          "mixName": "1.MAIN - ELSA",
+          "personName": "ELSA",
+          "type": "in_ear_stereo"
+        },
+        {
+          "outputs": "3 & 4",
+          "mixName": "2. DRUM - JUAN",
+          "personName": "JUAN",
+          "type": "in_ear_stereo"
+        },
+        {
+          "outputs": "5 & 6",
+          "mixName": "3. BASS - DANIEL",
+          "personName": "DANIEL",
+          "type": "in_ear_stereo"
+        },
+        {
+          "outputs": "7 & 8",
+          "mixName": "4. GUITAR - JULIAN",
+          "personName": "JULIAN",
+          "type": "in_ear_stereo"
+        },
+        {
+          "outputs": "9 & 10",
+          "mixName": "5. SPARE",
+          "type": "in_ear_stereo"
+        },
+        {
+          "outputs": "11 & 12",
+          "mixName": "6. STAFF",
+          "type": "in_ear_stereo",
+          "bodypackCount": 4
+        },
+        {
+          "outputs": "13 & 14",
+          "mixName": "7. GUEST",
+          "type": "in_ear_stereo"
+        },
+        {
+          "outputs": "15 & 16",
+          "mixName": "8. CUE",
+          "type": "in_ear_stereo"
+        }
+      ],
+      "fohOutputs": [
+        {
+          "outputNumber": "FOH 1",
+          "source": "SMPTE TO LIGHTING & VIDEO CONSOLE"
+        },
+        {
+          "outputNumber": "FOH 2",
+          "source": "TALK BACK SPEAKER"
+        },
+        {
+          "outputNumber": "FOH 3 & 4",
+          "source": "LIGHT & VIDEO MIX 2 X BODYPACK (WIRELESS STEREO IN EAR)"
+        },
+        {
+          "outputNumber": "FOH 5 & 6",
+          "source": "MAIN LR"
+        },
+        {
+          "outputNumber": "FOH 7",
+          "source": "SUB"
+        }
+      ]
+    },
+    {
+      "type": "stage_specs",
+      "pages": [
+        3,
+        4
+      ],
+      "status": "extracted",
+      "confidence": 0.7,
+      "language": "es",
+      "freeText": "show. Así mismo, debe haber un representante que pueda decidir cuestiones\nlogísticas.\n2- NOTAS\nCONTROL DE PRODUCCIÓN\nEl promotor/empresario acepta que la producci ó n de ELSA Y ELMAR tenga el\ncontrol total y puede tomar decisiones sobre todos los temas relacionados con el\nshow: horarios, escenario, vallas, acceso al venue, bandas abridoras, anuncios de\ncualquier tipo, publicidad en el venue, control de las luces de casa, aire\nacondicionado, calefacci ó n, fot ó grafos, video, circuito cerrado, acreditaciones,\netc.\n3- PERMISOS\nPERMISOS, LICENCIAS Y CERTIFICADOS\nEn caso de ser necesario obtener y/o pagar cualquier tipo de licencias, permisos,\nseguros, certi fi cados, visas y/o cualquier tr á mite requerido por cualquier\nsindicato, autoridad local o nacional, sociedad de autores y/o similares que\ntengan jurisdicci ó n sobre las actuaciones, estos tr á mites y cargos ser á n\nresponsabilidad del Promotor o Contratante.\n4- SOPORTE -ESCENARIO\nESTO DEBER Á SER DISCUTIDO PREVIAMENTE CON EL PRODUCTION MANAGER\nDE ELSA Y ELMAR\n★ Manuel Gonz á lez: magcs81@gmail.com\nGROUND SUPPORT\nLas medidas m í nimas deber á n ser de 12 m de frente x 9 m de altura x 10 m de\nfondo techado.\nAdem á s: FOH, á reas de trabajo y monitores tambi é n deben estar techados y\ncontar con mesh en back y laterales. Espacios a de fi nir, dependiendo de cada\nproducción.\nESCENARIO\nEl escenario deber á ser de 14 m de frente x 10 m de fondo a 1.50 m de altura.\nDeber á contar con un barandal de seguridad en toda la parte trasera, stage left y\nstage right, rodeando todo el escenario. Deber á contar con 2 á reas de trabajo\nque deber á n tener, al menos, las siguientes medidas:\n★ 3.66m x 10m StageLeft\n★ 4.88m x 6.10m StageRight\n★ 06 ventiladores, 01 para guitarra, 01 para bajo, 01 para batería y 03 para la\nparte de adelante del escenario.\nNOTAS\nEl escenario deber á ser en su totalidad de color negro o gris, totalmente liso, sin\nrelieves o salientes, nivelado y sin perforaciones o huecos.\nACCESOS AL ESCENARIO\nEl escenario deber á tener 3 escaleras de acceso, posicionadas de la siguiente\nmanera:\n★ En la parte trasera(UPSTAGE CENTER)\n★ Stage Left\n★ Stage Right\nLas escaleras deber á n tener barandales en ambos lados. Los accesos deben estar\ncon su fi ciente iluminaci ó n para poder caminar.\nEl acceso del personal de limpieza al escenario será autorizado únicamente por\nel Stage Manager.\nEl escenario debe contar con un bote de basura en Stage Left, uno en Stage\nRight y uno a la salida del escenario.\nSEGURIDAD Y MATERIALES DEL ESCENARIO\nEl escenario deber á estar construido por estructuras s ó lidas y de buen material.\nDeber á estar perfectamente liso y sin separaci ó n alguna entre tapas.\nAFORO DEL ESCENARIO\nEl escenario deber á estar perfectamente aforado con tela negra en perfecto\nestado, creando un black box.\nESPACIO PARA GEAR\nSerá necesario que el Promotor de fi na un área segura y protegida de la\nintemperie para almacenar las cajas de todo el equipo de los proveedores y la\nArtista, de manera tal que no corran riesgo de dañarse por cuestiones climáticas"
+    },
+    {
+      "type": "audio_pa",
+      "pages": [
+        5,
+        6
+      ],
+      "status": "extracted",
+      "confidence": 0.7,
+      "language": "es",
+      "freeText": "(inundaciones, lluvias, polvo, temperaturas extremas, sol, etc.).\nSERVICIOS MÉDICOS\nEs de vital importancia contar con una ambulancia con paramédicos desde el\nload in hasta load out. Los paramédicos deben presentarse con el Production\nManager a su llegada, y en cada cambio de turno de ser el caso.\nBARRICADA\nRequerimos que TODO el escenario cuente con barricada HEAVY al frente del\nescenario. (Mojo type).\nRISERS\nNo necesitamos risers para nuestro show. Todos los integrantes hacen la\npresentación a piso del escenario.\nGENERADORES\nEl uso de al menos 2 generadores de energ í a (plantas de luz) es primordial. El\nproductor local general deber á calcular la capacidad necesaria para alimentar\ntodos los equipos (audio, iluminaci ó n, motores, video, backline, monitoreo, etc.).\nEl voltaje deber á ser 1800 amps dividido en tres fases a 110-125 volts a 60hz. Todo\nel sistema deber á estar aterrizado. Debe haber tierra f í sica en todos los puntos\ndel sistema y la red de escenario.\n5- ESPECIFICACIONES TÉCNICAS\nSISTEMA P.A\nSe requiere un sistema profesional est é reo a 4 v í as, capaz de entregar\nuniformemente en todo el recinto 105 a 110 db, ponderaci ó n (c), en fase entre v í as\ny sin problemas de polaridad. La cantidad y distribución de altavoces dependerá\ndel recinto, con el objetivo de proveer un mínimo 110dB SPL en toda la audiencia\n(Indispensable Front Fill), con un rango de frecuencias plano a + /- 3dB de 25 Hz a\n18KHZ. Head Room de 120 dB, libre de distorsión, sin problema de fase y\npolaridad, con fi guración estéreo saliendo por Matrices ( L+R+Subs+Front fi ll ) no\nmono por favor.\n- Front Fill: Dependiendo de la boca del escenario, se requieren de 4 a 6 cajas de\nla misma marca que el sistema principal de audio y deben ser completamente\ncompatibles en fase.\nTodos los sistemas deben estar previamente alineados física y/o\nelectrónicamente, con la ampli fi cación y proceso original de fábrica; marcas de\npreferencia:\nL-Acoustics, Meyer Sound, JBL ( VTX V series)\nAMPLIFICACI Ó N\nLa sugerida por el fabricante.\nPROCESADORES\nEn la posici ó n de FOH, tambi é n los sugeridos por el fabricante.\nMARCAS SUGERIDAS Y CANTIDADES:\n★ D&B J8 TOPS x J SUBS\n★ L’ACOUSTIC V-DOSC TOPS x SB218 SUBS\n★ ADAMSON Y18 TOPS x T21 SUBS\n★ NEXO GEOD TOPS x GEO CD18 SUBS\nLA CANTIDAD DE EQUIPO SER Á EN PROPORCI Ó N A LA CAPACIDAD DEL\nRECINTO Y BAJO LA AUTORIZACI Ó N DEL PRODUCTION MANAGER.\nSUB-SISTEMAS\nDonde sean requeridos, out fi lls, down fi lls y delays deber á n ser de preferencia\niguales al sistema principal. É stos, y su procesador, deben de ser de la misma\nmarca que el sistema principal.\nMISCEL Á NEOS FOH\nSolicitamos un ingeniero de sistemas para alineaci ó n y asistencia del personal de\nsonido de ELSA Y ELMAR. El house deber á estar al centro, de preferencia a nivel\ndel suelo; si las circunstancias requieren elevarlo, ser á sobre risers de no m á s de\n50 cms de altura y a no m á s de 30 mts del escenario. TODO EL TIEMPO\nCUBIERTO DE SOL Y LLUVIA, CON TIENDA PROFESIONAL, NO CARPAS\nIMPROVISADAS Y ADEM Á S DE UN INTERCOM ENTRE FOH Y MONITORES.\nCONSOLA FOH\nFOH (SE HACE SALA Y MONITORES DESDE SALA)\nLLEVAMOS NUESTRA CONSOLA DE AUDIO, DESDE DONDE HACEMOS FOH Y\nMONITORES- POR FAVOR CONFIRMAR CON NUESTRO EQUIPO DE\nPRODUCCIÓN EL TRASLADO DE ESTA CONSOLA.\nEN CASO DE NO LLEVAR NUESTRA CONSOLA, TENEMOS ESTAS ALTERNATIVAS:\n★ Yamaha CL5 / Avid S6L 32d / Waves LV1 (48 ch)"
+    },
+    {
+      "type": "stage_plot",
+      "pages": [
+        11
+      ],
+      "status": "extracted",
+      "confidence": 0.75,
+      "language": "es",
+      "freeText": "FOH 8 FRONT FILL\n7- STAGE PLOT"
+    },
+    {
+      "type": "lighting_equipment",
+      "pages": [
+        10,
+        12,
+        13,
+        17,
+        18,
+        21,
+        22
+      ],
+      "status": "extracted",
+      "confidence": 0.65,
+      "language": "es",
+      "freeText": "MONITOR MIX OUTPUT PATCH\nOUTPUT SOURCE TYPE OBS.\n1 & 2 1.MAIN - ELSA IN EAR (STEREO)\n3 & 4 2. DRUM - JUAN IN EAR (STEREO)\n5 & 6 3. BASS - DANIEL IN EAR (STEREO)\n7 & 8 4. GUITAR - JULIAN IN EAR (STEREO)\n9 & 10 5. SPARE IN EAR (STEREO)\n11 & 12 6. STAFF IN EAR (STEREO) 4 X BODYPACK\n13 & 14 7. GUEST IN EAR (STEREO)\n15 & 16 8. CUE IN EAR (STEREO)\nFOH OUTPUT PATCH\nOUTPUT SOURCE OBS.\nFOH 1 SMPTE TO LIGHTING\n& VIDEO CONSOLE\nFOH 2 TALK BACK SPEAKER\nFOH 3 & 4 LIGHT & VIDEO MIX 2 X BODYPACK\n(WIRELESS STEREO\nIN EAR)\nFOH 5 & 6 MAIN LR\nFOH 7 SUB\n8- ILUMINACIÓN Y LIGHTPLOT\nEste listado debe estar funcionando perfectamente. Todo el cableado,\nmáquinas, consolas, etc. Debe estar en óptimas condiciones\n\nGENERADOR / CORRIENTE\nSerán necesarios tres generadores: uno para audio y video, uno para iluminación\ny uno de spare. Cada generador debe contar con la cantidad de cableado\nsu fi ciente para entregar la corriente a pie de escenario.\nLa capacidad de los generadores debe ser la siguiente:\n★ Audio y Video - 200 kVA\n★ Iluminación - 150 kVA\n★ Spare - 200 kVa\nDeben contar con un centro de carga para audio, uno para iluminación y uno\npara video, como mínimo. La corriente eléctrica debe estar conformada por 3\nfases, neutro y tierra física (con varilla enterrada a por lo menos 2 metros de\nprofundidad) para cada generador. Las conexiones deben ser con conectores\nCam-Lock. La distribución de energía en el escenario debe hacerse con\nextensiones con conectores Edison aterrizados y proveer entre 110 y 127 volts, sin\nregreso a tierra y en orden Tierra-Vivo Neutro correcto. El mismo generador que\nprovee al escenario debe proveer al\nNo cumplir con estas condiciones causará retrasos no imputables a la\nproducción y deben ser compensados. Cualquier daño ocasionado a los equipos\nde la Artista por la red eléctrica debe ser reparado por la producción del evento\nen el momento del percance y su costo debe ser remunerado en su totalidad.\nEs de suma importancia que todo el cableado utilizado esté perfectamente\nordenado. Se debe utilizar Yellow Jackets para cualquier punto de acceso para el\ntalento y el Crew.\n9- BACKLINE\nDrums - GRETSCH CLASSIC MAPLE / DW COLLECTORS / YAMAHA\nHYBRID MAPLE\n★ Bombo 22”\n★ Rock tom 13”\n★ Floor tom 16” con patas.\n★ Floor tom 18” con patas.\n★ Tarola main de 14”x6” o 14”x8” ( Supraphonic, Black Magic o similar)\n★ Tarola 2 de 14” x 6” Maple (Gretsch Brooklyn USA o similar )\n★ Tarola Spare 14” x 6”\n★ 03x Bases de Tarola\n★ 04x atriles de platillo con Boom.\n★ 01x atril de hihat DW 5000 o similar (con clutch y todas las almohadillas)\nno marca yamaha**\n★ 01x Pedal de bombo\n★ 01x Alfombra.\n★ 01x Set de Parches Remo Ambassador Coated\n★ 01x Banco DW Airlift 9000 Series Thrones sin respaldo con asiento redondo\n(62 cm de altura) no asiento de motocicleta**\nBajo\n★ Opción #1:\nAmp Ampeg SVT - Classic\nGabinete Ampeg 8x10\n★ Opción #2:\nAmp Aguilar Tone Hammer 700\nGabinete DB 810\n★ Opción #3:\nAmp Aguilar DB 751\nGabinete DB 810\nIMPORTANTE: Toda la transportaci ó n, hospedaje y catering debe ser\npreviamente revisado y autorizado con la Tour Manager.\n13- CAMERINOS\nSer á n necesarios 03 camerinos de 5 mts por 5 mts m í nimo, Se debe poder\ncerrar bajo llave, estar disponibles a la llegada del crew al venue, deber á n ser\nlibres de humo de tabaco, perfectamente ventilados, sanitizados y con botellas\nde gel antibacterial cada uno. Adem á s, deben contar con los siguientes\nelementos:\nCamerino 01 - ELSA :\n★ 01 Baño privado\n★ 02 Sillones cómodos.\n★ 04 Sillas.\n★ 01 Espejo De Cuerpo Completo.\n★ 01 Perchero o Rack con ganchos.\n★ 02 Lámparas de piso con luz cálida.\n★ 01 Baño privado dentro del camerino.\n★ 01 Mesa Para Catering.\n★ 04 Toallas faciales negras (Nuevas previamente lavadas.)\n★ 01 Multicontacto con:\n○ 01 cargador de iPhone ú ltima generaci ó n en pr é stamo\n○ 01 Android en pr é stamo\n○ 06 Tomas de corriente 110v\n★ Ventilación e Iluminación cálida\n★ 01 Hielera\n★ 1 fl orero con fl ores de temporada ie. Claveles de colores, lirios. (NO Rosas y\ngirasoles).\n★ 1 Vela Aromatizante ( No prender)\n★ 01 Cesto de basura\nCamerino 02 - M ú sicos:\n★ 01 Baño privado\n★ 02 Sillones cómodos\n★ 04 Sillas\n★ 01 Espejo De Cuerpo Completo\n★ 01 Perchero o Rack con ganchos\n★ 01 Lámpara de piso con luz cálida.\n★ 01 Mesa Para Catering.\n★ 08 Toallas faciales negras (Nuevas Previamente Lavadas)\n★ 01 Multicontacto Con:\n○ 01 cargador de iPhone ú ltima generaci ó n en pr é stamo\n○ 01 Android en pr é stamo\n○ 06 Tomas de corriente 110v\n★ Ventilación e iluminación cálida.\n★ 01 Hielera\n★ 01 Cesto de basura\nCamerino 03 - Crew:\n★ 02 Sillones cómodos.\n★ 01 Mesa de trabajo\n★ 06 Sillas\n★ 01 Mesa para catering\n★ 01 Lámparas de piso con luz cálida.\n★ 01 Multicontacto con:\n○ 01 cargador de iPhone ú ltima generaci ó n en pr é stamo\n○ 01 Android en pr é stamo\n○ 06 Tomas de corriente 110v\n★ Ventilaci ó n e iluminaci ó n c á lida\n★ 01 Hielera\n★ 01 Cesto de basura\nTODO EL CONTROL DEL ÁREA DE CAMERINOS QUEDA CARGO DE LA\nPRODUCCIÓN Y EL PERSONAL DE SEGURIDAD DE ELSA Y ELMAR.\nSE RESERVA EL DERECHO DE ADMISI Ó N A LOS CAMERINOS.\n14- CATERING\nTodo el catering de soundcheck y show para ARTISTA, MÚSICOS y CREW\ndeberá ser revisado con el equipo de producción de ELSA Y ELMAR.\nEn zonas donde haya altas temperaturas, se debe considerar aumentar las\ncantidades de líquidos disponibles para soundcheck y show.\nTodos los desechables deberán ser biodegradables ."
+    },
+    {
+      "type": "soundcheck",
+      "pages": [
+        19,
+        22,
+        23,
+        24
+      ],
+      "status": "extracted",
+      "confidence": 0.92,
+      "language": "es",
+      "freeText": "Guitarra\n★ 01x Fender Twin Reverb 2x12\n★ 01x Hot Rod 2x12\n★ 01x Spare Fender Twin Reverb 2x12\nMisceláneos\n★ 04x atriles de teclado sencillas Hércules\n★ 06x atriles de instrumento Hércules\n★ 02x guitarrero de 7 espacios\n★ 06x Mesas de Percusion\n06x Plugs ¼” 17ft\nRISERS\n★ No tenemos risers para este show.\nVIDEO\n★ 1 x Pantalla LED de pitch 3.9 de 12x5 mts\n★ Relación de aspecto 16:9\n★ Resolución de pantalla de 1920 x 1080 preferida (1280 x 720 utilizable)\n★ Por favor enviar pixel map\n10- SOUNDCHECK\nEl set up y soundcheck son a puerta cerrada. Es obligaci ó n del personal de\nseguridad asegurar que ú nicamente se encuentre personal de la producci ó n de\nElsa y Elmar en el recinto. La Producción de ELSA Y ELMAR se reserva el derecho\nde ingreso y permanencia de cualquier persona durante la prueba de sonido.\nElsa y Elmar requiere de m í nimo 6 horas para realizar prueba de sonido a partir\ndel Load-In de nuestro Crew.\n11- TRANSPORTACIÓN\nTRANSPORTACIÓN TERRESTRE:\nSe debe proveer 02 Van para 20 pasajeros cada una (Sprinter) y 01 van de carga\npara equipos de la producción de ELSA Y ELMAR.\nEn excelentes condiciones, de modelo mínimo 2020, limpias tanto por dentro\ncomo por fuera.\n★ 01 Lámpara de piso con luz cálida.\n★ 01 Mesa Para Catering.\n★ 08 Toallas faciales negras (Nuevas Previamente Lavadas)\n★ 01 Multicontacto Con:\n○ 01 cargador de iPhone ú ltima generaci ó n en pr é stamo\n○ 01 Android en pr é stamo\n○ 06 Tomas de corriente 110v\n★ Ventilación e iluminación cálida.\n★ 01 Hielera\n★ 01 Cesto de basura\nCamerino 03 - Crew:\n★ 02 Sillones cómodos.\n★ 01 Mesa de trabajo\n★ 06 Sillas\n★ 01 Mesa para catering\n★ 01 Lámparas de piso con luz cálida.\n★ 01 Multicontacto con:\n○ 01 cargador de iPhone ú ltima generaci ó n en pr é stamo\n○ 01 Android en pr é stamo\n○ 06 Tomas de corriente 110v\n★ Ventilaci ó n e iluminaci ó n c á lida\n★ 01 Hielera\n★ 01 Cesto de basura\nTODO EL CONTROL DEL ÁREA DE CAMERINOS QUEDA CARGO DE LA\nPRODUCCIÓN Y EL PERSONAL DE SEGURIDAD DE ELSA Y ELMAR.\nSE RESERVA EL DERECHO DE ADMISI Ó N A LOS CAMERINOS.\n14- CATERING\nTodo el catering de soundcheck y show para ARTISTA, MÚSICOS y CREW\ndeberá ser revisado con el equipo de producción de ELSA Y ELMAR.\nEn zonas donde haya altas temperaturas, se debe considerar aumentar las\ncantidades de líquidos disponibles para soundcheck y show.\nTodos los desechables deberán ser biodegradables .\nCatering Camerino 03 - Crew (Load In):\nHora del montaje Crew / T é cnicos\nA la llegada de nuestro CREW, les pedimos tener todo montado en el camerino\n#3. Para uso exclusivo del Crew de ELSA Y ELMAR.\n★ 10 Botellas de agua natural de 500 ml\n★ 05 Botellas de agua mineral de 500 ml.\n★ Cafetera con café regular que se resurta durante todo el día.\n★ 06 Refrescos surtidos\n★ 06 Redbull\n★ 06 Gatorades\n★ 08 Electrolyts surtidos\n★ 04 Manzanas\n★ 04 Plátanos\n★ 10 Barritas energéticas de Granola (tipo Nature Valley)\n★ Mix de moras\n★ Botanas Surtidas\n★ Mix de nueces\n★ 08 Toallas faciales negras (nuevas o previamente lavadas)\n★ Hielo limpio de consumo\n★ Hielera para escenario con hielo durante todo el evento para enfriar\nlíquidos\nCamerino Camerino 01 - ELSA (Soundcheck)\nEsto deber á estar disponible y montado al menos 90 minutos antes del sound\ncheck en el camerino # 1\n★ 08 botellas de agua ( Santa María ) ó 6 litros de agua mineral fi ltrada y vasos\nbiodegradables en caso de ser necesarios.\n★ 08 botellas de agua mineral ó con gas\n★ 08 gatorades ó electrolit sabores variados\n★ Té negro y Té de jengibre\n★ Café regular y café descafeinado\n★ 01 prensa francesa\n★ 01 Tetera de agua\n★ 02 Raíces de jengibre fresco\n★ 08 limones\n★ Crema para café\n★ 01 caja de leche de almendra sin azúcar\n★ 02 yogurt griegos pequeños sin azúcar\n★ 01 cajita de Arándanos\n★ 01 cajita de Fresas\n★ 01 cajita de moras\n★ Bandeja de embutidos (jamón serrano, pavo, salamis, etc)\n★ Frutos secos\n★ Almendras\n★ Pistachos\n★ Nuez de la India\n★ 10 Barritas energéticas de Granola (tipo Nature Valley)\n★ 02 Bolsas de papas\n★ Palomitas: cheddar, natural y dulce. Marca Slim Pop o similar.\nCatering Camerino 02 - M ú sicos (Soundcheck)\nEsto deber á estar disponible y montado al menos 90 minutos antes del sound\ncheck en el camerino # 2.\n★ 10 Botellas de agua natural de 500 ml\n★ 05 Botellas de agua mineral de 500 ml.\n★ 06 Refrescos surtidos\n★ 03 Redbull\n★ 04 Gatorades\n★ 04 Electrolyts surtidos\n★ 04 Manzanas\n★ 04 Plátanos\n★ 10 Barritas energéticas de Granola (tipo Nature Valley)\n★ Mix de moras\n★ Botanas Surtidas\n★ Mix de nueces\n★ 08 Toallas faciales negras (nuevas o previamente lavadas)\n★ Hielo limpio de consumo\n★ Hielera para escenario con hielo durante todo el evento para enfriar\nlíquidos\nDependiendo del horario y duración del soundcheck, considerar bocadillos o\nalimentos, a revisión con la producción de ELSA Y ELMAR.\nCatering Camerino 01 - ELSA (Para el show)\n★ 08 botellas de agua ( Santa María o Bonafont) ó 6 litros de agua mineral\nfi ltrada y vasos biodegradables en caso de ser necesarios.\n★ 08 botellas de agua mineral ó con gas"
+    },
+    {
+      "type": "backline",
+      "pages": [
+        5,
+        6,
+        18,
+        19
+      ],
+      "status": "extracted",
+      "confidence": 0.67,
+      "language": "es",
+      "freeText": "(inundaciones, lluvias, polvo, temperaturas extremas, sol, etc.).\nSERVICIOS MÉDICOS\nEs de vital importancia contar con una ambulancia con paramédicos desde el\nload in hasta load out. Los paramédicos deben presentarse con el Production\nManager a su llegada, y en cada cambio de turno de ser el caso.\nBARRICADA\nRequerimos que TODO el escenario cuente con barricada HEAVY al frente del\nescenario. (Mojo type).\nRISERS\nNo necesitamos risers para nuestro show. Todos los integrantes hacen la\npresentación a piso del escenario.\nGENERADORES\nEl uso de al menos 2 generadores de energ í a (plantas de luz) es primordial. El\nproductor local general deber á calcular la capacidad necesaria para alimentar\ntodos los equipos (audio, iluminaci ó n, motores, video, backline, monitoreo, etc.).\nEl voltaje deber á ser 1800 amps dividido en tres fases a 110-125 volts a 60hz. Todo\nel sistema deber á estar aterrizado. Debe haber tierra f í sica en todos los puntos\ndel sistema y la red de escenario.\n5- ESPECIFICACIONES TÉCNICAS\nSISTEMA P.A\nSe requiere un sistema profesional est é reo a 4 v í as, capaz de entregar\nuniformemente en todo el recinto 105 a 110 db, ponderaci ó n (c), en fase entre v í as\ny sin problemas de polaridad. La cantidad y distribución de altavoces dependerá\ndel recinto, con el objetivo de proveer un mínimo 110dB SPL en toda la audiencia\n(Indispensable Front Fill), con un rango de frecuencias plano a + /- 3dB de 25 Hz a\n18KHZ. Head Room de 120 dB, libre de distorsión, sin problema de fase y\npolaridad, con fi guración estéreo saliendo por Matrices ( L+R+Subs+Front fi ll ) no\nmono por favor.\n- Front Fill: Dependiendo de la boca del escenario, se requieren de 4 a 6 cajas de\nla misma marca que el sistema principal de audio y deben ser completamente\ncompatibles en fase.\nTodos los sistemas deben estar previamente alineados física y/o\nelectrónicamente, con la ampli fi cación y proceso original de fábrica; marcas de\npreferencia:\nL-Acoustics, Meyer Sound, JBL ( VTX V series)\nAMPLIFICACI Ó N\nLa sugerida por el fabricante.\nPROCESADORES\nEn la posici ó n de FOH, tambi é n los sugeridos por el fabricante.\nMARCAS SUGERIDAS Y CANTIDADES:\n★ D&B J8 TOPS x J SUBS\n★ L’ACOUSTIC V-DOSC TOPS x SB218 SUBS\n★ ADAMSON Y18 TOPS x T21 SUBS\n★ NEXO GEOD TOPS x GEO CD18 SUBS\nLA CANTIDAD DE EQUIPO SER Á EN PROPORCI Ó N A LA CAPACIDAD DEL\nRECINTO Y BAJO LA AUTORIZACI Ó N DEL PRODUCTION MANAGER.\nSUB-SISTEMAS\nDonde sean requeridos, out fi lls, down fi lls y delays deber á n ser de preferencia\niguales al sistema principal. É stos, y su procesador, deben de ser de la misma\nmarca que el sistema principal.\nMISCEL Á NEOS FOH\nSolicitamos un ingeniero de sistemas para alineaci ó n y asistencia del personal de\nsonido de ELSA Y ELMAR. El house deber á estar al centro, de preferencia a nivel\ndel suelo; si las circunstancias requieren elevarlo, ser á sobre risers de no m á s de\n50 cms de altura y a no m á s de 30 mts del escenario. TODO EL TIEMPO\nCUBIERTO DE SOL Y LLUVIA, CON TIENDA PROFESIONAL, NO CARPAS\nIMPROVISADAS Y ADEM Á S DE UN INTERCOM ENTRE FOH Y MONITORES.\nCONSOLA FOH\nFOH (SE HACE SALA Y MONITORES DESDE SALA)\nLLEVAMOS NUESTRA CONSOLA DE AUDIO, DESDE DONDE HACEMOS FOH Y\nMONITORES- POR FAVOR CONFIRMAR CON NUESTRO EQUIPO DE\nPRODUCCIÓN EL TRASLADO DE ESTA CONSOLA.\nEN CASO DE NO LLEVAR NUESTRA CONSOLA, TENEMOS ESTAS ALTERNATIVAS:\n★ Yamaha CL5 / Avid S6L 32d / Waves LV1 (48 ch)\nproducción y deben ser compensados. Cualquier daño ocasionado a los equipos\nde la Artista por la red eléctrica debe ser reparado por la producción del evento\nen el momento del percance y su costo debe ser remunerado en su totalidad.\nEs de suma importancia que todo el cableado utilizado esté perfectamente\nordenado. Se debe utilizar Yellow Jackets para cualquier punto de acceso para el\ntalento y el Crew.\n9- BACKLINE\nDrums - GRETSCH CLASSIC MAPLE / DW COLLECTORS / YAMAHA\nHYBRID MAPLE\n★ Bombo 22”\n★ Rock tom 13”\n★ Floor tom 16” con patas.\n★ Floor tom 18” con patas.\n★ Tarola main de 14”x6” o 14”x8” ( Supraphonic, Black Magic o similar)\n★ Tarola 2 de 14” x 6” Maple (Gretsch Brooklyn USA o similar )\n★ Tarola Spare 14” x 6”\n★ 03x Bases de Tarola\n★ 04x atriles de platillo con Boom.\n★ 01x atril de hihat DW 5000 o similar (con clutch y todas las almohadillas)\nno marca yamaha**\n★ 01x Pedal de bombo\n★ 01x Alfombra.\n★ 01x Set de Parches Remo Ambassador Coated\n★ 01x Banco DW Airlift 9000 Series Thrones sin respaldo con asiento redondo\n(62 cm de altura) no asiento de motocicleta**\nBajo\n★ Opción #1:\nAmp Ampeg SVT - Classic\nGabinete Ampeg 8x10\n★ Opción #2:\nAmp Aguilar Tone Hammer 700\nGabinete DB 810\n★ Opción #3:\nAmp Aguilar DB 751\nGabinete DB 810\nGuitarra\n★ 01x Fender Twin Reverb 2x12\n★ 01x Hot Rod 2x12\n★ 01x Spare Fender Twin Reverb 2x12\nMisceláneos\n★ 04x atriles de teclado sencillas Hércules\n★ 06x atriles de instrumento Hércules\n★ 02x guitarrero de 7 espacios\n★ 06x Mesas de Percusion\n06x Plugs ¼” 17ft\nRISERS\n★ No tenemos risers para este show.\nVIDEO\n★ 1 x Pantalla LED de pitch 3.9 de 12x5 mts\n★ Relación de aspecto 16:9\n★ Resolución de pantalla de 1920 x 1080 preferida (1280 x 720 utilizable)\n★ Por favor enviar pixel map\n10- SOUNDCHECK\nEl set up y soundcheck son a puerta cerrada. Es obligaci ó n del personal de\nseguridad asegurar que ú nicamente se encuentre personal de la producci ó n de\nElsa y Elmar en el recinto. La Producción de ELSA Y ELMAR se reserva el derecho\nde ingreso y permanencia de cualquier persona durante la prueba de sonido.\nElsa y Elmar requiere de m í nimo 6 horas para realizar prueba de sonido a partir\ndel Load-In de nuestro Crew.\n11- TRANSPORTACIÓN\nTRANSPORTACIÓN TERRESTRE:\nSe debe proveer 02 Van para 20 pasajeros cada una (Sprinter) y 01 van de carga\npara equipos de la producción de ELSA Y ELMAR.\nEn excelentes condiciones, de modelo mínimo 2020, limpias tanto por dentro\ncomo por fuera."
+    },
+    {
+      "type": "ground_transport",
+      "pages": [
+        19,
+        20
+      ],
+      "status": "extracted",
+      "confidence": 0.72,
+      "language": "es",
+      "freeText": "Guitarra\n★ 01x Fender Twin Reverb 2x12\n★ 01x Hot Rod 2x12\n★ 01x Spare Fender Twin Reverb 2x12\nMisceláneos\n★ 04x atriles de teclado sencillas Hércules\n★ 06x atriles de instrumento Hércules\n★ 02x guitarrero de 7 espacios\n★ 06x Mesas de Percusion\n06x Plugs ¼” 17ft\nRISERS\n★ No tenemos risers para este show.\nVIDEO\n★ 1 x Pantalla LED de pitch 3.9 de 12x5 mts\n★ Relación de aspecto 16:9\n★ Resolución de pantalla de 1920 x 1080 preferida (1280 x 720 utilizable)\n★ Por favor enviar pixel map\n10- SOUNDCHECK\nEl set up y soundcheck son a puerta cerrada. Es obligaci ó n del personal de\nseguridad asegurar que ú nicamente se encuentre personal de la producci ó n de\nElsa y Elmar en el recinto. La Producción de ELSA Y ELMAR se reserva el derecho\nde ingreso y permanencia de cualquier persona durante la prueba de sonido.\nElsa y Elmar requiere de m í nimo 6 horas para realizar prueba de sonido a partir\ndel Load-In de nuestro Crew.\n11- TRANSPORTACIÓN\nTRANSPORTACIÓN TERRESTRE:\nSe debe proveer 02 Van para 20 pasajeros cada una (Sprinter) y 01 van de carga\npara equipos de la producción de ELSA Y ELMAR.\nEn excelentes condiciones, de modelo mínimo 2020, limpias tanto por dentro\ncomo por fuera.\nEste transporte debe estar a entera disposición. Los conductores deben tener\nbuen trato hacia nuestros músicos y staff, antes, durante y después del show; sin\nlímite de tiempo ni de trayecto.\nTRANSPORTACI Ó N A É REA:\nTrayectos de más de 5 horas, se requiere viajar en avión. En caso de tener\nsobrepeso en el equipaje, el contratante se hará cargo de pagar el costo del\nmismo.\nSe deben contemplar 02 boletos de avi ó n en clase AM Plus (primera fi la de clase\nturista, juntos) y 06 boletos de avi ó n clase turista todos con una maleta de 25 kg\nincluidas y 02 pasajeros con 2 maletas de 25 kg.\nLos vuelos deber á n ser lo m á s directo posible sin escala. Los itinerarios\nautorizados ser á n entregados por la Tour Manager y no podr á n ser modi fi cados\nsin previa autorización del equipo de ELSA Y ELMAR.\n12- HOSPEDAJE\nEl hotel deber á ser 5 estrellas o de cadena reconocida y contar con el servicio de\nroom service 24 horas y el desayuno incluido. Antes de reservar, se debe enviar la\ninformaci ó n para autorizaci ó n del artista.\nSe requieren 1 Jr. Suite, 7 Habitaciones Sencillas y 2 Habitaciones Dobles con\nInternet Incluido.\n01 Jr Suite Elsa Carvajal\n01 Sencilla Julian Bernal\n02 Sencilla Production Manager\n03 Sencilla Tour Manager\n04 Sencilla Bajista\n05 Sencilla Baterista\n06 Sencilla MUA + Personal\n07 Sencilla Ingeniero Audio\n01 Doble Staff + Staff\n02 Doble VJ + Ingeniero Luces"
+    },
+    {
+      "type": "lodging",
+      "pages": [
+        20,
+        21
+      ],
+      "status": "extracted",
+      "confidence": 0.8,
+      "language": "es",
+      "freeText": "Este transporte debe estar a entera disposición. Los conductores deben tener\nbuen trato hacia nuestros músicos y staff, antes, durante y después del show; sin\nlímite de tiempo ni de trayecto.\nTRANSPORTACI Ó N A É REA:\nTrayectos de más de 5 horas, se requiere viajar en avión. En caso de tener\nsobrepeso en el equipaje, el contratante se hará cargo de pagar el costo del\nmismo.\nSe deben contemplar 02 boletos de avi ó n en clase AM Plus (primera fi la de clase\nturista, juntos) y 06 boletos de avi ó n clase turista todos con una maleta de 25 kg\nincluidas y 02 pasajeros con 2 maletas de 25 kg.\nLos vuelos deber á n ser lo m á s directo posible sin escala. Los itinerarios\nautorizados ser á n entregados por la Tour Manager y no podr á n ser modi fi cados\nsin previa autorización del equipo de ELSA Y ELMAR.\n12- HOSPEDAJE\nEl hotel deber á ser 5 estrellas o de cadena reconocida y contar con el servicio de\nroom service 24 horas y el desayuno incluido. Antes de reservar, se debe enviar la\ninformaci ó n para autorizaci ó n del artista.\nSe requieren 1 Jr. Suite, 7 Habitaciones Sencillas y 2 Habitaciones Dobles con\nInternet Incluido.\n01 Jr Suite Elsa Carvajal\n01 Sencilla Julian Bernal\n02 Sencilla Production Manager\n03 Sencilla Tour Manager\n04 Sencilla Bajista\n05 Sencilla Baterista\n06 Sencilla MUA + Personal\n07 Sencilla Ingeniero Audio\n01 Doble Staff + Staff\n02 Doble VJ + Ingeniero Luces\nIMPORTANTE: Toda la transportaci ó n, hospedaje y catering debe ser\npreviamente revisado y autorizado con la Tour Manager.\n13- CAMERINOS\nSer á n necesarios 03 camerinos de 5 mts por 5 mts m í nimo, Se debe poder\ncerrar bajo llave, estar disponibles a la llegada del crew al venue, deber á n ser\nlibres de humo de tabaco, perfectamente ventilados, sanitizados y con botellas\nde gel antibacterial cada uno. Adem á s, deben contar con los siguientes\nelementos:\nCamerino 01 - ELSA :\n★ 01 Baño privado\n★ 02 Sillones cómodos.\n★ 04 Sillas.\n★ 01 Espejo De Cuerpo Completo.\n★ 01 Perchero o Rack con ganchos.\n★ 02 Lámparas de piso con luz cálida.\n★ 01 Baño privado dentro del camerino.\n★ 01 Mesa Para Catering.\n★ 04 Toallas faciales negras (Nuevas previamente lavadas.)\n★ 01 Multicontacto con:\n○ 01 cargador de iPhone ú ltima generaci ó n en pr é stamo\n○ 01 Android en pr é stamo\n○ 06 Tomas de corriente 110v\n★ Ventilación e Iluminación cálida\n★ 01 Hielera\n★ 1 fl orero con fl ores de temporada ie. Claveles de colores, lirios. (NO Rosas y\ngirasoles).\n★ 1 Vela Aromatizante ( No prender)\n★ 01 Cesto de basura\nCamerino 02 - M ú sicos:\n★ 01 Baño privado\n★ 02 Sillones cómodos\n★ 04 Sillas\n★ 01 Espejo De Cuerpo Completo\n★ 01 Perchero o Rack con ganchos"
+    },
+    {
+      "type": "catering",
+      "pages": [
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27
+      ],
+      "status": "extracted",
+      "confidence": 0.63,
+      "language": "es",
+      "freeText": "IMPORTANTE: Toda la transportaci ó n, hospedaje y catering debe ser\npreviamente revisado y autorizado con la Tour Manager.\n13- CAMERINOS\nSer á n necesarios 03 camerinos de 5 mts por 5 mts m í nimo, Se debe poder\ncerrar bajo llave, estar disponibles a la llegada del crew al venue, deber á n ser\nlibres de humo de tabaco, perfectamente ventilados, sanitizados y con botellas\nde gel antibacterial cada uno. Adem á s, deben contar con los siguientes\nelementos:\nCamerino 01 - ELSA :\n★ 01 Baño privado\n★ 02 Sillones cómodos.\n★ 04 Sillas.\n★ 01 Espejo De Cuerpo Completo.\n★ 01 Perchero o Rack con ganchos.\n★ 02 Lámparas de piso con luz cálida.\n★ 01 Baño privado dentro del camerino.\n★ 01 Mesa Para Catering.\n★ 04 Toallas faciales negras (Nuevas previamente lavadas.)\n★ 01 Multicontacto con:\n○ 01 cargador de iPhone ú ltima generaci ó n en pr é stamo\n○ 01 Android en pr é stamo\n○ 06 Tomas de corriente 110v\n★ Ventilación e Iluminación cálida\n★ 01 Hielera\n★ 1 fl orero con fl ores de temporada ie. Claveles de colores, lirios. (NO Rosas y\ngirasoles).\n★ 1 Vela Aromatizante ( No prender)\n★ 01 Cesto de basura\nCamerino 02 - M ú sicos:\n★ 01 Baño privado\n★ 02 Sillones cómodos\n★ 04 Sillas\n★ 01 Espejo De Cuerpo Completo\n★ 01 Perchero o Rack con ganchos\n★ 01 Lámpara de piso con luz cálida.\n★ 01 Mesa Para Catering.\n★ 08 Toallas faciales negras (Nuevas Previamente Lavadas)\n★ 01 Multicontacto Con:\n○ 01 cargador de iPhone ú ltima generaci ó n en pr é stamo\n○ 01 Android en pr é stamo\n○ 06 Tomas de corriente 110v\n★ Ventilación e iluminación cálida.\n★ 01 Hielera\n★ 01 Cesto de basura\nCamerino 03 - Crew:\n★ 02 Sillones cómodos.\n★ 01 Mesa de trabajo\n★ 06 Sillas\n★ 01 Mesa para catering\n★ 01 Lámparas de piso con luz cálida.\n★ 01 Multicontacto con:\n○ 01 cargador de iPhone ú ltima generaci ó n en pr é stamo\n○ 01 Android en pr é stamo\n○ 06 Tomas de corriente 110v\n★ Ventilaci ó n e iluminaci ó n c á lida\n★ 01 Hielera\n★ 01 Cesto de basura\nTODO EL CONTROL DEL ÁREA DE CAMERINOS QUEDA CARGO DE LA\nPRODUCCIÓN Y EL PERSONAL DE SEGURIDAD DE ELSA Y ELMAR.\nSE RESERVA EL DERECHO DE ADMISI Ó N A LOS CAMERINOS.\n14- CATERING\nTodo el catering de soundcheck y show para ARTISTA, MÚSICOS y CREW\ndeberá ser revisado con el equipo de producción de ELSA Y ELMAR.\nEn zonas donde haya altas temperaturas, se debe considerar aumentar las\ncantidades de líquidos disponibles para soundcheck y show.\nTodos los desechables deberán ser biodegradables .\nCatering Camerino 03 - Crew (Load In):\nHora del montaje Crew / T é cnicos\nA la llegada de nuestro CREW, les pedimos tener todo montado en el camerino\n#3. Para uso exclusivo del Crew de ELSA Y ELMAR.\n★ 10 Botellas de agua natural de 500 ml\n★ 05 Botellas de agua mineral de 500 ml.\n★ Cafetera con café regular que se resurta durante todo el día.\n★ 06 Refrescos surtidos\n★ 06 Redbull\n★ 06 Gatorades\n★ 08 Electrolyts surtidos\n★ 04 Manzanas\n★ 04 Plátanos\n★ 10 Barritas energéticas de Granola (tipo Nature Valley)\n★ Mix de moras\n★ Botanas Surtidas\n★ Mix de nueces\n★ 08 Toallas faciales negras (nuevas o previamente lavadas)\n★ Hielo limpio de consumo\n★ Hielera para escenario con hielo durante todo el evento para enfriar\nlíquidos\nCamerino Camerino 01 - ELSA (Soundcheck)\nEsto deber á estar disponible y montado al menos 90 minutos antes del sound\ncheck en el camerino # 1\n★ 08 botellas de agua ( Santa María ) ó 6 litros de agua mineral fi ltrada y vasos\nbiodegradables en caso de ser necesarios.\n★ 08 botellas de agua mineral ó con gas\n★ 08 gatorades ó electrolit sabores variados\n★ Té negro y Té de jengibre\n★ Café regular y café descafeinado\n★ 01 prensa francesa\n★ 01 Tetera de agua\n★ 02 Raíces de jengibre fresco\n★ 08 limones\n★ Crema para café\n★ 01 caja de leche de almendra sin azúcar\n★ 02 yogurt griegos pequeños sin azúcar\n★ 01 cajita de Arándanos\n★ 01 cajita de Fresas\n★ 01 cajita de moras\n★ Bandeja de embutidos (jamón serrano, pavo, salamis, etc)\n★ Frutos secos\n★ Almendras\n★ Pistachos\n★ Nuez de la India\n★ 10 Barritas energéticas de Granola (tipo Nature Valley)\n★ 02 Bolsas de papas\n★ Palomitas: cheddar, natural y dulce. Marca Slim Pop o similar.\nCatering Camerino 02 - M ú sicos (Soundcheck)\nEsto deber á estar disponible y montado al menos 90 minutos antes del sound\ncheck en el camerino # 2.\n★ 10 Botellas de agua natural de 500 ml\n★ 05 Botellas de agua mineral de 500 ml.\n★ 06 Refrescos surtidos\n★ 03 Redbull\n★ 04 Gatorades\n★ 04 Electrolyts surtidos\n★ 04 Manzanas\n★ 04 Plátanos\n★ 10 Barritas energéticas de Granola (tipo Nature Valley)\n★ Mix de moras\n★ Botanas Surtidas\n★ Mix de nueces\n★ 08 Toallas faciales negras (nuevas o previamente lavadas)\n★ Hielo limpio de consumo\n★ Hielera para escenario con hielo durante todo el evento para enfriar\nlíquidos\nDependiendo del horario y duración del soundcheck, considerar bocadillos o\nalimentos, a revisión con la producción de ELSA Y ELMAR.\nCatering Camerino 01 - ELSA (Para el show)\n★ 08 botellas de agua ( Santa María o Bonafont) ó 6 litros de agua mineral\nfi ltrada y vasos biodegradables en caso de ser necesarios.\n★ 08 botellas de agua mineral ó con gas\n★ 08 gatorade ó electrolit sabores variados\n★ Té negro y Té de jengibre\n★ Café regular y café descafeinado\n★ 01 prensa francesa\n★ Tetera de agua\n★ 02 raíces de Jengibre fresco\n★ 08 limones\n★ Crema para café\n★ 01 caja de leche de almendra sin azúcar\n★ 02 yogurt griegos pequeños sin azúcar\n★ Bandeja de embutidos (jamón serrano, pavo, salamis, etc) y verduras de\ntemporada (jícama, pepino, quesos, crudités)\n★ Frutos secos (almendras tostadas, pistachos. Evitar cacahuates)\n★ Barritas energéticas de Granola (tipo Nature Valley)\n★ 02 Bolsas de papas\n★ Palomitas: cheddar, natural y dulce. Marca Slim Pop o similar\n★ 01 bowl surtido de gomitas, paletas y chocolates\n★ 01 barra de Chocolate Valor/Lindt oscuro (70% cacao)\n★ Chips de camote, betabel, plátano y palomitas de aire\n★ 02 yogurt griegos pequeños sin azúcar\n★ 01 cajita de arándanos\n★ 01 cajita de fresas\n★ 01 cajita de frambuesas\n★ 01 espejo de cuerpo completo\n★ 01 caja de Tylenol\n★ 01 cuchillo y tabla para picar\n★ 01 paquete pequeño de globos de hule redondos tamaño mediano o\npequeño\n★ PLATILLOS Y ANTOJITOS TÍPICOS DE LA REGIÓN. Revisar previamente con\nTour Manager las opciones disponibles. Esto debe estar listo en camerinos\n#2 y #3 al terminar el show.\nCamerino 02 - M ú sicos (Para el Show)\n★ 16 botellas de agua mineralizada (Santa María o Bonafont).\n★ 16 aguas minerales ó con gas. Idealmente marca Topo Chico\n★ 10 botellas de Electrolit/Gatorade/Powerade (sabores surtidos)\n★ 06 latas de Coca Cola\n★ 06 latas de Coca Cola Zero\n★ 08 limones\n★ 08 plátanos\n★ Chips de camote, betabel, plátano y palomitas de aire\n★ 01 Bandeja de quesos y embutidos surtidos\n★ 04 bolsas de papas\n★ 01 Paquete mediano de almendras tostadas\n★ 01 Paquete mediano de pistachos\n★ 01 Jarra calentadora eléctrica\n★ 01 Cuchillo y tabla para picar\n★ Vasos biodegradables ó no-desechables\n★ 01 hielera o mini refrigerador\nCatering Camerino 03 - Crew (Para el show)\n★ 08 Toallas de mano (no faciales) en color oscuro nuevas o prelavadas para\nescenario\n★ 16 Botellas con agua natural\n★ 10 Refrescos surtidos\n★ 10 Agua Mineral\n★ 10 Vitamin Water surtidos\n★ 10 Gatorades surtidos\n★ 01 Bandeja de quesos y embutidos surtidos\n★ 02 Paquete de pan integral rebanado de 620 gr.\n★ 01 Paquete de 400 gr. Jam ó n de cerdo en rebanadas\n★ 01 Paquete de 400 gr. Jamón de pechuga de pavo en rebanadas\n★ 01 Paquete de 500 gr. de queso manchego en rebanadas\n★ 01 Paquete de 400 gr. de queso panela en rebanadas\n★ Jitomates, cebolla y aguacate rebanados en contenedores separados\n★ 01 Mayonesa pequeña\n★ 01 Mostaza pequeña\n★ 01 Lata de chile chipotle 220 gr.\n★ 01 Lata de chile jalape ñ o 220 gr.\n★ 01 Sanduchera el é ctrica\n★ 01 Bolsa de hielo limpio refrigerado\n★ 01 Paquete de vasos desechables compostable(No unicel)\n★ 01 Paquete de platos desechables compostables (No unicel)\n★ 01 Paquete de servilletas\n★ 01 Paquete de tenedores / cucharas / cuchillos desechables y\ncompostables\n★ 01 Paquete de toallas antibacteriales o gel antibacterial\nCamerino 01 - ELSA (Después del show)\n★ 01 Caldo de Verduras o Pollo\n★ 01 Corte de carne/ pechuga a la plancha con verduras\n★ 01 Bolsa de Sal Marina\nCamerino 02 - M ú sicos (Después del show)\n★ 01 botella de vino blanco o rosado\n★ 15 cervezas frías (no Sol ni Corona)\n★ 2 Botellas de Mezcal(Amaras/Unión/400 Conejos) *Si el show es fuera de\nMéxico, por favor priorizar el alcohol local de su elección.\n★ Platillos y antojitos típicos de la región, debe incluir opciones vegetarianas.\nRevisar previamente con Tour Manager las opciones disponibles. Esto\ndebe estar listo en camerinos #2 y #3 al terminar el show.\nCamerino 03 - Crew (Después del show)\n★ 10 Cervezas frías (no Sol ni Corona)\n★ 02 Ensaladas ( Con fi rmar tipo de ensalada con TM)\n★ Platillos y antojitos típicos de la región, debe incluir opciones vegetarianas.\nRevisar previamente con Tour Manager las opciones disponibles. Esto\ndebe estar listo en camerinos #2 y #3 al terminar el show.\nAsegúrese de tener un plan para los restos de comida. Hacemos todo lo posible\npara solicitar solo la cantidad necesaria diariamente, pero discuta un plan para la\ndonación de los artículos de hospitalidad sobrantes, ya sea a una organización\nbené fi ca local o al personal y al equipo del venue."
+    },
+    {
+      "type": "dressing_rooms",
+      "pages": [
+        21,
+        22,
+        25,
+        27
+      ],
+      "status": "extracted",
+      "confidence": 0.72,
+      "language": "es",
+      "freeText": "IMPORTANTE: Toda la transportaci ó n, hospedaje y catering debe ser\npreviamente revisado y autorizado con la Tour Manager.\n13- CAMERINOS\nSer á n necesarios 03 camerinos de 5 mts por 5 mts m í nimo, Se debe poder\ncerrar bajo llave, estar disponibles a la llegada del crew al venue, deber á n ser\nlibres de humo de tabaco, perfectamente ventilados, sanitizados y con botellas\nde gel antibacterial cada uno. Adem á s, deben contar con los siguientes\nelementos:\nCamerino 01 - ELSA :\n★ 01 Baño privado\n★ 02 Sillones cómodos.\n★ 04 Sillas.\n★ 01 Espejo De Cuerpo Completo.\n★ 01 Perchero o Rack con ganchos.\n★ 02 Lámparas de piso con luz cálida.\n★ 01 Baño privado dentro del camerino.\n★ 01 Mesa Para Catering.\n★ 04 Toallas faciales negras (Nuevas previamente lavadas.)\n★ 01 Multicontacto con:\n○ 01 cargador de iPhone ú ltima generaci ó n en pr é stamo\n○ 01 Android en pr é stamo\n○ 06 Tomas de corriente 110v\n★ Ventilación e Iluminación cálida\n★ 01 Hielera\n★ 1 fl orero con fl ores de temporada ie. Claveles de colores, lirios. (NO Rosas y\ngirasoles).\n★ 1 Vela Aromatizante ( No prender)\n★ 01 Cesto de basura\nCamerino 02 - M ú sicos:\n★ 01 Baño privado\n★ 02 Sillones cómodos\n★ 04 Sillas\n★ 01 Espejo De Cuerpo Completo\n★ 01 Perchero o Rack con ganchos\n★ 01 Lámpara de piso con luz cálida.\n★ 01 Mesa Para Catering.\n★ 08 Toallas faciales negras (Nuevas Previamente Lavadas)\n★ 01 Multicontacto Con:\n○ 01 cargador de iPhone ú ltima generaci ó n en pr é stamo\n○ 01 Android en pr é stamo\n○ 06 Tomas de corriente 110v\n★ Ventilación e iluminación cálida.\n★ 01 Hielera\n★ 01 Cesto de basura\nCamerino 03 - Crew:\n★ 02 Sillones cómodos.\n★ 01 Mesa de trabajo\n★ 06 Sillas\n★ 01 Mesa para catering\n★ 01 Lámparas de piso con luz cálida.\n★ 01 Multicontacto con:\n○ 01 cargador de iPhone ú ltima generaci ó n en pr é stamo\n○ 01 Android en pr é stamo\n○ 06 Tomas de corriente 110v\n★ Ventilaci ó n e iluminaci ó n c á lida\n★ 01 Hielera\n★ 01 Cesto de basura\nTODO EL CONTROL DEL ÁREA DE CAMERINOS QUEDA CARGO DE LA\nPRODUCCIÓN Y EL PERSONAL DE SEGURIDAD DE ELSA Y ELMAR.\nSE RESERVA EL DERECHO DE ADMISI Ó N A LOS CAMERINOS.\n14- CATERING\nTodo el catering de soundcheck y show para ARTISTA, MÚSICOS y CREW\ndeberá ser revisado con el equipo de producción de ELSA Y ELMAR.\nEn zonas donde haya altas temperaturas, se debe considerar aumentar las\ncantidades de líquidos disponibles para soundcheck y show.\nTodos los desechables deberán ser biodegradables .\n★ 08 gatorade ó electrolit sabores variados\n★ Té negro y Té de jengibre\n★ Café regular y café descafeinado\n★ 01 prensa francesa\n★ Tetera de agua\n★ 02 raíces de Jengibre fresco\n★ 08 limones\n★ Crema para café\n★ 01 caja de leche de almendra sin azúcar\n★ 02 yogurt griegos pequeños sin azúcar\n★ Bandeja de embutidos (jamón serrano, pavo, salamis, etc) y verduras de\ntemporada (jícama, pepino, quesos, crudités)\n★ Frutos secos (almendras tostadas, pistachos. Evitar cacahuates)\n★ Barritas energéticas de Granola (tipo Nature Valley)\n★ 02 Bolsas de papas\n★ Palomitas: cheddar, natural y dulce. Marca Slim Pop o similar\n★ 01 bowl surtido de gomitas, paletas y chocolates\n★ 01 barra de Chocolate Valor/Lindt oscuro (70% cacao)\n★ Chips de camote, betabel, plátano y palomitas de aire\n★ 02 yogurt griegos pequeños sin azúcar\n★ 01 cajita de arándanos\n★ 01 cajita de fresas\n★ 01 cajita de frambuesas\n★ 01 espejo de cuerpo completo\n★ 01 caja de Tylenol\n★ 01 cuchillo y tabla para picar\n★ 01 paquete pequeño de globos de hule redondos tamaño mediano o\npequeño\n★ PLATILLOS Y ANTOJITOS TÍPICOS DE LA REGIÓN. Revisar previamente con\nTour Manager las opciones disponibles. Esto debe estar listo en camerinos\n#2 y #3 al terminar el show.\nCamerino 02 - M ú sicos (Para el Show)\n★ 16 botellas de agua mineralizada (Santa María o Bonafont).\n★ 16 aguas minerales ó con gas. Idealmente marca Topo Chico\n★ 10 botellas de Electrolit/Gatorade/Powerade (sabores surtidos)\n★ 06 latas de Coca Cola\n★ 06 latas de Coca Cola Zero\n★ 08 limones\n★ 08 plátanos\n★ Chips de camote, betabel, plátano y palomitas de aire\n★ 01 Bandeja de quesos y embutidos surtidos\nCamerino 02 - M ú sicos (Después del show)\n★ 01 botella de vino blanco o rosado\n★ 15 cervezas frías (no Sol ni Corona)\n★ 2 Botellas de Mezcal(Amaras/Unión/400 Conejos) *Si el show es fuera de\nMéxico, por favor priorizar el alcohol local de su elección.\n★ Platillos y antojitos típicos de la región, debe incluir opciones vegetarianas.\nRevisar previamente con Tour Manager las opciones disponibles. Esto\ndebe estar listo en camerinos #2 y #3 al terminar el show.\nCamerino 03 - Crew (Después del show)\n★ 10 Cervezas frías (no Sol ni Corona)\n★ 02 Ensaladas ( Con fi rmar tipo de ensalada con TM)\n★ Platillos y antojitos típicos de la región, debe incluir opciones vegetarianas.\nRevisar previamente con Tour Manager las opciones disponibles. Esto\ndebe estar listo en camerinos #2 y #3 al terminar el show.\nAsegúrese de tener un plan para los restos de comida. Hacemos todo lo posible\npara solicitar solo la cantidad necesaria diariamente, pero discuta un plan para la\ndonación de los artículos de hospitalidad sobrantes, ya sea a una organización\nbené fi ca local o al personal y al equipo del venue."
+    }
+  ],
+  "revision": 1
+}

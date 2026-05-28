@@ -75,8 +75,7 @@ export const sources = {
     detail:
       'The agent sells the shows and emails a routing spreadsheet with dates, cities, venues, capacities, and deal terms. The TM enters this into the hub manually in v1 (or imports the CSV). The rider PDF never contains a route — it is a per-show requirements document.',
     artifacts: [
-      { label: 'Mock deal memo (WMA-LATAM → TM)', url: '/mock-booking-agent-deal-memo.md', kind: 'doc' },
-      { label: 'Mock routing spreadsheet', url: '/mock-tour-route.csv', kind: 'csv' },
+      { label: 'Mock 7-day route (Mexico leg)', url: '/mock-tour-route-mexico-7day.csv', kind: 'csv' },
     ],
   },
   leg: {
@@ -302,6 +301,25 @@ export const sources = {
     phase: 'advance',
     detail:
       'Runs after all section extractors complete. Flags contradictions, missing references, count mismatches. The parser does not auto-resolve — humans always decide.',
+  },
+
+  // ----- Scratch mode (Start From Scratch onboarding) ---------
+  scratch_tour: {
+    source: 'Start From Scratch onboarding mode',
+    realSource: 'manual_entry',
+    phase: 'booking',
+    detail:
+      'In scratch mode the app starts as an empty tour a new TM builds up by uploading the project mock fixtures. Uploads are matched by filename to known sample files — there is no backend parsing yet. See CLAUDE.md "Data modes".',
+  },
+  route_import: {
+    source: 'Booking-agent routing CSV — scratch-mode import',
+    realSource: 'csv_import',
+    phase: 'booking',
+    detail:
+      'The routing spreadsheet builds a Day per row, sets each day type, attaches venues to show days, and seeds a show-day schedule skeleton (load-in, soundcheck +6h, doors, set, curfew). In production this is the same CSV the booking agent sends with the deal memo.',
+    artifacts: [
+      { label: 'Mock 7-day route (Mexico leg)', url: '/mock-tour-route-mexico-7day.csv', kind: 'csv' },
+    ],
   },
 
   // ----- Cross-cutting ---------------------------------------

@@ -8,7 +8,6 @@ import { RiderRef, linkifyRiderRefs } from '@/components/RiderRef';
 import { ConflictResolveModal } from '@/components/ConflictResolveModal';
 import { ConflictExplain } from '@/components/ExplainTag';
 import { useApp } from '@/state/AppState';
-import { getAllConflicts } from '@/data/mockTour';
 import { cn } from '@/lib/cn';
 import type { Conflict } from '@/types';
 
@@ -18,7 +17,7 @@ import type { Conflict } from '@/types';
  * a Resolve → action per row that opens the resolution flow.
  */
 export function ConflictFeed({ limit, compact = false }: { limit?: number; compact?: boolean }) {
-  const { resolvedConflicts, getPendingConflictResolution, user } = useApp();
+  const { resolvedConflicts, getPendingConflictResolution, user, getAllConflicts } = useApp();
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const [active, setActive] = useState<Conflict | null>(null);
 

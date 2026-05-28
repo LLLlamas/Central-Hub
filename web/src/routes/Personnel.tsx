@@ -258,6 +258,7 @@ function PersonRow({
         {member.startDate} → {member.endDate}
       </td>
       <td className="py-2.5 px-5 text-right">
+        {/* TODO: wire crew edits to AppState with pending/approval workflow + history when implemented (see CLAUDE.md pending items) */}
         <button className="text-[11.5px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]">
           Edit
         </button>
@@ -307,6 +308,7 @@ function PersonCardRow({
           {member.startDate} → {member.endDate}
         </div>
       </div>
+      {/* TODO: wire crew edits to AppState with pending/approval workflow + history when implemented (see CLAUDE.md pending items) */}
       <button className="text-[11.5px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)] shrink-0">
         Edit
       </button>

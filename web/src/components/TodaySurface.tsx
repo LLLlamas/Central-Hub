@@ -7,19 +7,11 @@ import { MockTag } from '@/components/provenance/MockTag';
 import { SourceTag } from '@/components/provenance/SourceTag';
 import { LastUpdated } from '@/components/LastUpdated';
 import { getMockVenue } from '@/data/mockVenues';
-import {
-  getAllConflicts,
-  getDay,
-  getScheduleItemsForDay,
-  getTravelForDay,
-  getHotelsForDay,
-} from '@/data/mockTour';
 import { MOCK_TODAY, MOCK_NOW } from '@/lib/today';
 import { cn } from '@/lib/cn';
 import {
   dayTypeLabel,
   fmtDate,
-  scheduleItemLabel,
   travelModeIcon,
   travelModeLabel,
 } from '@/lib/format';
@@ -34,6 +26,11 @@ export function TodaySurface({ className }: { className?: string }) {
     toggleDayLocked,
     getDayLastUpdated,
     resolvedConflicts,
+    getDay,
+    getScheduleItemsForDay,
+    getTravelForDay,
+    getHotelsForDay,
+    getAllConflicts,
   } = useApp();
   const day = getDay(MOCK_TODAY);
 
@@ -46,14 +43,7 @@ export function TodaySurface({ className }: { className?: string }) {
   const visibleSchedule = managerView
     ? allSchedule
     : allSchedule.filter((it) => resolveVisibility(it.visibility, user) !== 'blocked');
-  const neededSchedule = visibleSchedule.filter((it) => {
-    const level = resolveVisibility(it.visibility, user);
-    return managerView || level === 'needs' || level === 'owns';
-  });
-  const scheduleToShow = (neededSchedule.length > 0 ? neededSchedule : visibleSchedule).slice(
-    0,
-    densityMode === 'simple' ? 5 : 8,
-  );
+  const scheduleToShow = visibleSchedule;
   const currentClock = MOCK_NOW.slice(11, 16);
   const nextItem = visibleSchedule.find((it) => it.startTime >= currentClock) ?? visibleSchedule[0];
   const travel = getTravelForDay(day.id).filter((t) => managerView || resolveVisibility(t.visibility, user) !== 'blocked');
@@ -173,12 +163,6 @@ export function TodaySurface({ className }: { className?: string }) {
                       <span className="min-w-0">
                         <span className="flex items-center gap-2 flex-wrap">
                           <span className="text-[13.5px] font-semibold text-[var(--color-ink)]">{it.title}</span>
-                          <Chip tone="neutral" size="sm">{scheduleItemLabel(it.type)}</Chip>
-                          {managerView && level !== 'blocked' && level !== 'sees' && (
-                            <Chip tone={level === 'owns' ? 'critical' : 'rehearsal'} size="sm">
-                              {level === 'owns' ? 'Owns' : 'Needs'}
-                            </Chip>
-                          )}
                         </span>
                         {it.location && (
                           <span className="mt-0.5 block text-[12px] text-[var(--color-ink-3)]">{it.location}</span>
@@ -230,7 +214,7 @@ export function TodaySurface({ className }: { className?: string }) {
             <div className="text-[12px] text-[var(--color-ink-3)]">{user.role}</div>
             {!managerView && (
               <p className="mt-2 text-[12px] leading-relaxed text-[var(--color-ink-3)]">
-                This view is filtered to what your role can see or needs today.
+                This view is filtered to what your role can see today.
               </p>
             )}
           </div>

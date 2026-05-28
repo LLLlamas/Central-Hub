@@ -9,7 +9,7 @@
 // Most real data comes from the rider PDF:
 //   RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf
 //
-// A few values are user-provided (e.g. Lorenzo Llamas as TM).
+// A few values are user-provided (e.g. the Tour Manager).
 // =============================================================
 
 export interface RealSource {

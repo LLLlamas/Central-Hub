@@ -14,8 +14,6 @@
  *     soundcheck rules, transport spec, rooming list, dressing
  *     rooms, catering menus, conflicts
  *
- * USER-PROVIDED (Lorenzo Llamas as Tour Manager).
- *
  * MOCK (no rider source — placeholders awaiting real data):
  *   - Tour dates and route (would come from agent deal memos)
  *   - Schedule item times (rider only says 6h soundcheck min)
@@ -39,7 +37,6 @@ import type {
   Document,
   FlightImport,
   RiderImport,
-  CurrentUser,
   RiderSection,
   Conflict,
   UpdateStamp,
@@ -68,7 +65,9 @@ const tourId = 'tour_full_band_2025';
 // outputs (which roles exist on this tour). Exact group names
 // are TM choice and would normally be copied from a prior tour.
 // ============================================================
-const groups: Group[] = [
+// Exported so the scratch tour (data/scratchTour.ts) reuses the exact same
+// group taxonomy — groups are a reusable template, not tour-specific data.
+export const groups: Group[] = [
   { id: 'grp_artist', name: 'Artist', color: '#b8392b', description: 'The band itself.' },
   { id: 'grp_aparty', name: 'A Party', color: '#d97a4a', description: 'Artist + close circle (MUA, personal).' },
   { id: 'grp_mgmt', name: 'Management', color: '#a07a2e', description: 'Tour manager, artist manager.' },
@@ -154,7 +153,6 @@ const personnel: TourPerson[] = [
   tp('tp_staff1', 'p_staff1', 'Touring Staff', 'grp_staff', [], { isPlaceholder: true }),
   tp('tp_staff2', 'p_staff2', 'Touring Staff', 'grp_staff', [], { isPlaceholder: true }),
 ];
-const tpById = Object.fromEntries(personnel.map((p) => [p.id, p]));
 
 // ============================================================
 // MOCK · Days (auto-generated from tour date range — the
@@ -235,32 +233,32 @@ const dayByDate = Object.fromEntries(days.map((d) => [d.date, d]));
 // ============================================================
 const scheduleItems: ScheduleItem[] = [
   // --- Show day · Mexico City (Sep 25) — fully fleshed ---
-  { id: 'si_0925_busc', dayId: dayByDate['2025-09-25'].id, type: 'bus_call', title: 'Bus call (hotel lobby)', startTime: '08:30', visibility: vis.everyone('needs') },
-  { id: 'si_0925_load', dayId: dayByDate['2025-09-25'].id, type: 'load_in', title: 'Crew load-in', startTime: '09:00', endTime: '12:00', location: 'Auditorio Nacional · Stage door', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'needs') },
+  { id: 'si_0925_busc', dayId: dayByDate['2025-09-25'].id, type: 'bus_call', title: 'Bus call (hotel lobby)', startTime: '08:30', visibility: vis.everyone('sees') },
+  { id: 'si_0925_load', dayId: dayByDate['2025-09-25'].id, type: 'load_in', title: 'Crew load-in', startTime: '09:00', endTime: '12:00', location: 'Auditorio Nacional · Stage door', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'sees') },
   { id: 'si_0925_lunch', dayId: dayByDate['2025-09-25'].id, type: 'lunch', title: 'Crew lunch', startTime: '12:30', endTime: '13:30', location: 'Camerino 03 (Crew)', visibility: vis.everyone('sees') },
-  { id: 'si_0925_sndchk', dayId: dayByDate['2025-09-25'].id, type: 'soundcheck', title: 'Soundcheck — closed door (6h min from load-in)', startTime: '15:30', endTime: '17:30', location: 'Auditorio Nacional · Stage', notes: 'Closed door per rider §10', visibility: { default: 'sees', groups: { grp_artist: 'needs', grp_audio: 'owns', grp_lighting: 'needs' } } },
-  { id: 'si_0925_press', dayId: dayByDate['2025-09-25'].id, type: 'press', title: 'Press junket — Rolling Stone México', startTime: '16:00', endTime: '16:45', location: 'Camerino 01 (Elsa)', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'needs', grp_mgmt: 'needs' } } },
-  { id: 'si_0925_dinner', dayId: dayByDate['2025-09-25'].id, type: 'dinner', title: 'Band dinner', startTime: '18:00', endTime: '19:00', visibility: { default: 'sees', groups: { grp_artist: 'needs', grp_aparty: 'needs' } } },
+  { id: 'si_0925_sndchk', dayId: dayByDate['2025-09-25'].id, type: 'soundcheck', title: 'Soundcheck — closed door (6h min from load-in)', startTime: '15:30', endTime: '17:30', location: 'Auditorio Nacional · Stage', notes: 'Closed door per rider §10', visibility: { default: 'sees', groups: { grp_artist: 'sees', grp_audio: 'owns', grp_lighting: 'sees' } } },
+  { id: 'si_0925_press', dayId: dayByDate['2025-09-25'].id, type: 'press', title: 'Press junket — Rolling Stone México', startTime: '16:00', endTime: '16:45', location: 'Camerino 01 (Elsa)', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
+  { id: 'si_0925_dinner', dayId: dayByDate['2025-09-25'].id, type: 'dinner', title: 'Band dinner', startTime: '18:00', endTime: '19:00', visibility: { default: 'sees', groups: { grp_artist: 'sees', grp_aparty: 'sees' } } },
   { id: 'si_0925_doors', dayId: dayByDate['2025-09-25'].id, type: 'doors', title: 'Doors', startTime: '20:00', visibility: vis.everyone('sees') },
-  { id: 'si_0925_set', dayId: dayByDate['2025-09-25'].id, type: 'set', title: 'Elsa y Elmar — Full Band set', startTime: '21:30', endTime: '23:15', location: 'Auditorio Nacional · Stage', visibility: vis.everyone('needs') },
+  { id: 'si_0925_set', dayId: dayByDate['2025-09-25'].id, type: 'set', title: 'Elsa y Elmar — Full Band set', startTime: '21:30', endTime: '23:15', location: 'Auditorio Nacional · Stage', visibility: vis.everyone('sees') },
   { id: 'si_0925_curfew', dayId: dayByDate['2025-09-25'].id, type: 'curfew', title: 'Curfew', startTime: '23:30', visibility: vis.everyone('sees') },
-  { id: 'si_0925_lout', dayId: dayByDate['2025-09-25'].id, type: 'load_out', title: 'Load-out', startTime: '23:45', endTime: '03:00', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'needs') },
+  { id: 'si_0925_lout', dayId: dayByDate['2025-09-25'].id, type: 'load_out', title: 'Load-out', startTime: '23:45', endTime: '03:00', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'sees') },
 
   // --- Show day · Los Angeles (Oct 3) — partial ---
-  { id: 'si_1003_busc', dayId: dayByDate['2025-10-03'].id, type: 'bus_call', title: 'Bus call', startTime: '09:00', visibility: vis.everyone('needs') },
-  { id: 'si_1003_load', dayId: dayByDate['2025-10-03'].id, type: 'load_in', title: 'Crew load-in', startTime: '09:30', endTime: '12:30', location: 'The Greek · Stage door', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'needs') },
-  { id: 'si_1003_sndchk', dayId: dayByDate['2025-10-03'].id, type: 'soundcheck', title: 'Soundcheck — closed door', startTime: '15:00', endTime: '16:30', visibility: { default: 'sees', groups: { grp_artist: 'needs', grp_audio: 'owns' } } },
+  { id: 'si_1003_busc', dayId: dayByDate['2025-10-03'].id, type: 'bus_call', title: 'Bus call', startTime: '09:00', visibility: vis.everyone('sees') },
+  { id: 'si_1003_load', dayId: dayByDate['2025-10-03'].id, type: 'load_in', title: 'Crew load-in', startTime: '09:30', endTime: '12:30', location: 'The Greek · Stage door', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'sees') },
+  { id: 'si_1003_sndchk', dayId: dayByDate['2025-10-03'].id, type: 'soundcheck', title: 'Soundcheck — closed door', startTime: '15:00', endTime: '16:30', visibility: { default: 'sees', groups: { grp_artist: 'sees', grp_audio: 'owns' } } },
   { id: 'si_1003_doors', dayId: dayByDate['2025-10-03'].id, type: 'doors', title: 'Doors', startTime: '19:00', visibility: vis.everyone('sees') },
-  { id: 'si_1003_set', dayId: dayByDate['2025-10-03'].id, type: 'set', title: 'Elsa y Elmar — Full Band set', startTime: '20:30', endTime: '22:30', visibility: vis.everyone('needs') },
+  { id: 'si_1003_set', dayId: dayByDate['2025-10-03'].id, type: 'set', title: 'Elsa y Elmar — Full Band set', startTime: '20:30', endTime: '22:30', visibility: vis.everyone('sees') },
 
   // --- Promo day · LA (Oct 5) ---
-  { id: 'si_1005_p1', dayId: dayByDate['2025-10-05'].id, type: 'press', title: 'NPR Alt.Latino interview', startTime: '10:00', endTime: '11:00', location: 'NPR West · Culver City', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'needs', grp_mgmt: 'needs' } } },
-  { id: 'si_1005_p2', dayId: dayByDate['2025-10-05'].id, type: 'press', title: 'Billboard photoshoot', startTime: '14:00', endTime: '16:30', location: 'Quixote Studios', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'needs', grp_mgmt: 'needs' } } },
-  { id: 'si_1005_meet', dayId: dayByDate['2025-10-05'].id, type: 'meet_greet', title: 'VIP meet & greet', startTime: '18:00', endTime: '19:00', visibility: { default: 'blocked', groups: { grp_aparty: 'needs', grp_mgmt: 'needs' } } },
+  { id: 'si_1005_p1', dayId: dayByDate['2025-10-05'].id, type: 'press', title: 'NPR Alt.Latino interview', startTime: '10:00', endTime: '11:00', location: 'NPR West · Culver City', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
+  { id: 'si_1005_p2', dayId: dayByDate['2025-10-05'].id, type: 'press', title: 'Billboard photoshoot', startTime: '14:00', endTime: '16:30', location: 'Quixote Studios', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
+  { id: 'si_1005_meet', dayId: dayByDate['2025-10-05'].id, type: 'meet_greet', title: 'VIP meet & greet', startTime: '18:00', endTime: '19:00', visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
 
   // --- Rehearsal day · CDMX (Sep 23) ---
   { id: 'si_0923_call', dayId: dayByDate['2025-09-23'].id, type: 'lobby_call', title: 'Hotel lobby call', startTime: '10:00', visibility: vis.everyone('sees') },
-  { id: 'si_0923_reh', dayId: dayByDate['2025-09-23'].id, type: 'rehearsal', title: 'Production rehearsal', startTime: '11:00', endTime: '18:00', location: 'Foro Indie Rocks (rented)', visibility: vis.everyone('needs') },
+  { id: 'si_0923_reh', dayId: dayByDate['2025-09-23'].id, type: 'rehearsal', title: 'Production rehearsal', startTime: '11:00', endTime: '18:00', location: 'Foro Indie Rocks (rented)', visibility: vis.everyone('sees') },
 ];
 
 // ============================================================
@@ -289,7 +287,7 @@ const travel: Travel[] = [
       { tourPersonId: 'tp_audio', seat: '5A' },
       { tourPersonId: 'tp_mua', seat: '5C' },
     ],
-    visibility: { default: 'sees', groups: { grp_aparty: 'needs', grp_mgmt: 'needs' } },
+    visibility: { default: 'sees', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } },
   },
   {
     id: 'tr_cdmx_mty',
@@ -303,7 +301,7 @@ const travel: Travel[] = [
     arriveTime: '12:35',
     recordLocator: 'XYZ987',
     passengers: personnel.map((p) => ({ tourPersonId: p.id })),
-    visibility: vis.everyone('needs'),
+    visibility: vis.everyone('sees'),
   },
   {
     id: 'tr_la_oak',
@@ -316,7 +314,7 @@ const travel: Travel[] = [
     departTime: '22:00',
     arriveTime: '08:00',
     passengers: personnel.filter((p) => ['grp_production', 'grp_audio', 'grp_lighting'].includes(p.groupId)).map((p) => ({ tourPersonId: p.id })),
-    visibility: vis.everyone('needs'),
+    visibility: vis.everyone('sees'),
   },
 ];
 
@@ -333,13 +331,14 @@ const hotels: Hotel[] = [
     phone: '+52 55 5228 1818',
     checkIn: '15:00',
     checkOut: '12:00',
+    nights: 3,
     occupants: [
       { tourPersonId: 'tp_elsa', roomNumber: '2104', roomType: 'Junior Suite' },
       { tourPersonId: 'tp_lorenzo', roomNumber: '2102', roomType: 'Single' },
       { tourPersonId: 'tp_manuel', roomNumber: '2106', roomType: 'Single' },
     ],
     sensitive: true,
-    visibility: { default: 'blocked', groups: { grp_aparty: 'needs', grp_mgmt: 'needs' } },
+    visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } },
   },
   {
     id: 'h_cdmx_nh',
@@ -349,6 +348,7 @@ const hotels: Hotel[] = [
     phone: '+52 55 5208 2222',
     checkIn: '15:00',
     checkOut: '12:00',
+    nights: 3,
     occupants: [
       { tourPersonId: 'tp_julian', roomType: 'Single' },
       { tourPersonId: 'tp_juan', roomType: 'Single' },
@@ -371,9 +371,9 @@ const hotels: Hotel[] = [
 // MOCK · Tasks
 // ============================================================
 const tasks: Task[] = [
-  { id: 't_carnet', title: 'Confirm carnet status with customs broker before MX entry', dayId: dayByDate['2025-09-22'].id, ownerTourPersonId: 'tp_manuel', due: '2025-09-15T17:00', status: 'doing', visibility: vis.onlyGroups(['grp_production', 'grp_mgmt'], 'needs') },
-  { id: 't_iems', title: 'Pick up 4 IEM packs returning from repair (Sennheiser SC)', ownerTourPersonId: 'tp_audio', due: '2025-09-20T17:00', status: 'todo', visibility: vis.onlyGroups(['grp_audio'], 'needs') },
-  { id: 't_passes', title: 'Print pass laminates for all crew before LAX departure', dayId: dayByDate['2025-09-22'].id, ownerTourPersonId: 'tp_manuel', due: '2025-09-21T17:00', status: 'doing', visibility: vis.onlyGroups(['grp_production'], 'needs') },
+  { id: 't_carnet', title: 'Confirm carnet status with customs broker before MX entry', dayId: dayByDate['2025-09-22'].id, ownerTourPersonId: 'tp_manuel', due: '2025-09-15T17:00', status: 'doing', visibility: vis.onlyGroups(['grp_production', 'grp_mgmt'], 'sees') },
+  { id: 't_iems', title: 'Pick up 4 IEM packs returning from repair (Sennheiser SC)', ownerTourPersonId: 'tp_audio', due: '2025-09-20T17:00', status: 'todo', visibility: vis.onlyGroups(['grp_audio'], 'sees') },
+  { id: 't_passes', title: 'Print pass laminates for all crew before LAX departure', dayId: dayByDate['2025-09-22'].id, ownerTourPersonId: 'tp_manuel', due: '2025-09-21T17:00', status: 'doing', visibility: vis.onlyGroups(['grp_production'], 'sees') },
 ];
 
 // ============================================================
@@ -420,7 +420,7 @@ const flightImports: FlightImport[] = [
           { name: 'Julian Bernal', seat: '2C', matchedTourPersonId: 'tp_julian' },
           { name: 'Juan', seat: '3A', matchedTourPersonId: 'tp_juan' },
           { name: 'Daniel', seat: '3C', matchedTourPersonId: 'tp_daniel' },
-          { name: 'Lorenzo Llamas', seat: '4A', matchedTourPersonId: 'tp_lorenzo' },
+          { name: 'Tour Manager', seat: '4A', matchedTourPersonId: 'tp_lorenzo' },
           { name: 'Manuel González', seat: '4C', matchedTourPersonId: 'tp_manuel' },
           { name: 'Audio Engineer', seat: '5A', matchedTourPersonId: 'tp_audio' },
           { name: 'MUA', seat: '5C', matchedTourPersonId: 'tp_mua' },
@@ -428,34 +428,6 @@ const flightImports: FlightImport[] = [
       },
     ],
     unmatchedNames: [],
-  },
-  {
-    id: 'fi_bog_lim',
-    filename: 'AV_Group_BOG-LIM_2025-10-14.pdf',
-    uploadedAt: '2025-10-11T16:05',
-    status: 'review',
-    parsedFlights: [
-      {
-        airline: 'Avianca',
-        flightNumber: 'AV 247',
-        departureAirport: 'BOG',
-        arrivalAirport: 'LIM',
-        departureTime: '2025-10-14T11:50',
-        arrivalTime: '2025-10-14T15:18',
-        recordLocator: 'PQRS44',
-        passengers: [
-          { name: 'Elsa Carvajal', seat: '7B', matchedTourPersonId: 'tp_elsa' },
-          { name: 'Julian Bernal', seat: '7C', matchedTourPersonId: 'tp_julian' },
-          { name: 'J. Apellido', seat: '8A' },
-          { name: 'Daniel', seat: '8B', matchedTourPersonId: 'tp_daniel' },
-          { name: 'D. Apellido', seat: '8C' },
-          { name: 'Manuel González', seat: '9A', matchedTourPersonId: 'tp_manuel' },
-          { name: 'L. Llamas', seat: '9B', matchedTourPersonId: 'tp_lorenzo' },
-          { name: 'New Audio Sub', seat: '9C' },
-        ],
-      },
-    ],
-    unmatchedNames: ['J. Apellido', 'D. Apellido', 'New Audio Sub'],
   },
 ];
 
@@ -614,7 +586,7 @@ const lodgingSpec: NonNullable<RiderSection['lodging']> = {
     { roomNumber: 1, roomType: 'junior_suite', occupants: [{ name: 'Elsa Carvajal', role: 'artist' }] },
     { roomNumber: 2, roomType: 'single', occupants: [{ name: 'Julian Bernal', role: 'guitarist' }] },
     { roomNumber: 3, roomType: 'single', occupants: [{ name: 'Manuel González', role: 'production_manager' }] },
-    { roomNumber: 4, roomType: 'single', occupants: [{ name: 'Lorenzo Llamas', role: 'tour_manager' }] },
+    { roomNumber: 4, roomType: 'single', occupants: [{ name: 'Tour Manager', role: 'tour_manager' }] },
     { roomNumber: 5, roomType: 'single', occupants: [{ role: 'bassist' }] },
     { roomNumber: 6, roomType: 'single', occupants: [{ role: 'drummer' }] },
     { roomNumber: 7, roomType: 'single', occupants: [{ role: 'makeup_artist' }, { role: 'personal_assistant' }] },
@@ -783,7 +755,7 @@ const conflicts: Conflict[] = [
       { section: '§12 Lodging header', value: 'Stated: 11 occupants' },
       { section: '§12 Lodging rooming list', value: 'Counted: 13 occupants' },
     ],
-    suggestedResolution: 'Confirm with TM (Lorenzo). Room #7 is labeled "Single" but lists "MUA + Personal" — two people sharing a single room. Either the room type should be Double, or one of the two is unbooked.',
+    suggestedResolution: 'Confirm with the TM. Room #7 is labeled "Single" but lists "MUA + Personal" — two people sharing a single room. Either the room type should be Double, or one of the two is unbooked.',
   },
   {
     id: 'cf_flight_count',
@@ -987,7 +959,7 @@ const riderImports: RiderImport[] = [
     id: 'ri_001',
     filename: 'RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf',
     uploadedAt: '2025-09-10T10:14',
-    uploadedBy: 'Lorenzo Llamas',
+    uploadedBy: 'Tour Manager',
     sourceLanguage: 'es',
     pageCount: 27,
     status: 'review',
@@ -1037,52 +1009,7 @@ export const mockTour: Tour = {
   riderImports,
 };
 
-// ============================================================
-// Current user / role-switcher options
-// ============================================================
-export const currentUsers: Record<string, CurrentUser> = {
-  lorenzo: { tourPersonId: 'tp_lorenzo', name: 'Tour Manager', role: 'Tour Manager (TBD)', groupId: 'grp_mgmt', tagIds: [] },
-  manuel: { tourPersonId: 'tp_manuel', name: 'Manuel González', role: 'Production Manager', groupId: 'grp_production', tagIds: [] },
-  audio: { tourPersonId: 'tp_audio', name: 'Audio Engineer', role: 'FOH + Monitors', groupId: 'grp_audio', tagIds: [] },
-  elsa: { tourPersonId: 'tp_elsa', name: 'Elsa Carvajal', role: 'Artist · Lead Vocals', groupId: 'grp_artist', tagIds: [] },
-  julian: { tourPersonId: 'tp_julian', name: 'Julian Bernal', role: 'Artist · Guitar', groupId: 'grp_artist', tagIds: [] },
-  mua: { tourPersonId: 'tp_mua', name: 'MUA + Personal', role: 'Makeup + Personal Assistant', groupId: 'grp_aparty', tagIds: [] },
-};
-
-export const defaultUserKey: keyof typeof currentUsers = 'lorenzo';
-
-// ============================================================
-// Helpers
-// ============================================================
-export function getDay(date: string): Day | undefined {
-  return mockTour.days.find((d) => d.date === date);
-}
-export function getDayById(id: string): Day | undefined {
-  return mockTour.days.find((d) => d.id === id);
-}
-export function getScheduleItemsForDay(dayId: string): ScheduleItem[] {
-  return mockTour.scheduleItems.filter((s) => s.dayId === dayId);
-}
-export function getTravelForDay(dayId: string): Travel[] {
-  return mockTour.travel.filter((t) => t.dayId === dayId);
-}
-export function getHotelsForDay(dayId: string): Hotel[] {
-  return mockTour.hotels.filter((h) => h.dayId === dayId);
-}
-export function getTasksForDay(dayId: string): Task[] {
-  return mockTour.tasks.filter((t) => t.dayId === dayId);
-}
-export function getTourPersonById(id: string): TourPerson | undefined {
-  return tpById[id];
-}
-export function getGroupById(id: string): Group | undefined {
-  return groups.find((g) => g.id === id);
-}
-export function getGroupTagById(id: string): GroupTag | undefined {
-  return groupTags.find((t) => t.id === id);
-}
-export function getAllConflicts(): Conflict[] {
-  return mockTour.riderImports.flatMap((ri) =>
-    ri.sections.flatMap((s) => s.conflicts ?? []),
-  );
-}
+// Tour query helpers (getDay, getScheduleItemsForDay, …) previously lived here
+// and read mockTour directly. They moved to lib/tourQueries.ts as pure
+// functions over an explicit `tour`, and are re-exposed (bound to the active
+// tour) from state/AppState.tsx — call them via useApp().

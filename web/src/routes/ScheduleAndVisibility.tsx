@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '@/state/AppState';
+import type { PendingVisibilityEdit, VisibilityEditRecord } from '@/state/AppState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, SectionCard, EmptyState } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
@@ -8,19 +9,33 @@ import { Button } from '@/components/ui/Button';
 import { MockBadge } from '@/components/provenance/MockBadge';
 import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { SensitiveExplain } from '@/components/ExplainTag';
+import { LastUpdated } from '@/components/LastUpdated';
 import { VisibilityEditor } from '@/components/VisibilityEditor';
+import { TypeDefaultsEditor } from '@/components/TypeDefaultsEditor';
 import { fmtDate, dayTypeLabel, scheduleItemLabel } from '@/lib/format';
 import { resolveVisibility } from '@/lib/visibility';
-import type { ScheduleItem, Visibility } from '@/types';
+import type { ScheduleItem, Visibility, VisibilityLevel } from '@/types';
 import { cn } from '@/lib/cn';
 
 export function ScheduleAndVisibility() {
-  const { tour, allUsers } = useApp();
+  const {
+    tour,
+    user,
+    allUsers,
+    getVisibilityEdit,
+    updateVisibilityEdit,
+    getPendingVisibilityEdit,
+    proposeVisibilityEdit,
+    approvePendingVisibilityEdit,
+    rejectPendingVisibilityEdit,
+    getVisibilityHistory,
+  } = useApp();
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
 
   // pick first show day as default
   const firstShow = tour.scheduleItems[0];
   const [selectedId, setSelectedId] = useState<string | null>(firstShow?.id ?? null);
-  const [editedVis, setEditedVis] = useState<Record<string, Visibility>>({});
+  const [defaultsOpen, setDefaultsOpen] = useState(false);
 
   const itemsByDay = useMemo(() => {
     const map = new Map<string, ScheduleItem[]>();
@@ -35,25 +50,54 @@ export function ScheduleAndVisibility() {
   }, [tour.scheduleItems]);
 
   const selected = tour.scheduleItems.find((i) => i.id === selectedId);
-  const selectedVis = selected ? editedVis[selected.id] ?? selected.visibility : null;
+  const pendingVis = selected ? getPendingVisibilityEdit(selected.id) : undefined;
+  const selectedVis = selected
+    ? pendingVis?.patch ?? getVisibilityEdit(selected.id) ?? selected.visibility
+    : null;
+
+  // Route the editor's onChange to a direct edit (managers) or a proposal
+  // (everyone else). Captures the current effective visibility as `before`.
+  const editOrProposeVis = (itemId: string, patch: Visibility) => {
+    if (!selectedVis) return;
+    if (managerView) updateVisibilityEdit(itemId, patch, selectedVis);
+    else proposeVisibilityEdit(itemId, patch, selectedVis);
+  };
+
+  if (!managerView) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <div className="text-center max-w-sm">
+          <div className="text-[15px] font-semibold text-[var(--color-ink)] mb-1">Access restricted</div>
+          <p className="text-[13px] text-[var(--color-ink-3)]">Schedule permissions are managed by the Tour Manager and Production Manager.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
       <PageHeader
-        eyebrow="Schedule"
-        title={
-          <>
-            Schedule
-          </>
-        }
-        description="Set call times and choose who sees, needs, or owns each item."
+        eyebrow="Daily ops"
+        title="Schedule Permissions"
+        description="Set call times and control who sees or owns each item."
         actions={
-          <Button variant="primary" leading={<Icon.Plus size={14} />}>
-            New schedule item
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              leading={<Icon.Sparkle size={12} />}
+              onClick={() => setDefaultsOpen(true)}
+            >
+              Defaults by type
+            </Button>
+            <Button variant="primary" leading={<Icon.Plus size={14} />}>
+              New schedule item
+            </Button>
+          </div>
         }
         meta={<MockBadge source="schedule_item" />}
       />
+      <TypeDefaultsEditor open={defaultsOpen} onClose={() => setDefaultsOpen(false)} />
 
       <div className="grid lg:grid-cols-[280px_1fr_360px] gap-5">
         {/* Day picker — left */}
@@ -161,15 +205,24 @@ export function ScheduleAndVisibility() {
                 <p className="text-[12.5px] text-[var(--color-ink-3)] mb-4 leading-relaxed">
                   Visibility is per-item. Set a default and override for specific groups, tags, or persons. Most specific match wins. Owns implies Needs implies Sees.
                 </p>
+                {pendingVis && (
+                  <PendingVisibilityBanner
+                    pending={pendingVis}
+                    managerView={managerView}
+                    onApprove={() => approvePendingVisibilityEdit(selected.id)}
+                    onReject={() => rejectPendingVisibilityEdit(selected.id)}
+                  />
+                )}
                 <VisibilityEditor
                   value={selectedVis!}
                   groups={tour.groups}
                   tags={tour.groupTags}
                   persons={tour.personnel}
-                  onChange={(v) =>
-                    setEditedVis((prev) => ({ ...prev, [selected.id]: v }))
-                  }
+                  onChange={(v) => editOrProposeVis(selected.id, v)}
                 />
+                {getVisibilityHistory(selected.id).length > 0 && (
+                  <VisibilityHistory records={getVisibilityHistory(selected.id)} />
+                )}
               </SectionCard>
             </>
           )}
@@ -201,9 +254,8 @@ export function ScheduleAndVisibility() {
           <Card>
             <div className="eyebrow mb-2">Levels</div>
             <ul className="space-y-2 text-[12px]">
-              <LegendRow label="Owns" desc="View and edit." color="var(--color-vis-owns)" />
-              <LegendRow label="Needs" desc="Must see — affects their day." color="var(--color-vis-needs)" />
-              <LegendRow label="Sees" desc="Can view if they look." color="var(--color-vis-sees)" />
+              <LegendRow label="Owns" desc="Can view and edit." color="var(--color-vis-owns)" />
+              <LegendRow label="Sees" desc="Can view — it's on their day sheet." color="var(--color-vis-sees)" />
               <LegendRow label="Blocked" desc="Hidden — not on their day sheet." color="var(--color-vis-blocked)" />
             </ul>
           </Card>
@@ -217,15 +269,77 @@ export function ScheduleAndVisibility() {
   );
 }
 
-function LevelPill({ level }: { level: 'blocked' | 'sees' | 'needs' | 'owns' }) {
-  const tone =
-    level === 'owns' ? 'critical' : level === 'needs' ? 'rehearsal' : level === 'sees' ? 'travel' : 'off';
-  const label =
-    level === 'owns' ? 'Owns' : level === 'needs' ? 'Needs' : level === 'sees' ? 'Sees' : 'Hidden';
+function LevelPill({ level }: { level: VisibilityLevel }) {
+  const tone = level === 'owns' ? 'critical' : level === 'sees' ? 'travel' : 'off';
+  const label = level === 'owns' ? 'Owns' : level === 'sees' ? 'Sees' : 'Hidden';
   return (
     <Chip tone={tone as any} variant="soft" size="sm">
       {label}
     </Chip>
+  );
+}
+
+function PendingVisibilityBanner({
+  pending,
+  managerView,
+  onApprove,
+  onReject,
+}: {
+  pending: PendingVisibilityEdit;
+  managerView: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  return (
+    <div className="mb-4 flex items-center justify-between gap-3 flex-wrap rounded-[3px] border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/6 px-2.5 py-1.5">
+      <div className="flex items-center gap-2">
+        <Icon.Alert size={12} className="text-[var(--color-accent)] shrink-0" />
+        <LastUpdated label="Proposed" stamp={pending.proposedAt} />
+      </div>
+      {managerView ? (
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={onReject}>Reject</Button>
+          <Button size="sm" variant="primary" leading={<Icon.Check size={12} />} onClick={onApprove}>
+            Approve change
+          </Button>
+        </div>
+      ) : (
+        <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--color-accent)]">
+          Awaiting approval
+        </span>
+      )}
+    </div>
+  );
+}
+
+function VisibilityHistory({ records }: { records: VisibilityEditRecord[] }) {
+  return (
+    <details className="mt-4 border-t border-[var(--color-rule-soft)] pt-3">
+      <summary className="cursor-pointer text-[11.5px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]">
+        {records.length} edit event{records.length === 1 ? '' : 's'}
+      </summary>
+      <ol className="mt-2 divide-y divide-[var(--color-rule-soft)]">
+        {[...records].reverse().map((r, i) => (
+          <li key={i} className="py-2 flex items-start gap-2.5">
+            <Chip
+              tone={r.status === 'approved' ? 'success' : r.status === 'rejected' ? 'critical' : 'neutral'}
+              size="sm"
+            >
+              {r.status === 'approved' ? 'Approved' : r.status === 'rejected' ? 'Rejected' : 'Direct'}
+            </Chip>
+            <div className="min-w-0">
+              <div className="text-[12px] text-[var(--color-ink-2)]">
+                {r.changes.length} field change{r.changes.length === 1 ? '' : 's'} by{' '}
+                <span className="font-semibold text-[var(--color-ink)]">{r.resolvedAt.by}</span>
+              </div>
+              <div className="font-mono text-[10.5px] tabular text-[var(--color-ink-4)]">
+                {fmtDate(r.resolvedAt.at, 'MMM d, yyyy')} · {fmtDate(r.resolvedAt.at, 'h:mm a')}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </details>
   );
 }
 

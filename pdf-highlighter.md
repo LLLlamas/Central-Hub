@@ -13,7 +13,7 @@ The "highlighter" (auto-highlighting the referenced text on open) is **planned, 
 - `web/src/components/PdfViewer.tsx` — `PdfViewerProvider`, the `usePdfViewer()` hook, `PdfViewerModal`. The provider is mounted in `main.tsx`, so it wraps both layouts (`/print/*` gets it too).
 - `web/src/components/ui/Modal.tsx` — gained `size="xl"` for the viewer.
 - `web/scripts/gen-flight-pdfs.mjs` — one-off generator for the flight PDFs; uses `pdf-lib` (a devDependency).
-- PDFs in `web/public/`: the rider PDF, `AM19_Group_LAX-MEX_2025-09-22.pdf`, `AV_Group_BOG-LIM_2025-10-14.pdf`.
+- PDFs in `web/public/`: the rider PDF, `AM19_Group_LAX-MEX_2025-09-22.pdf`, `VB1014_Group_MEX-MTY_2025-09-27.pdf`, `Hotel_Block_Mexico_2025-09.pdf`.
 
 ## API
 

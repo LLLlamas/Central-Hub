@@ -6,14 +6,28 @@ Operational notes for Claude sessions working on this repo. README.md is the hum
 
 A prototype tour-ops hub for one tour manager (not the industry). React + Vite + TypeScript + Tailwind v4 frontend in `web/`. **No backend yet — everything is mocked.**
 
+## Current focus — the Start-From-Scratch experience
+
+**The whole app is the Start From Scratch experience** — a new tour manager
+landing in an empty app and building a tour by uploading sample files, with a
+guided walkthrough. There is no longer a separate demo/prototype mode: the old
+static 32-day `mockTour` is no longer an *active tour*, and `data/mockTour.ts`
+now survives only as the fixture data the scratch uploads draw from (see "Data
+modes" below).
+
+The goal of current work is the *new-user experience*: evaluate pain points,
+surface good features, and sharpen information architecture, readability, and
+ease of use. See "Data modes" and "Walkthrough" below.
+
 Source-of-truth docs in repo root:
 - `potential-implementation.md` — build playbook and feature scope
 - `tour-management-deep-research.md` — domain research, competitor landscape
 - `redesign-plan.md` — active plan for the clarity + mobile redesign (read before UI work)
 - `pdf-highlighter.md` — the in-app PDF viewer's design + the (unbuilt) text-highlighting plan
+- `PDF-Parser-In-House.md` — design notes for the in-house pdfjs-based parser (`lib/pdfParser.ts`)
 - `RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf` — canonical rider test fixture
-- `mock-booking-agent-deal-memo.md` + `mock-tour-route.csv` — mock artifacts the booking-agent flow would produce
-- `web/public/` holds the in-app-openable docs: the rider PDF, the CSV + deal memo, and two generated flight-confirmation PDFs
+- `web/public/` holds the uploadable scratch fixtures: the rider PDF, the route CSV, the travel-agent grid CSV, two flight-confirmation PDFs, and a hotel-block confirmation PDF
+- `outdated/` (gitignored) — prototype-era artifacts moved out of the build: the old 32-day route CSV, the booking-agent deal memo, and the orphan AV flight PDF
 
 ## Run
 
@@ -39,19 +53,33 @@ web/src/
 ├── types/
 │   └── index.ts                   # All domain types — Tour, Day, ScheduleItem, Visibility, RiderSection, Conflict…
 ├── data/
-│   ├── mockTour.ts                # The single mock tour ("Elsa y Elmar · Full Band 2025")
+│   ├── mockTour.ts                # Fixture data source — groups + rider import + personnel the scratch uploads reuse
+│   ├── scratchTour.ts             # createScratchTour() — empty shell the app boots into
+│   ├── riderFixture.ts            # Rider clone + named personnel for the scratch rider import
+│   ├── flightFixture.ts           # Raw flight data + buildScratchFlightImport (name-matched)
+│   ├── hotelFixture.ts            # Raw hotel-block data + buildScratchHotelImport (hotels + tasks)
 │   ├── mockVenues.ts              # Per-venueId mock address/promoter/house-PM info
 │   ├── sources.ts                 # MOCK provenance registry (where data should come from)
 │   └── realSources.ts             # REAL provenance registry (rider page refs + user entries)
 ├── lib/
 │   ├── visibility.ts              # ABAC resolver: persons > tags > groups > default
+│   ├── tourQueries.ts             # Pure tour query helpers (getDay, getScheduleItemsForDay, …)
+│   ├── routeCsv.ts                # parseRouteCsv — route CSV → legs/days/schedule skeleton
+│   ├── travelGridCsv.ts           # Travel-agent grid CSV → FlightImport[] (one per leg)
+│   ├── fixtureMatcher.ts          # FIXTURES registry + matchFixture (filename → known fixture)
+│   ├── scratchStorage.ts          # localStorage load/save for the scratch tour
 │   ├── format.ts                  # Date/dayType/scheduleItem formatters
 │   ├── riderSections.ts           # §N → page-number map + RiderSectionType → §N
 │   ├── today.ts                   # Pinned demo clock — MOCK_TODAY / MOCK_NOW
-│   └── cn.ts                      # Tailwind class joiner
+│   ├── cn.ts                      # Tailwind class joiner
+│   ├── pdfCore.mjs                # Shared pure-ESM PDF helpers — constants + row/col/text utils
+│   ├── pdfCore.d.mts              # TypeScript declarations for pdfCore.mjs (bundler resolution requires .d.mts)
+│   └── pdfParser.ts               # In-house PDF parser — pdfjs-dist extraction → RiderImport / FlightImport / HotelImport
 ├── components/
-│   ├── ui/                        # Card, Chip, Button, Icon, Modal — primitives
-│   ├── layout/                    # Layout, PrintLayout, Sidebar, BottomNav, TopBar, PageHeader
+│   ├── ui/                        # Card, Chip, Button, Icon, Modal, CollapsibleSection — primitives
+│   ├── ingest/                    # FileDropZone, UploadResultNote — scratch-mode upload UI
+│   ├── tour/                      # TourProvider + CoachMark + scratchTourSteps — the walkthrough
+│   ├── layout/                    # Layout, PrintLayout, Sidebar, BottomNav, TopBar, ScratchBanner, PageHeader
 │   ├── provenance/                # MockTag, MockBadge, SourceTag, DataSourcesPanel, PersonName
 │   ├── CommandPalette.tsx         # Ctrl/⌘K palette + provider + hook
 │   ├── ConflictFeed.tsx           # Top-level conflict list + intro text
@@ -72,20 +100,191 @@ web/src/
     ├── ScheduleAndVisibility.tsx  # /schedule
     ├── DaySheets.tsx              # /daysheet, /daysheet/:date (in-app sheet)
     ├── DaySheetPrint.tsx          # /print/daysheet/:date (printable, no chrome)
-    ├── FlightIngest.tsx           # /ingest/flights
+    ├── FlightIngest.tsx           # /ingest/flights — "Import route & travel" (route CSV + flights + hotels)
     ├── RiderIngest.tsx            # /ingest/riders
     └── More.tsx                   # /more (mobile overflow menu)
+
+web/tests/                          # Unit tests (vitest) — mirrors src/ structure
+├── data/
+│   └── scratchTour.test.ts        # createScratchTour shell + scratchUsers derivation
+└── lib/
+    ├── fixtureMatcher.test.ts     # filename → known fixture matching
+    ├── flightImportDiff.test.ts   # duplicate-flight diff (passengers + seats + metadata)
+    ├── routeCsv.test.ts           # route CSV parser → legs/days/schedule skeleton
+    ├── scratchStorage.test.ts     # localStorage load/save round-trip
+    ├── tourQueries.test.ts        # pure tour query helpers (getDay, getScheduleItemsForDay, …)
+    ├── travelGridCsv.test.ts      # travel-agent grid CSV → FlightImport[]
+    └── visibility.test.ts         # ABAC resolver (persons > tags > groups > default)
 ```
 
-## The mock tour at a glance
+## Data modes — there is only the scratch tour
 
-- **Tour:** `Elsa y Elmar · Full Band 2025`, 2025-09-22 → 2025-10-23, status `in_progress`
-- **Pinned demo clock:** `lib/today.ts` hard-codes "today" as `MOCK_TODAY = 2025-09-25` (and `MOCK_NOW` 09:00). Every "today" lookup reads from it — never `new Date()`.
-- **Legs:** Mexico (`leg_mx`), USA (`leg_us`), South America (`leg_sa`)
-- **Show cities:** Mexico City, Monterrey, Guadalajara, Los Angeles, Oakland, Miami, Bogotá, Lima, Santiago, Buenos Aires
+There used to be a `dataMode` toggle (`'demo' | 'scratch'`). **Demo mode was
+removed.** The app now always runs the build-from-scratch tour; there is no
+`/prototype` route, no `enterScratchMode`/`exitScratchMode`, no mode flag.
+`data/mockTour.ts` is **not deleted** — it is the fixture data source that
+`riderFixture.ts` (rider import + personnel) and `scratchTour.ts` (`groups`)
+clone from. Its assembled 32-day `mockTour` object is dead weight kept only so
+those `.riderImports` / `.personnel` reads still resolve; it could be slimmed to
+a pure fixture module later.
+
+How the scratch tour works:
+- `createScratchTour()` (`data/scratchTour.ts`) builds a **minimal shell** — named tour,
+  the standard `groups`, one Tour Manager, everything else empty. The app boots into
+  this shell when localStorage has no stored tour. (A "blank + setup form" variant —
+  TM fills name/artist/dates first — was considered as a future fallback.)
+- Uploads are **matched by filename** against `FIXTURES` in `lib/fixtureMatcher.ts` — there
+  is no real PDF/CSV parsing backend. A matching route CSV is genuinely parsed
+  (`parseRouteCsv`); rider/flight uploads pull canned data (`riderFixture`/`flightFixture`).
+  Unknown files get a "sample only" note. **When a real ingest backend exists this needs
+  rethinking** — discuss the upload→parse contract then.
+- Tour mutators live in `AppState`: `applyRouteToScratch`, `addRiderImportToScratch`,
+  `addFlightImportToScratch`, `commitFlightImportToScratch`; `resetScratchTour()` wipes
+  back to the empty shell.
+- **Persistence:** the whole `Tour` is saved to localStorage (`tour-hub:scratch-tour`)
+  and restored on reload. The AppState overlay Maps (lockedDays, sectionEdits,
+  visibilityEdits, …) are **not** persisted — they reset on reload. The tour starts
+  with nothing locked and nothing approved (the user builds that state up). The
+  uploaded file itself is never stored — only parsed metadata. **Multi-user note:**
+  persistence is per-browser localStorage today; for a real demo, tours will need
+  server-side, per-user storage.
+- The viewer switcher (`allUsers`) is derived from the tour's own personnel — starts as
+  just the TM, grows when the rider import adds the band + crew (`scratchUsers`).
+
+The uploadable scratch fixtures in `web/public/`: the rider PDF,
+`mock-tour-route-mexico-7day.csv` (a 7-day Mexico-leg route — Sep 22–28),
+`mock-travel-grid-mexico.csv` (the travel-agent grid — every passenger × leg
+in one file, the bulk path for flights), `AM19_…` + `VB1014_…` per-flight
+confirmation PDFs (the boarding-pass path), and `Hotel_Block_Mexico_2025-09.pdf`
+(the CDMX + Monterrey hotel blocks). The PDFs are generated by
+`scripts/gen-flight-pdfs.mjs`. The sample data is deliberately the "follow
+along exactly" set the walkthrough references — keep filenames, the `FIXTURES`
+registry, and the `*Fixture.ts` / `travelGridCsv.ts` files in sync if it changes.
+
+**Two flight-import paths, one review queue.** The travel-agent grid (CSV) and
+per-flight confirmation PDFs both produce `FlightImport`s and feed the same
+review-before-approve surface on `/ingest/flights`. The grid is parsed by
+`lib/travelGridCsv.ts` (`buildFlightImportsFromGrid` — one `FlightImport` per
+distinct *(airline, flightNumber, date)*); the PDFs are parsed by
+`data/flightFixture.ts` (`buildScratchFlightImport`). This mirrors how real
+tours work: the agent emails a grid for the whole tour, then individual
+confirmations trickle in for additions/swaps. Name-matching against the roster
+is best-effort hint only — unmatched rows still appear in review.
+
+**Re-upload + "Updated" audit semantics.** Route and hotel steps don't have a
+"Cancel import" button — in practice the user doesn't cancel, they *update*
+(re-upload a corrected file). Each summary has a **Re-upload** toggle that
+re-opens the dropzone in place; dropping a new file replaces the data and
+bumps `UpdateStamp.updates` on the relevant stamp (`Tour.routeImport` /
+`Tour.hotelImport`). The audit line then flips from "Imported by X" → "Updated
+by X" once `updates > 0`. `cancelRouteImport` / `cancelHotelImport` mutators
+still exist on `AppState` (for the rare wipe case) but are not surfaced in the
+UI — for "start over from empty," use the global Reset in the ScratchBanner.
+
+The FlightImport review surface still has a **Discard** button — that one IS a
+real cancellation (the import is pre-approve and hasn't created any Travel
+records yet). `discardFlightImport(id)` removes the FlightImport + any Travel
+in its namespace (`tr_${id}_*`) + any pending passenger resolutions.
+
+Audit stamps are sourced from `Tour.routeImport` / `Tour.hotelImport` (typed as
+`UpdateStamp` with optional `updates?: number`) and from
+`RiderImport.uploadedBy` / `FlightImport.uploadedBy` (stamped with `MOCK_NOW` +
+current viewer when the mutator runs).
+
+**FlightImport re-uploads.** Flights don't need a separate "Re-upload" toggle
+— the grid + PDF dropzones at the top of Step 2 are always visible, so the
+update path is: drop the new file → duplicate-detection flags it → Replace or
+Merge. `FlightImport.updates?: number` tracks how many times an import has
+been replaced/merged; the queue-card audit line flips from "imported {date}
+by X" → **"updated {date} by X"** once `updates > 0`. Three paths bump it:
+  - `addFlightImportToScratch` when a same-id re-upload lands (same fixture
+    filename uploaded again). If the previous version was already `imported`,
+    the stale Travel records (`tr_${id}_*`) are dropped so the user re-approves.
+  - `replaceFlightImport` — incoming becomes canonical with `updates =
+    existing.updates + 1`.
+  - `mergeFlightImport` — bumps the existing import's `updates`; if the
+    existing was `imported`, status reverts to `review` and its Travel is
+    cleared so the merged data goes through the approve gate.
+
+**Per-passenger resolution for unmatched flights.** Each `FlightImport` that
+has `unmatchedNames` exposes a **"Resolve N unmatched"** button on its review
+header, opening `components/ingest/ResolveUnmatchedModal.tsx`. For every
+unmatched row the reviewer picks one of:
+  - **Assign** to an existing `TourPerson` (the common spelling / legal-name
+    case — e.g. "L. Llamas" → the existing Tour Manager record);
+  - **Add new** — `commitFlightImportToScratch` creates a placeholder
+    `TourPerson` (`tp_auto_${slug}` / `p_auto_${slug}`, `groupId: 'grp_band'`,
+    `isPlaceholder: true`) and links the passenger to it;
+  - **Skip** — passenger is dropped from the Travel record (the v1 default).
+Resolutions live in `AppState.flightPassengerResolutions` keyed by
+`${importId}::${name.toLowerCase()}` and are applied at commit-time so the
+review surface remains the single source of truth.
+
+**Duplicate-flight detection + Replace / Merge.** When two `FlightImport`s
+describe the same leg — same `(airline, flightNumber, departDate)` — the later
+one is flagged as a **Duplicate**. Computed locally in `FlightIngest.tsx` via
+`findFlightDuplicates` (no extra state — recomputed on render from the current
+import list). Surfaces as: a red "Duplicate" chip in the queue, and a banner on
+the review surface that **diffs** the two imports — added / removed passengers
++ per-passenger seat changes + a "metadata differs" flag for time/PNR/airport
+changes (`lib/flightImportDiff.ts` :: `diffFlightImports`). The banner offers
+two actions:
+- **Replace existing** → `replaceFlightImport(existingId, incomingId)` —
+  discards the older import; the new upload becomes canonical (for full-flight
+  updates: a corrected grid replaces an old one).
+- **Merge into existing** → `mergeFlightImport(existingId, incomingId)` —
+  applies the new passengers onto the existing import (updates seats for
+  matched names, appends new names, re-stamps `uploadedBy` / `uploadedAt`),
+  then discards the duplicate (for partial updates: one passenger's seat
+  changed, a single sub was added). Hidden when the diff is empty.
+The user can still **Discard** either copy manually. The dedupe in
+`commitFlightImportToScratch` only namespaces within an import
+(`tr_${importId}_*`), so approving two duplicates would create two Travel
+records for the same flight — the banner explicitly warns about this.
+
+The four imports each have a data file + an AppState mutator: route
+(`routeCsv.ts` → `applyRouteToScratch`), rider (`riderFixture.ts` →
+`addRiderImportToScratch`), flights (`flightFixture.ts` →
+`addFlightImportToScratch` + `commitFlightImportToScratch`), hotels
+(`hotelFixture.ts` → `addHotelImportToScratch`). The hotel import is direct (no
+review step) — it adds `Hotel` records keyed to check-in days plus a few
+hotel-advance `Task`s, so the Day Sheet's Hotel and Tasks panels have content.
+
+## Walkthrough (coach-mark tour)
+
+`components/tour/` is an interactive coach-mark walkthrough over the onboarding
+(structure modelled on the iOS app's llama-intro tour):
+
+- `TourProvider.tsx` — mounted inside `Layout` so it persists across routes and can
+  read both `useApp()` and the router. Tracks the active step, **auto-navigates** to
+  each step's route, and **auto-advances** a hands-on step once its `advanceWhen(tour)`
+  predicate is satisfied (e.g. route imported → days appear). Auto-starts once for a
+  new scratch user; `tour-hub:walkthrough-seen` suppresses re-nagging. `useTour()` hook.
+- `CoachMark.tsx` — the overlay: a box-shadow spotlight cut-out + halo on the step's
+  `data-tour` target, with an instruction bubble (Back / Next / Skip / dots). The dim is
+  `pointer-events-none` so the user interacts with the real UI through it. Centered
+  bubble for transition steps. Respects `prefers-reduced-motion`.
+- `scratchTourSteps.ts` — the 14 steps: the 4 hands-on imports (route → rider → flights
+  → hotels), each with a spotlit dropzone, interleaved with transition beats; then 5
+  centered feature steps that tour the post-ingest surfaces (Calendar, Day Sheet, day
+  locking, conflicts, schedule permissions); then a closing step.
+- Targets are `data-tour="…"` attributes (`FileDropZone` has a `tourAnchor` prop; plus
+  `flight-approve`, `rider-sections`, `hotel-dropzone`). Feature steps omit `target` and
+  use a centered bubble. The `/` intro screen (`ScratchGetStarted` in `TourOverview`)
+  and the `ScratchBanner` both expose a "Start the walkthrough" button.
+
+When adding a tour step, add its `data-tour` anchor on the real element and a step to
+`scratchTourSteps.ts`. Keep step copy short and warm.
+
+## The fixture data at a glance
+
+`data/mockTour.ts` is the fixture source the scratch uploads draw from — its
+`riderImports[0]` + `personnel` feed `riderFixture.ts`, its `groups` feed
+`scratchTour.ts`. It is no longer rendered as a tour itself.
+
+- **Pinned demo clock:** `lib/today.ts` hard-codes "today" as `MOCK_TODAY = 2025-09-25` (and `MOCK_NOW` 09:00). Every "today" lookup reads from it — never `new Date()`. The sample route CSV (Sep 22–28) is built around this date.
 - **Personnel (13):** 5 named from rider (Elsa Carvajal, Julian Bernal, Juan, Daniel, Manuel González PM) + 8 placeholders (Tour Manager, Audio Engineer, Lighting Engineer, VJ, MUA, Personal Asst, Staff #1, Staff #2). Last names for Juan/Daniel and full names for every placeholder are pending user input.
-- **Sep 25 (Mexico City show)** is the fully-fleshed day, and also the pinned "today" — most demos use it as the reference.
-- **Pre-locked days:** Sep 22–25 (seeded in `AppState`).
+- **Lock state:** the scratch tour starts with **nothing locked** — the user builds lock state up themselves. (Demo mode used to pre-lock Sep 22–25; that seed is gone.)
 
 ## Data quirks (worth knowing)
 
@@ -123,14 +322,18 @@ Display rule: **don't show `§N` in the visible UI** (it's industry jargon). Use
 
 ABAC. Each schedule item / travel / hotel / task / doc carries a `Visibility` blob with `default + groups + tags + persons` overrides. **Most specific wins.** Levels: `blocked < sees < needs < owns`. The resolver lives in `lib/visibility.ts`.
 
-The TopBar viewer switcher (Lorenzo / Manuel / Audio / Elsa / Julian / MUA) re-renders the Day Detail and Day Sheets pages from that user's perspective. This is the killer demo for the visibility model — same data, different views.
+**Type defaults + auto-owner** (`lib/visibilityDefaults.ts`): `SCHEDULE_TYPE_OWNER` maps each `ScheduleItemType` → owning group (`load_in/doors/curfew/load_out → grp_production`, `soundcheck → grp_audio`, `set/rehearsal → grp_artist`, `bus_call/lobby_call/meals/press/meet_greet → grp_mgmt`). `defaultVisibilityForType(type)` seeds `{ default: 'sees', groups: { [owner]: 'owns' } }`. `Tour.visibilityDefaultsByType` holds the editable template (seeded by `buildScheduleTypeDefaults()` on a fresh scratch tour); `getScheduleTypeDefault` / `setScheduleTypeDefault` on `AppState` read/write it. `routeCsv.ts` uses the static defaults when seeding ScheduleItems from the route CSV. UI: "Defaults by type" button on `/schedule` opens `TypeDefaultsEditor` modal — pick a type on the left, edit its Visibility on the right; per-item edits still override.
+
+The TopBar viewer switcher (Tour Manager / Manuel / Audio / Elsa / Julian / MUA) re-renders the Day Detail and Day Sheets pages from that user's perspective. This is the killer demo for the visibility model — same data, different views.
 
 ## State (AppState)
 
 Lives in React Context (`state/AppState.tsx`). The single provider is mounted **in `main.tsx`** so it wraps both `Layout` and `PrintLayout` — that's why locking a day in `/daysheet` updates `/print/daysheet` instantly.
 
 Currently exposes:
-- `tour`, `user`, `userKey`, `setUserKey`, `allUsers`
+- `tour`, `user`, `userKey`, `setUserKey`, `allUsers` — `tour` is the build-from-scratch tour (restored from localStorage, or a fresh shell); `allUsers` is derived from the tour's personnel. `userKey` is a plain `string` (scratch keys aren't compile-time known)
+- `resetScratchTour()` and the tour mutators `applyRouteToScratch` / `addRiderImportToScratch` / `addFlightImportToScratch` / `commitFlightImportToScratch` / `addHotelImportToScratch` — see "Data modes" above
+- The tour query helpers `getDay` / `getDayById` / `getScheduleItemsForDay` / `getTravelForDay` / `getHotelsForDay` / `getTasksForDay` / `getTourPersonById` / `getGroupById` / `getGroupTagById` / `getAllConflicts` — pure functions in `lib/tourQueries.ts`, re-exposed here **bound to the active tour**. Always call them via `useApp()`, never import from `mockTour.ts`
 - `densityMode` (`'simple' | 'pro'`), `setDensityMode` — global Simple/Pro density toggle, persisted to localStorage, controls layout density only
 - `lockedDays`, `isDayLocked(id)`, `toggleDayLocked(id)`, `setDayLocked(id, locked)`
 - `getDayLastUpdated(day)` — resolves a `Day`'s last-updated `UpdateStamp` against an in-memory `dayUpdates` overlay (falls back to seeded `day.lastUpdated`); locking/unlocking a day live-stamps it with `MOCK_NOW` + current viewer
@@ -143,15 +346,15 @@ When backend lands, replace with TanStack Query + Zustand or similar; the contex
 ## Routing
 
 ```
-/                          Tour Overview
+/                          Tour Overview — Start From Scratch homepage by default
 /calendar                  Month grid
 /calendar/:date            Day Detail
 /personnel                 Crew + groups
 /schedule                  Visibility editor
 /daysheet                  In-app day sheet (defaults to first show)
 /daysheet/:date            In-app day sheet for a date
-/ingest/flights            Flight ingest demo
-/ingest/riders             Rider ingest demo (the differentiator)
+/ingest/flights            Import route & travel (route CSV + flight PDFs)
+/ingest/riders             Rider ingest (the differentiator)
 /more                      Mobile overflow menu (links not in the bottom-nav)
 /print/daysheet/:date      PRINT route (no sidebar/topbar) — outside Layout
 ```
@@ -201,6 +404,8 @@ If you add a route that should be printable / shareable / chrome-free, put it un
 
 ## Recent additions (most likely to need extension)
 
+- **Shareable day sheet link** — "Share" button on `/daysheet/:date` and the print-preview action bar copies a tokenized URL (`/print/daysheet/:date?token=…`) to the clipboard. `lib/shareToken.ts` generates + verifies mock base64 tokens. When the token is present and valid, the print view shows "Shared day sheet" in place of "← Back to day sheet" and hides the day jumper — signals to the recipient this is a shared read-only view. Note: since tours live in localStorage, recipients need the tour loaded in their browser; real auth-gated sharing needs a server-issued token and server-side verification.
+- **In-house PDF parser** (`lib/pdfParser.ts` + `lib/pdfCore.mjs`) — no LLM, no backend. pdfjs-dist text extraction + positional reconstruction. Handles Spanish and English riders. Three exports: `parseRiderPdf(file) → RiderImport`, `parseFlightPdf(file, personnel) → FlightImport | null`, `parseHotelPdf(file, personnel, days) → { hotels, tasks }`. Wired into `RiderIngest`, `FlightIngest`, and `HotelImportSection` upload handlers — each tries the real parser first, falls back to the fixture if parsing fails or returns empty. **Shared module:** `lib/pdfCore.mjs` holds all pure algorithmic helpers (constants, `groupRows`, `buildColMap`, `assignCols`, `multiPageItems`, `colAliasLookup`, etc.) imported by both `pdfParser.ts` (Vite/browser) and `scripts/parse-rider.mjs` (Node CLI). TypeScript resolves `.mjs` imports via `pdfCore.d.mts` (not `.d.ts` — `moduleResolution: "bundler"` maps `.mjs` → `.d.mts`). **Known quirks:** pdfjs-dist fragments Spanish accented chars (`producción` → `producci ó n`), so language detection uses unaccented Spanish function words instead of accent regex; column alias lookup uses prefix matching for fragmented headers. Artist name extraction uses a two-level fallback: tallest-average-height alphabetic row on the cover, then body-text scan for `producción de ARTIST`. TOC pages (pages matching ≥5 section hints) are skipped so they don't pollute section page lists. Multi-page sections use a y-offset trick (`(nPages-1-pi)*10000`) so items from different pages don't collide in `groupRows`. The `nextStarts` check in `findSections` uses `pageText(next).slice(0,300)` rather than all heading items — heading items on table pages are too broad (all h=12 rows) and caused false section boundaries when table cell text like "SMPTE TO LIGHTING" matched the lighting regex. The `input_list` regex includes `\bCH\s+SOURCE\b` so continuation pages (same table header, no section-title text) are included in the span. The canonical rider (`RIDER ELSA Y ELMAR 2025…`) extracts 44 channels, 8 monitor mixes, 5 FOH outputs (stereo pairs like "FOH 3 & 4" count as one entry), 11 sections. FOH output labels like "FOH 1", "FOH 3 & 4" are supported (bare integers only was too restrictive). **CLI:** `node scripts/parse-rider.mjs [path/to/rider.pdf]` writes `src/data/riderExtracted.json`; useful for testing extraction quality.
 - **Clarity + mobile redesign** (`redesign-plan.md`, landed) — `TodaySurface` is a role-aware "Today" surface used as both the desktop Tour Overview hero and the mobile home screen; `BottomNav` is the mobile tab bar (Today / Calendar / People / More) replacing the sidebar on small screens; `/more` is the mobile overflow menu. The pinned demo clock (`lib/today.ts`) makes "today" deterministic.
 - **Simple/Pro density toggle** — `densityMode` in `AppState`, toggle in the TopBar, persisted to localStorage. Affects layout density only; no data is hidden.
 - **Last-updated audit indicator** — `<LastUpdated>` renders "Last updated {date} by {name}" from a `Day.lastUpdated` `UpdateStamp` (resolved via `getDayLastUpdated`). Surfaced on TodaySurface, Day Sheet (desktop + mobile + tools-rail "Revision" card), the print day sheet, and Day Detail. Locking a day or resolving a conflict live-stamps with `MOCK_NOW`.
@@ -210,7 +415,11 @@ If you add a route that should be printable / shareable / chrome-free, put it un
 - **Rider section review — inline edit + approve** — on `/ingest/riders` each section can be corrected inline and then **Approved**. The Input List, Monitor Mix, FOH Outputs tables and free-text sections have editable fields (borderless `EditableText` / `EditableSelect`); edits layer over the extraction via `updateSectionEdit` (keyed `${type}-${index}`). Approving stamps the section with an `UpdateStamp` and shows `<LastUpdated label="Approved">`; an approved section is locked until **Reopen**. The nested sections (Backline, Catering, Lodging) are review-only for now — see the gap list.
 - **In-app PDF viewer** — `PdfViewerProvider` / `usePdfViewer()` (`components/PdfViewer.tsx`, mounted in `main.tsx`) shows PDFs in a popup `Modal` (size `xl`) at the cited page, instead of a new tab. Wired into every PDF reference: `RiderRef` §N/p.N links, `SourceTag` + `MockTag` artifact links, the rider filename chip, and the flight filename chips. **Full design + the unbuilt highlighting plan are in `pdf-highlighter.md` — read it before touching this.**
 - **Warning explainers** — `<ExplainTag>` (`components/ExplainTag.tsx`) adds a clickable amber "(?)" to every red/alert element (rider version warning, extraction flags, conflicts, "Sensitive" markers, excluded-brand flags); each opens a plain-English explanation.
-- **Flight PDFs** — `web/public/` holds two generated flight-confirmation PDFs. They're produced by `web/scripts/gen-flight-pdfs.mjs` (one-off Node script; `pdf-lib` is a devDependency). Re-run it if the `flightImports` mock data changes.
+- **Start From Scratch** — the only experience (see "Data modes"). Touches `AppState` (the tour, mutators, personnel-derived `allUsers`, bound query helpers), the combined `/ingest/flights` "Import route & travel" page, `RiderIngest` upload, `TopBar`, `ScratchBanner`, and the `lib/`/`data/`/`components/ingest/` files. Unit tests live in `web/tests/` (mirroring `web/src/` structure — e.g. `tests/lib/visibility.test.ts` tests `src/lib/visibility.ts`) and run with `npm test` (vitest). Tests import the code under test via the `@/` alias (`@/lib/foo`), not relative paths — keeps imports stable if a test ever moves. The vitest config lives in `web/vitest.config.ts`; `tsconfig.app.json` includes both `src` and `tests` so the typechecker sees both. When extending an ingest surface, route through the AppState mutators.
+- **Guided walkthrough** — `components/tour/` coach-mark tour over the scratch onboarding (see "Walkthrough"). The `/` intro screen frames the scenario; the overlay spotlights each step and auto-advances as the user imports each file. 14 steps: 4 hands-on imports then 5 centered feature steps touring the post-ingest surfaces.
+- **Hotel import** — the 4th uploadable fixture. A hotel-block confirmation PDF (`Hotel_Block_Mexico_2025-09.pdf`) → `hotelFixture.ts` `buildScratchHotelImport` builds `Hotel` records (keyed to check-in days, occupants name-matched to the roster) plus a few hotel-advance `Task`s. Imported via `addHotelImportToScratch` from the "Hotels & rooming" section on `/ingest/flights`. Direct import — no review/approve step, unlike flights.
+- **Generated fixture PDFs** — `web/public/` holds two flight-confirmation PDFs (AM19, VB1014) and one hotel-block confirmation (`Hotel_Block_Mexico_2025-09.pdf`). They're produced by `web/scripts/gen-flight-pdfs.mjs` (one-off Node script; `pdf-lib` is a devDependency). Re-run it if `flightFixture.ts` / `hotelFixture.ts` data changes.
+- **Travel-agent grid (CSV)** — bulk flight import. `mock-travel-grid-mexico.csv` (one row per passenger × leg) is parsed by `lib/travelGridCsv.ts` and produces one `FlightImport` per leg. Sits next to the per-flight PDF dropzone on `/ingest/flights` Step 2 — same review surface, two upload paths. The walkthrough's "Step 3 — Import the flights" now spotlights the grid dropzone as the recommended fast path.
 - **Cmd+K palette** — provider in `Layout`. Search index built from tour days + personnel + schedule items + venues + pages.
 - **Route map** — static SVG with hard-coded city lat/lngs in `RouteMap.tsx`. New cities need their lat/lng added there.
 - **Calendar List/Grid toggle** — `Calendar.tsx` defaults to Grid on desktop, List on mobile, switchable on both. List view groups days by month with headers; the month grid uses compact cells on mobile.
@@ -218,17 +427,16 @@ If you add a route that should be printable / shareable / chrome-free, put it un
 
 ## Pending user-blocked items
 
-The tour roster has 8 placeholder names waiting for user input:
+The tour roster still has placeholder names waiting for user input:
 - Juan, Daniel — last names (drummer + bassist, named in rider §6 monitor mixes but no surnames)
-- Tour Manager — real name + contact info (the current `p_lorenzo`/`tp_lorenzo` is a placeholder; the role-switcher's `lorenzo` key is kept for stability)
+- Tour Manager — real name + contact info. The scratch TM is the placeholder name **"Tour Manager"** (`scratchTour.ts`); the flight/hotel fixtures use the same literal string so passenger/rooming name-matching connects.
 - Audio Engineer (FOH + Monitors), Lighting Engineer, VJ, MUA, Personal Assistant, Staff #1, Staff #2 — full names
 
-Once provided, update `persons[]` in `web/src/data/mockTour.ts` and remove `isPlaceholder: true` from the corresponding `TourPerson` entries. For the TM, also update `currentUsers.lorenzo` (name + role label) and re-add a `realSources` entry if you want the `(i)` provenance modal to point to "user entry".
+Once provided, update `persons[]` in `web/src/data/mockTour.ts` and remove `isPlaceholder: true` from the corresponding `TourPerson` entries. For the TM, also update the scratch TM name in `web/src/data/scratchTour.ts` and the matching passenger/rooming names in `flightFixture.ts` / `hotelFixture.ts` (and re-run `gen-flight-pdfs.mjs`), and re-add a `realSources` entry if you want the `(i)` provenance modal to point to "user entry".
 
 ## What's still on the gap list (from the audit)
 
-Tier 1 untouched:
-- Public read-only share link for day sheets (tokenized URL → `/print/daysheet/:date?token=...`)
+Tier 1 untouched: *(all shipped)*
 
 Tier 2:
 - PDF text highlighting — the viewer + jump-to-page are done, but auto-highlighting the cited text is blocked on a data issue (Spanish PDF vs. English citations). Plan + fix in `pdf-highlighter.md`.
@@ -237,6 +445,11 @@ Tier 2:
 - Catering allergy/diet aggregator
 - Promoter contact card as a first-class entity
 - Timezone-aware times throughout
+- Flight passenger matching + Personnel edits: when these surfaces are wired, apply the pending/approval + history pattern (`PendingEdit` + `SectionEditRecord`-style log). TODOs are in the source files (`FlightIngest.tsx`, `Personnel.tsx`).
+
+Shipped (recent):
+- `DayLockRecord` pattern — day lock records a reason + full per-day history via `getDayLockHistory(dayId)`. `toggleDayLocked`/`setDayLocked` take an optional `reason?` and push a record on every change. Surfaced in `DaySheets` as a reason prompt + a "N lock events" accordion.
+- Visibility edit workflow — `/schedule` visibility edits persist to AppState with the pending/approval workflow and `VisibilityEditRecord` history (same shape as `SectionEditRecord`). `computeVisibilityChanges` diffs the Default / Group / Tag / Person levels. Managers edit directly via `updateVisibilityEdit`; non-managers `proposeVisibilityEdit` and a manager approves/rejects. Keyed by schedule-item id.
 
 (Shipped from earlier backlogs — see "Recent additions": the mobile-shaped day sheet, mobile bottom-nav, Today screen, Simple/Pro toggle, last-updated indicator, and tap-to-call / WhatsApp / maps deep links on the Today surface, mobile day sheet, and print sheet.)
 

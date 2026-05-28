@@ -10,13 +10,15 @@ import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { ConflictFeed } from '@/components/ConflictFeed';
 import { RouteMap } from '@/components/RouteMap';
 import { TodaySurface } from '@/components/TodaySurface';
-import { getAllConflicts } from '@/data/mockTour';
+import { useTour } from '@/components/tour/TourProvider';
 import type { RealSourceKey } from '@/data/realSources';
+import { fixturesOfKind } from '@/lib/fixtureMatcher';
 import { fmtFullDate, fmtDate, dayTypeLabel } from '@/lib/format';
 import { MOCK_TODAY } from '@/lib/today';
 
 export function TourOverview() {
-  const { tour, lockedDays, densityMode, resolvedConflicts } = useApp();
+  const { tour, lockedDays, densityMode, resolvedConflicts, getAllConflicts } = useApp();
+  const scratchEmpty = tour.days.length === 0;
   const today = MOCK_TODAY;
 
   const dayCounts = tour.days.reduce<Record<string, number>>((acc, d) => {
@@ -30,7 +32,7 @@ export function TourOverview() {
   const offDays = dayCounts.off ?? 0;
   const conflicts = getAllConflicts();
   const unresolvedCount = conflicts.filter((c) => !resolvedConflicts.has(c.id)).length;
-  const lockedCount = lockedDays.size;
+  const lockedCount = tour.days.filter((d) => lockedDays.has(d.id)).length;
   const upcoming = tour.days.filter((d) => d.date >= today).slice(0, densityMode === 'simple' ? 4 : 6);
   const simple = densityMode === 'simple';
 
@@ -63,7 +65,7 @@ export function TourOverview() {
         }
       />
 
-      <TodaySurface />
+      {scratchEmpty ? <ScratchGetStarted /> : <TodaySurface />}
 
       <div className="mt-5 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Total days" value={totalDays} sublabel={`${tour.legs.length} legs`} mockSource="tour_route" />
@@ -270,4 +272,89 @@ function FactRow({
 
 function cnList(...classes: Array<string | false | undefined>): string {
   return classes.filter(Boolean).join(' ');
+}
+
+// Guided intro shown on the scratch overview before any route is imported.
+// Frames the scenario, offers the coach-mark walkthrough, and lists the three
+// import steps with the exact sample file each one expects.
+function ScratchGetStarted() {
+  const { start } = useTour();
+  const route = fixturesOfKind('route')[0];
+  const rider = fixturesOfKind('rider')[0];
+  const flight = fixturesOfKind('flight')[0];
+  const steps = [
+    {
+      n: 1,
+      title: 'Import the tour route',
+      file: route?.filename,
+      hint: 'Builds a day for every date — shows, travel, off days — plus each show’s schedule.',
+      to: '/ingest/flights',
+    },
+    {
+      n: 2,
+      title: 'Import the rider',
+      file: rider?.filename,
+      hint: 'The AI ingest extracts every rider section for you to review, correct and approve.',
+      to: '/ingest/riders',
+    },
+    {
+      n: 3,
+      title: 'Import the flights',
+      file: flight?.filename,
+      hint: 'Review the parsed passenger matches, then approve them into Travel records.',
+      to: '/ingest/flights',
+    },
+  ];
+  return (
+    <section className="card overflow-hidden">
+      <div className="p-5 sm:p-7 border-b border-[var(--color-rule-soft)]">
+        <div className="eyebrow inline-flex items-center gap-1">
+          Start from scratch
+          <MockTag source="scratch_tour" field="Start From Scratch" />
+        </div>
+        <h2 className="mt-2 font-display text-[26px] sm:text-[32px] leading-tight font-bold text-[var(--color-ink)]">
+          You’re the new Tour Manager
+        </h2>
+        <p className="mt-2 text-[13px] text-[var(--color-ink-3)] leading-relaxed max-w-xl">
+          Elsa y Elmar are about to tour. Three documents are waiting in your inbox —
+          a routing spreadsheet from the booking agent, the band’s tech rider, and
+          flight confirmations from the travel agent. Import them in order and the
+          hub builds the tour around you.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={start}
+            className="inline-flex items-center gap-1.5 h-9 px-4 text-[13px] font-semibold rounded-[4px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]"
+          >
+            <Icon.Sparkle size={14} /> Start the walkthrough
+          </button>
+          <span className="text-[12px] text-[var(--color-ink-3)]">
+            or follow the three steps below at your own pace.
+          </span>
+        </div>
+      </div>
+      <ol className="divide-y divide-[var(--color-rule-soft)]">
+        {steps.map((s) => (
+          <li key={s.n}>
+            <Link to={s.to} className="flex items-center gap-4 px-5 sm:px-7 py-3.5 hover:bg-[var(--color-paper)]/50">
+              <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[var(--color-ink)] text-[var(--color-paper)] font-mono text-[12px] font-bold shrink-0">
+                {s.n}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13.5px] font-semibold text-[var(--color-ink)]">{s.title}</span>
+                <span className="block text-[12px] text-[var(--color-ink-3)]">{s.hint}</span>
+                {s.file && (
+                  <span className="mt-1 inline-block font-mono text-[10.5px] text-[var(--color-ink-3)] bg-[var(--color-paper-2)] border border-[var(--color-rule-soft)] rounded-[3px] px-1.5 py-0.5">
+                    {s.file}
+                  </span>
+                )}
+              </span>
+              <Icon.Chevron size={14} className="text-[var(--color-ink-4)]" />
+            </Link>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
 }

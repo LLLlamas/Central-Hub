@@ -21,15 +21,33 @@ export type HHMM = string;         // 24h, e.g. "16:00"
 export interface UpdateStamp {
   at: ISODateTime;   // when the record was last updated
   by: string;        // display name of the person who updated it
+  /** How many times this record has been updated since first creation.
+   *  Used by import audit lines to switch the label from "Imported" → "Updated". */
+  updates?: number;
+}
+
+// One entry in a day's lock/unlock history — captures the reason and who/when.
+export interface DayLockRecord {
+  locked: boolean;
+  reason?: string;
+  stamp: UpdateStamp;
+}
+
+// A single field that changed in a section edit — used in history modal.
+export interface FieldChange {
+  rowLabel: string;   // e.g. "Ch 3 — Kick Drum", "Mix 1-2 — MAIN ELSA"
+  field: string;      // human-readable field name
+  before: string;
+  after: string;
 }
 
 // ============================================================
 // Visibility — attribute-based access control
 // Hierarchy: persons > tags > groups > default. Most specific wins.
-// Levels: blocked < sees < needs < owns. Owns implies needs implies sees.
+// Levels: blocked < sees < owns. Owns implies sees.
 // ============================================================
 
-export type VisibilityLevel = 'blocked' | 'sees' | 'needs' | 'owns';
+export type VisibilityLevel = 'blocked' | 'sees' | 'owns';
 
 export interface Visibility {
   default: VisibilityLevel;
@@ -69,6 +87,14 @@ export interface Tour {
   documents: Document[];
   flightImports: FlightImport[];
   riderImports: RiderImport[];
+  /** Audit stamps for the lightweight imports that don't have their own record. */
+  routeImport?: UpdateStamp;
+  hotelImport?: UpdateStamp;
+  /** Tour-level visibility template — every new ScheduleItem inherits the
+   *  blob for its type unless explicitly overridden on the item. See
+   *  `lib/visibilityDefaults.ts`. Partial so the user can clear a type back
+   *  to "no template" if they want raw per-item control. */
+  visibilityDefaultsByType?: Partial<Record<ScheduleItemType, Visibility>>;
 }
 
 export interface Leg {
@@ -206,6 +232,7 @@ export interface Hotel {
   phone?: string;
   checkIn?: HHMM;
   checkOut?: HHMM;
+  nights?: number;
   occupants: { tourPersonId: ID; roomNumber?: string; roomType?: string }[];
   visibility: Visibility;
   sensitive: boolean;
@@ -277,9 +304,25 @@ export interface FlightImport {
   id: ID;
   filename: string;
   uploadedAt: ISODateTime;
+  uploadedBy?: string;
   status: IngestStatus;
   parsedFlights: ParsedFlight[];
   unmatchedNames: string[];
+  /** Number of times this import has been replaced/merged after first upload.
+   *  Drives the "Imported" → "Updated" label flip on the review surface. */
+  updates?: number;
+}
+
+/**
+ * How an unmatched flight passenger gets linked at approve-time:
+ *   - 'assign' → use an existing roster TourPerson (by id)
+ *   - 'add'    → create a new placeholder TourPerson and link to it
+ *   - 'skip'   → keep them off the Travel record (the legacy behavior)
+ * Keyed by `${importId}::${passengerName.toLowerCase()}` in AppState.
+ */
+export interface FlightPassengerResolution {
+  action: 'assign' | 'add' | 'skip';
+  tourPersonId?: ID;
 }
 
 // ============================================================
@@ -342,6 +385,7 @@ export interface InputChannel {
   wirelessSystem?: string;
   notes?: string;
   extractionFlags?: ExtractionFlag[];
+  lastEditedAt?: UpdateStamp;
 }
 
 // --- Monitor mix (rider §6) --------------------------------
@@ -360,6 +404,7 @@ export interface MonitorMix {
   type: MonitorType;
   bodypackCount?: number;
   notes?: string;
+  lastEditedAt?: UpdateStamp;
 }
 
 // --- FOH outputs (rider §6) --------------------------------
@@ -367,6 +412,7 @@ export interface FOHOutput {
   outputNumber: string;
   source: string;
   notes?: string;
+  lastEditedAt?: UpdateStamp;
 }
 
 // --- Backline (rider §9) -----------------------------------
@@ -504,6 +550,41 @@ export interface RiderImport {
   sections: RiderSection[];
   revisionOf?: ID;
   revision: number;
+}
+
+// Inline corrections layered over AI extraction for a single section.
+export interface RiderSectionEdit {
+  inputList?: InputChannel[];
+  monitorMix?: MonitorMix[];
+  fohOutputs?: FOHOutput[];
+  freeText?: string;
+  freeTextEn?: string;
+}
+
+// Archived record of a completed edit event (approved / rejected / direct manager edit).
+export interface SectionEditRecord {
+  patch: RiderSectionEdit;
+  changes: FieldChange[];
+  proposedAt?: UpdateStamp;   // undefined for direct manager edits
+  status: 'approved' | 'rejected' | 'direct';
+  resolvedAt: UpdateStamp;
+}
+
+// A visibility change proposed by a non-manager, awaiting manager approval.
+export interface PendingVisibilityEdit {
+  itemId: ID;
+  patch: Visibility;
+  before: Visibility;
+  proposedAt: UpdateStamp;
+}
+
+// Archived record of a completed visibility edit (approved / rejected / direct manager edit).
+export interface VisibilityEditRecord {
+  patch: Visibility;
+  changes: FieldChange[];
+  proposedAt?: UpdateStamp;   // undefined for direct manager edits
+  status: 'approved' | 'rejected' | 'direct';
+  resolvedAt: UpdateStamp;
 }
 
 // ============================================================

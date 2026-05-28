@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { SourceTag } from '@/components/provenance/SourceTag';
-import { getScheduleItemsForDay } from '@/data/mockTour';
+import { useApp } from '@/state/AppState';
 import type { Day, ScheduleItemType } from '@/types';
 import { cn } from '@/lib/cn';
 
@@ -57,12 +57,13 @@ function fmtDiff(min: number): string {
 }
 
 export function LobbyCallLadder({ day }: { day: Day }) {
+  const { getScheduleItemsForDay } = useApp();
   const items = useMemo(
     () =>
       getScheduleItemsForDay(day.id).sort((a, b) =>
         a.startTime.localeCompare(b.startTime),
       ),
-    [day.id],
+    [day.id, getScheduleItemsForDay],
   );
 
   const doors = items.find((i) => i.type === 'doors');

@@ -80,10 +80,10 @@ function buildIndex(tour: Tour): PaletteItem[] {
     { type: 'page', label: 'Today', to: '/', keywords: ['home', 'dashboard', 'overview'] },
     { type: 'page', label: 'Calendar', to: '/calendar', keywords: ['dates'] },
     { type: 'page', label: 'People', to: '/personnel', keywords: ['personnel', 'crew', 'roster'] },
-    { type: 'page', label: 'Schedule', to: '/schedule', keywords: ['visibility', 'abac', 'permissions'] },
+    { type: 'page', label: 'Schedule Permissions', to: '/schedule', keywords: ['visibility', 'abac', 'permissions', 'schedule'] },
     { type: 'page', label: 'Day Sheets', to: '/daysheet', keywords: ['day sheet'] },
     { type: 'page', label: 'More', to: '/more', keywords: ['tools', 'settings'] },
-    { type: 'page', label: 'Import flights', to: '/ingest/flights', keywords: ['flight', 'ingest'] },
+    { type: 'page', label: 'Import route & travel', to: '/ingest/flights', keywords: ['flight', 'route', 'travel', 'csv', 'ingest'] },
     { type: 'page', label: 'Import rider', to: '/ingest/riders', keywords: ['rider', 'pdf', 'conflicts', 'ingest'] },
   ];
   items.push(...pages);

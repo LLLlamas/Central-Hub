@@ -1,4 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '@/state/AppState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, SectionCard, EmptyState } from '@/components/ui/Card';
@@ -10,31 +12,37 @@ import { PersonName } from '@/components/provenance/PersonName';
 import { SensitiveExplain } from '@/components/ExplainTag';
 import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { LastUpdated } from '@/components/LastUpdated';
+import { getMockVenue } from '@/data/mockVenues';
 import {
   fmtFullDate,
   dayTypeLabel,
-  scheduleItemLabel,
   travelModeLabel,
   travelModeIcon,
   initials,
 } from '@/lib/format';
 import { resolveVisibility } from '@/lib/visibility';
-import {
-  getDay,
-  getScheduleItemsForDay,
-  getTravelForDay,
-  getHotelsForDay,
-  getTasksForDay,
-  getTourPersonById,
-  getGroupById,
-  getGroupTagById,
-} from '@/data/mockTour';
-import type { VisibilityLevel } from '@/types';
+import type { TourPerson, Group } from '@/types';
+
+type PersonPopoverTarget = {
+  personId: string;
+  rect: DOMRect;
+};
 
 export function DayDetail() {
   const { date } = useParams();
-  const { tour, user, getDayLastUpdated } = useApp();
+  const {
+    tour,
+    user,
+    getDayLastUpdated,
+    getDay,
+    getScheduleItemsForDay,
+    getTravelForDay,
+    getHotelsForDay,
+    getTasksForDay,
+    getTourPersonById,
+  } = useApp();
   const day = date ? getDay(date) : undefined;
+  const [popover, setPopover] = useState<PersonPopoverTarget | null>(null);
 
   if (!day) {
     return (
@@ -54,11 +62,15 @@ export function DayDetail() {
   }
 
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
+  const dayIndex = tour.days.findIndex((d) => d.date === day.date);
+  const prevDay = dayIndex > 0 ? tour.days[dayIndex - 1] : undefined;
+  const nextDay = dayIndex < tour.days.length - 1 ? tour.days[dayIndex + 1] : undefined;
   const allItems = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
   const items = managerView ? allItems : allItems.filter((it) => resolveVisibility(it.visibility, user) !== 'blocked');
   const travel = getTravelForDay(day.id);
   const hotels = getHotelsForDay(day.id);
   const tasks = getTasksForDay(day.id);
+  const venue = getMockVenue(day.venueId);
 
   return (
     <div>
@@ -68,12 +80,38 @@ export function DayDetail() {
         description={day.notes}
         actions={
           <>
-            <Link
-              to="/calendar"
-              className="inline-flex items-center gap-1.5 h-9 px-3 text-[12.5px] font-semibold rounded-[3px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] bg-[var(--color-card)]"
-            >
-              <Icon.Chevron size={12} className="rotate-180" /> Calendar
-            </Link>
+            <div className="inline-flex rounded-[3px] border border-[var(--color-rule)] overflow-hidden">
+              {prevDay ? (
+                <Link
+                  to={`/calendar/${prevDay.date}`}
+                  className="inline-flex items-center gap-1 h-9 px-2.5 text-[12px] font-semibold text-[var(--color-ink-2)] bg-[var(--color-card)] hover:bg-[var(--color-paper-2)] border-r border-[var(--color-rule)] transition-colors"
+                >
+                  <Icon.Chevron size={10} className="rotate-180" /> Yesterday
+                </Link>
+              ) : (
+                <span className="inline-flex items-center gap-1 h-9 px-2.5 text-[12px] font-semibold text-[var(--color-ink-5)] bg-[var(--color-card)] border-r border-[var(--color-rule)] cursor-not-allowed select-none">
+                  <Icon.Chevron size={10} className="rotate-180" /> Yesterday
+                </span>
+              )}
+              <Link
+                to="/calendar"
+                className="inline-flex items-center h-9 px-3 text-[12px] font-semibold text-[var(--color-ink-2)] bg-[var(--color-card)] hover:bg-[var(--color-paper-2)] border-r border-[var(--color-rule)] transition-colors"
+              >
+                Calendar
+              </Link>
+              {nextDay ? (
+                <Link
+                  to={`/calendar/${nextDay.date}`}
+                  className="inline-flex items-center gap-1 h-9 px-2.5 text-[12px] font-semibold text-[var(--color-ink-2)] bg-[var(--color-card)] hover:bg-[var(--color-paper-2)] transition-colors"
+                >
+                  Tomorrow <Icon.Chevron size={10} />
+                </Link>
+              ) : (
+                <span className="inline-flex items-center gap-1 h-9 px-2.5 text-[12px] font-semibold text-[var(--color-ink-5)] bg-[var(--color-card)] cursor-not-allowed select-none">
+                  Tomorrow <Icon.Chevron size={10} />
+                </span>
+              )}
+            </div>
             <Link
               to={`/daysheet/${day.date}`}
               className="inline-flex items-center gap-1.5 h-9 px-3.5 text-[13px] font-semibold rounded-[3px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]"
@@ -147,9 +185,6 @@ export function DayDetail() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Chip tone="neutral" size="sm">
-                            {scheduleItemLabel(it.type)}
-                          </Chip>
                           {it.sensitive && (
                             <span className="inline-flex items-center">
                               <Chip tone="critical" size="sm">
@@ -158,7 +193,6 @@ export function DayDetail() {
                               <SensitiveExplain />
                             </span>
                           )}
-                          <VisibilityPill level={lvl} />
                         </div>
                         <div className="mt-1 text-[13.5px] font-semibold text-[var(--color-ink)]">
                           {it.title}
@@ -184,6 +218,63 @@ export function DayDetail() {
 
         {/* Side rail */}
         <div className="space-y-5">
+          {/* Venue */}
+          {venue && (
+            <SectionCard
+              title="Venue"
+              eyebrow={venue.city}
+              action={<MockTag source="venue" field="Venue details" />}
+            >
+              <div className="space-y-3 text-[12.5px]">
+                <div>
+                  <div className="font-semibold text-[var(--color-ink)]">{venue.name}</div>
+                  <div className="text-[var(--color-ink-2)] leading-snug mt-0.5">{venue.address}</div>
+                  {venue.phone && (
+                    <div className="font-mono tabular text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
+                      <a href={`tel:${venue.phone.replace(/\s/g, '')}`} className="hover:underline">{venue.phone}</a>
+                    </div>
+                  )}
+                  {venue.stageDoor && (
+                    <div className="text-[11.5px] text-[var(--color-ink-3)] mt-1">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-ink-4)]">Stage door</span>
+                      {' '}{venue.stageDoor}
+                    </div>
+                  )}
+                  {venue.capacity && (
+                    <div className="font-mono text-[10.5px] uppercase tracking-[0.10em] text-[var(--color-ink-4)] mt-1">
+                      Cap: {venue.capacity.toLocaleString()}
+                    </div>
+                  )}
+                </div>
+                {(venue.housePM || venue.promoterRep) && (
+                  <div className="border-t border-[var(--color-rule-soft)] pt-3 space-y-2.5">
+                    {venue.housePM && (
+                      <div>
+                        <div className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-ink-4)]">House PM</div>
+                        <div className="font-semibold text-[var(--color-ink)]">{venue.housePM}</div>
+                        {venue.housePMPhone && (
+                          <a href={`tel:${venue.housePMPhone.replace(/\s/g, '')}`} className="font-mono text-[11px] tabular text-[var(--color-ink-3)] hover:underline">{venue.housePMPhone}</a>
+                        )}
+                      </div>
+                    )}
+                    {venue.promoterRep && (
+                      <div>
+                        <div className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-ink-4)]">{venue.promoter ?? 'Promoter'}</div>
+                        <div className="font-semibold text-[var(--color-ink)]">{venue.promoterRep}</div>
+                        {venue.promoterPhone && (
+                          <a href={`tel:${venue.promoterPhone.replace(/\s/g, '')}`} className="font-mono text-[11px] tabular text-[var(--color-ink-3)] hover:underline">{venue.promoterPhone}</a>
+                        )}
+                        {venue.promoterEmail && managerView && (
+                          <div className="font-mono text-[11px] tabular text-[var(--color-ink-3)] truncate">{venue.promoterEmail}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </SectionCard>
+          )}
+
           {/* Travel */}
           <SectionCard
             title="Travel"
@@ -325,14 +416,19 @@ export function DayDetail() {
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {members.slice(0, 5).map((m) => (
-                      <span
+                      <button
                         key={m.id}
-                        className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[9.5px] font-mono font-bold text-[var(--color-paper)] border border-[var(--color-rule)] ${m.isPlaceholder ? 'opacity-60' : ''}`}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setPopover(popover?.personId === m.id ? null : { personId: m.id, rect });
+                        }}
+                        className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[9.5px] font-mono font-bold text-[var(--color-paper)] border border-[var(--color-rule)] cursor-pointer hover:opacity-80 transition-opacity ${m.isPlaceholder ? 'opacity-60' : ''}`}
                         style={{ background: g.color }}
-                        title={`${m.person.name} · ${m.role}${m.isPlaceholder ? ' (placeholder)' : ''}`}
                       >
                         {m.isPlaceholder ? '?' : initials(m.person.name)}
-                      </span>
+                      </button>
                     ))}
                     {members.length > 5 && (
                       <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-[9.5px] font-mono font-bold text-[var(--color-ink-3)] bg-[var(--color-paper-2)] border border-[var(--color-rule)]">
@@ -359,27 +455,81 @@ export function DayDetail() {
         </div>
       </SectionCard>
 
+      {popover && (() => {
+        const member = tour.personnel.find((p) => p.id === popover.personId);
+        const group = member ? tour.groups.find((g) => g.id === member.groupId) : undefined;
+        if (!member || !group) return null;
+        return (
+          <PersonPopover
+            member={member}
+            group={group}
+            rect={popover.rect}
+            onClose={() => setPopover(null)}
+          />
+        );
+      })()}
+
       <DataSourcesPanel
-        sourceKeys={['day', 'schedule_item', 'travel', 'hotel', 'task', 'visibility']}
+        sourceKeys={['day', 'schedule_item', 'travel', 'hotel', 'task', 'visibility', 'venue']}
       />
     </div>
   );
 }
 
-function VisibilityPill({ level }: { level: VisibilityLevel }) {
-  const tone =
-    level === 'owns' ? 'critical' : level === 'needs' ? 'rehearsal' : level === 'sees' ? 'travel' : 'off';
-  const label =
-    level === 'owns'
-      ? 'Owns'
-      : level === 'needs'
-      ? 'Needs'
-      : level === 'sees'
-      ? 'Sees'
-      : 'Hidden';
-  return (
-    <Chip tone={tone as any} variant="outline" size="sm" uppercase>
-      {label} for you
-    </Chip>
+function PersonPopover({
+  member,
+  group,
+  rect,
+  onClose,
+}: {
+  member: TourPerson;
+  group: Group;
+  rect: DOMRect;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  const top = rect.bottom + window.scrollY + 6;
+  const left = Math.min(rect.left + window.scrollX, window.innerWidth - 220);
+
+  return createPortal(
+    <div
+      ref={ref}
+      style={{ position: 'absolute', top, left, zIndex: 9999, width: 200 }}
+      className="bg-[var(--color-card)] border border-[var(--color-rule)] rounded-[4px] shadow-[0_4px_16px_rgba(0,0,0,0.12)] p-3"
+    >
+      <div className="flex items-center gap-2.5">
+        <span
+          className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-[11px] font-mono font-bold text-[var(--color-paper)] shrink-0 ${member.isPlaceholder ? 'opacity-60' : ''}`}
+          style={{ background: group.color }}
+        >
+          {member.isPlaceholder ? '?' : initials(member.person.name)}
+        </span>
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold text-[var(--color-ink)] leading-snug truncate">
+            {member.isPlaceholder ? <em className="not-italic text-[var(--color-ink-3)]">Name TBD</em> : member.person.name}
+          </div>
+          <div className="text-[11.5px] text-[var(--color-ink-3)] truncate">{member.role}</div>
+          <div className="mt-0.5 inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: group.color }} />
+            <span className="text-[10.5px] font-mono text-[var(--color-ink-4)]">{group.name}</span>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

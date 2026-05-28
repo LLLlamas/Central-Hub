@@ -9,9 +9,9 @@ import { fmtDate } from '@/lib/format';
 
 const tools = [
   { to: '/daysheet', label: 'Day sheets', hint: 'Edit, personalize, print, and publish daily sheets.', icon: Icon.Document },
-  { to: '/schedule', label: 'Schedule', hint: 'Manage visibility and who needs which call times.', icon: Icon.Layers },
+  { to: '/schedule', label: 'Schedule Permissions', hint: 'Control who sees or owns each call time. TM and PM only.', icon: Icon.Layers },
   { to: '/ingest/riders', label: 'Import rider', hint: 'Review the extracted rider sections and conflicts.', icon: Icon.Sparkle },
-  { to: '/ingest/flights', label: 'Import flights', hint: 'Check parsed flight confirmations and passenger matches.', icon: Icon.Plane },
+  { to: '/ingest/flights', label: 'Import route & travel', hint: 'Import the tour route, then review parsed flight confirmations.', icon: Icon.Plane },
 ];
 
 export function More() {

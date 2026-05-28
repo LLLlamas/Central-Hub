@@ -1,14 +1,13 @@
 // Visibility resolver — the heart of the permissions model.
 // Hierarchy: persons > tags > groups > default. Most specific wins.
-// Levels: blocked < sees < needs < owns.
+// Levels: blocked < sees < owns.
 
 import type { Visibility, VisibilityLevel, CurrentUser } from '@/types';
 
 const LEVEL_RANK: Record<VisibilityLevel, number> = {
   blocked: 0,
   sees: 1,
-  needs: 2,
-  owns: 3,
+  owns: 2,
 };
 
 export function resolveVisibility(
@@ -36,8 +35,6 @@ export function visibilityLabel(level: VisibilityLevel): string {
   switch (level) {
     case 'owns':
       return 'Owns';
-    case 'needs':
-      return 'Needs';
     case 'sees':
       return 'Sees';
     case 'blocked':
@@ -49,10 +46,8 @@ export function visibilityDescription(level: VisibilityLevel): string {
   switch (level) {
     case 'owns':
       return 'Can view and edit.';
-    case 'needs':
-      return 'Must see this — it affects their day.';
     case 'sees':
-      return 'Can view if they look.';
+      return 'Can view — it\'s on their day sheet.';
     case 'blocked':
       return 'Hidden — not in their day sheet.';
   }
@@ -63,7 +58,7 @@ export const vis = {
   everyone(level: VisibilityLevel = 'sees'): Visibility {
     return { default: level };
   },
-  onlyGroups(groupIds: string[], level: VisibilityLevel = 'needs'): Visibility {
+  onlyGroups(groupIds: string[], level: VisibilityLevel = 'sees'): Visibility {
     return {
       default: 'blocked',
       groups: Object.fromEntries(groupIds.map((id) => [id, level])),

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useApp } from '@/state/AppState';
 import { useCommandPalette } from '@/components/CommandPalette';
 import { Icon } from '@/components/ui/Icon';
-import { Chip } from '@/components/ui/Chip';
 import { Modal } from '@/components/ui/Modal';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
@@ -37,12 +36,6 @@ export function TopBar() {
         </div>
 
         <div className="flex items-center gap-2 md:gap-3">
-          <div className="hidden xl:block">
-            <Chip tone="mock" variant="outline">
-              Prototype - Mock data
-            </Chip>
-          </div>
-
           <div className="inline-flex h-11 md:h-9 rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] p-0.5">
             {(['simple', 'pro'] as const).map((mode) => (
               <button
@@ -78,7 +71,7 @@ export function TopBar() {
               type="button"
               onClick={() => setOpen((v) => !v)}
               className="flex items-center gap-2.5 h-11 md:h-9 pl-1.5 pr-2.5 rounded-[4px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] transition-colors bg-[var(--color-card)]"
-              title="Switch viewer (demo)"
+              title="Switch viewer"
             >
               <span
                 className="inline-flex items-center justify-center w-7 h-7 md:w-6 md:h-6 rounded-full text-[10px] font-mono font-bold text-[var(--color-paper)]"

@@ -6,12 +6,11 @@ import { visibilityLabel, visibilityDescription } from '@/lib/visibility';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
-const LEVELS: VisibilityLevel[] = ['blocked', 'sees', 'needs', 'owns'];
+const LEVELS: VisibilityLevel[] = ['blocked', 'sees', 'owns'];
 
 const LEVEL_COLOR: Record<VisibilityLevel, string> = {
   blocked: 'var(--color-vis-blocked)',
   sees: 'var(--color-vis-sees)',
-  needs: 'var(--color-vis-needs)',
   owns: 'var(--color-vis-owns)',
 };
 

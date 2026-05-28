@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
+import { buildShareUrl } from '@/lib/shareToken';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, EmptyState } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
@@ -17,22 +18,15 @@ import { LastUpdated } from '@/components/LastUpdated';
 import { getMockVenue } from '@/data/mockVenues';
 import type { SourceKey } from '@/data/sources';
 import type { RealSourceKey } from '@/data/realSources';
-import type { Day, ScheduleItem, UpdateStamp } from '@/types';
+import type { Day, ScheduleItem, UpdateStamp, DayLockRecord } from '@/types';
 import {
   fmtFullDate,
   fmtDate,
   dayTypeLabel,
-  scheduleItemLabel,
   travelModeIcon,
   travelModeLabel,
 } from '@/lib/format';
 import { resolveVisibility } from '@/lib/visibility';
-import {
-  getDay,
-  getScheduleItemsForDay,
-  getTravelForDay,
-  getHotelsForDay,
-} from '@/data/mockTour';
 import { MOCK_TODAY, getGeneratedAtLabel } from '@/lib/today';
 import { cn } from '@/lib/cn';
 
@@ -47,8 +41,13 @@ export function DaySheets() {
     setUserKey,
     isDayLocked,
     toggleDayLocked,
+    getDayLockHistory,
     getDayLastUpdated,
     densityMode,
+    getDay,
+    getScheduleItemsForDay,
+    getTravelForDay,
+    getHotelsForDay,
   } = useApp();
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
 
@@ -63,7 +62,18 @@ export function DaySheets() {
   }, [date, tour.days]);
 
   const day = getDay(defaultDate);
-  const [mode, setMode] = useState<Mode>('edit');
+  const [mode, setMode] = useState<Mode>('personal');
+  const [lockReason, setLockReason] = useState('');
+  const [showLockPrompt, setShowLockPrompt] = useState(false);
+  const [showLockHistory, setShowLockHistory] = useState(false);
+  const [copiedShare, setCopiedShare] = useState(false);
+  const handleCopyShareLink = useCallback(() => {
+    if (!day) return;
+    navigator.clipboard.writeText(buildShareUrl(day.date)).then(() => {
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 2000);
+    });
+  }, [day]);
   const effectiveMode: Mode = managerView ? mode : 'personal';
   const locked = day ? isDayLocked(day.id) : false;
 
@@ -87,6 +97,14 @@ export function DaySheets() {
         description="The sheet is the hero. Pro mode keeps publishing tools close; Simple mode keeps the readable sheet front and center."
         actions={
           <>
+            <button
+              type="button"
+              onClick={handleCopyShareLink}
+              title="Copy shareable link to this day sheet"
+              className="min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] text-[var(--color-ink)] hover:border-[var(--color-ink-4)]"
+            >
+              <Icon.Share size={14} /> {copiedShare ? 'Copied!' : 'Share'}
+            </button>
             <Link
               to={`/print/daysheet/${day.date}`}
               target="_blank"
@@ -97,19 +115,58 @@ export function DaySheets() {
               <Icon.Print size={14} /> Print / PDF
             </Link>
             {managerView && (
-              <button
-                type="button"
-                onClick={() => toggleDayLocked(day.id)}
-                className={cn(
-                  'min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] border transition-colors',
-                  locked
-                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/8 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/14'
-                    : 'border-[var(--color-rule)] bg-[var(--color-card)] text-[var(--color-ink)] hover:border-[var(--color-ink-4)]',
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (locked) {
+                      toggleDayLocked(day.id);
+                    } else {
+                      setShowLockPrompt((v) => !v);
+                    }
+                  }}
+                  className={cn(
+                    'min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] border transition-colors',
+                    locked
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/8 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/14'
+                      : 'border-[var(--color-rule)] bg-[var(--color-card)] text-[var(--color-ink)] hover:border-[var(--color-ink-4)]',
+                  )}
+                  title={locked ? 'Locked - click to unlock and resume editing' : 'Lock the day - marks it closed-out / ready to publish'}
+                >
+                  <Icon.Lock size={14} /> {locked ? 'Locked' : 'Lock day'}
+                </button>
+                {showLockPrompt && !locked && (
+                  <span className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={lockReason}
+                      onChange={(e) => setLockReason(e.target.value)}
+                      placeholder="Reason (optional)"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          toggleDayLocked(day.id, lockReason.trim() || undefined);
+                          setLockReason('');
+                          setShowLockPrompt(false);
+                        }
+                      }}
+                      className="h-9 w-44 px-2 text-[12.5px] rounded-[3px] border border-[var(--color-rule)] bg-[var(--color-card)]"
+                    />
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      leading={<Icon.Lock size={12} />}
+                      onClick={() => {
+                        toggleDayLocked(day.id, lockReason.trim() || undefined);
+                        setLockReason('');
+                        setShowLockPrompt(false);
+                      }}
+                    >
+                      Lock
+                    </Button>
+                  </span>
                 )}
-                title={locked ? 'Locked - click to unlock and resume editing' : 'Lock the day - marks it closed-out / ready to publish'}
-              >
-                <Icon.Lock size={14} /> {locked ? 'Locked' : 'Lock day'}
-              </button>
+              </div>
             )}
             {managerView && (
               <Button variant="primary" leading={<Icon.Sparkle size={14} />} className="min-h-11 md:min-h-9">
@@ -130,6 +187,15 @@ export function DaySheets() {
             ) : (
               <Chip tone="neutral" variant="outline">Draft</Chip>
             )}
+            {managerView && getDayLockHistory(day.id).length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowLockHistory((v) => !v)}
+                className="text-[11.5px] font-semibold text-[var(--color-ink-3)] underline decoration-[var(--color-ink-4)]/40 hover:text-[var(--color-ink)]"
+              >
+                {getDayLockHistory(day.id).length} lock event{getDayLockHistory(day.id).length === 1 ? '' : 's'}
+              </button>
+            )}
             {managerView && <ModeToggle mode={mode} setMode={setMode} />}
             <MockBadge source="schedule_item" className="ml-auto hidden sm:inline-flex" />
           </div>
@@ -144,6 +210,10 @@ export function DaySheets() {
         isDayLocked={isDayLocked}
         onSelect={(d) => navigate(`/daysheet/${d.date}`)}
       />
+
+      {managerView && showLockHistory && (
+        <LockHistory records={getDayLockHistory(day.id)} />
+      )}
 
       <div className="lg:hidden mt-5">
         <MobileDaySheet day={day} mode={effectiveMode} nextDay={nextDay} />
@@ -268,6 +338,39 @@ function DateStepper({
   );
 }
 
+function LockHistory({ records }: { records: DayLockRecord[] }) {
+  return (
+    <div className="card mt-3 p-4">
+      <div className="eyebrow mb-2">Lock history</div>
+      <ol className="divide-y divide-[var(--color-rule-soft)]">
+        {[...records].reverse().map((r, i) => (
+          <li key={i} className="py-2 flex items-start gap-2.5">
+            <span
+              className={cn(
+                'mt-0.5 shrink-0',
+                r.locked ? 'text-[var(--color-accent)]' : 'text-[var(--color-ink-3)]',
+              )}
+            >
+              {r.locked ? <Icon.Lock size={13} /> : <Icon.Check size={13} />}
+            </span>
+            <div className="min-w-0">
+              <div className="text-[12.5px] font-semibold text-[var(--color-ink)]">
+                {r.locked ? 'Locked' : 'Unlocked'} by {r.stamp.by}
+              </div>
+              <div className="font-mono text-[11px] tabular text-[var(--color-ink-3)]">
+                {fmtDate(r.stamp.at, 'MMM d, yyyy')} · {fmtDate(r.stamp.at, 'h:mm a')}
+              </div>
+              {r.reason && (
+                <div className="text-[12px] text-[var(--color-ink-2)] mt-0.5 italic">{r.reason}</div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 function ToolsRail({
   day,
   mode,
@@ -349,7 +452,14 @@ function ModeToggle({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void 
 }
 
 function MobileDaySheet({ day, mode, nextDay }: { day: Day; mode: Mode; nextDay?: Day }) {
-  const { tour, user, getDayLastUpdated } = useApp();
+  const {
+    tour,
+    user,
+    getDayLastUpdated,
+    getScheduleItemsForDay,
+    getTravelForDay,
+    getHotelsForDay,
+  } = useApp();
   const allItems = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
   const allTravel = getTravelForDay(day.id);
   const allHotels = getHotelsForDay(day.id);
@@ -422,10 +532,9 @@ function MobileDaySheet({ day, mode, nextDay }: { day: Day; mode: Mode; nextDay?
                   <span className="font-mono text-[16px] tabular font-semibold text-[var(--color-ink)]">{it.startTime}</span>
                   <span className="min-w-0">
                     <span className="block text-[14px] font-semibold text-[var(--color-ink)]">{it.title}</span>
-                    <span className="mt-1 flex items-center gap-2 flex-wrap">
-                      <Chip tone="neutral" size="sm">{scheduleItemLabel(it.type)}</Chip>
-                      {it.location && <span className="text-[12.5px] text-[var(--color-ink-3)]">{it.location}</span>}
-                    </span>
+                    {it.location && (
+                      <span className="mt-1 block text-[12.5px] text-[var(--color-ink-3)]">{it.location}</span>
+                    )}
                   </span>
                 </li>
               ))}
@@ -529,7 +638,15 @@ function MobileContact({ label, name, phone }: { label: string; name: string; ph
 }
 
 function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
-  const { tour, user, getDayLastUpdated } = useApp();
+  const {
+    tour,
+    user,
+    getDayLastUpdated,
+    getScheduleItemsForDay,
+    getTravelForDay,
+    getHotelsForDay,
+  } = useApp();
+  const venue = getMockVenue(day.venueId);
   const allItems = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
   const allTravel = getTravelForDay(day.id);
   const allHotels = getHotelsForDay(day.id);
@@ -547,8 +664,12 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
             <h2 className="font-display text-[42px] leading-[0.95] font-bold text-[var(--color-ink)] mt-1.5">
               {fmtDate(day.date, 'EEEE, MMMM d')}
             </h2>
-            <div className="mt-1 text-[14px] font-semibold text-[var(--color-ink-2)]">
-              {day.city ?? '-'} - {dayTypeLabel(day.dayType)}
+            <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[14px] font-semibold text-[var(--color-ink-2)]">
+              <span>{day.city ?? '-'}{venue ? ` · ${venue.name}` : ''}</span>
+              {venue && <MockTag source="venue" field="Venue name" />}
+              {mode === 'personal' && (
+                <span className="text-[var(--color-ink-4)] font-normal">· For: {user.role}</span>
+              )}
             </div>
           </div>
           <div className="text-right shrink-0">
@@ -556,9 +677,11 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
             <div className="font-display text-[28px] leading-none font-bold tabular text-[var(--color-ink)]">
               {fmtDate(day.date, 'MM.dd')}
             </div>
-            <div className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
-              {mode === 'edit' ? 'Edit view' : `For: ${user.name}`}
-            </div>
+            {mode === 'edit' && (
+              <div className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
+                Edit view
+              </div>
+            )}
           </div>
         </div>
 
@@ -603,7 +726,6 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
                           {it.title}
                           {ruleKey && <SourceTag source={ruleKey} field={`${it.title} - rule source`} />}
                         </span>
-                        <Chip tone="neutral" size="sm">{scheduleItemLabel(it.type)}</Chip>
                         {mode === 'edit' && it.sensitive && (
                           <span className="inline-flex items-center">
                             <Chip tone="critical" size="sm">
