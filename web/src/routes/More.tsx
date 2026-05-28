@@ -1,9 +1,7 @@
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { Chip } from '@/components/ui/Chip';
-import { useApp } from '@/state/AppState';
 import { MOCK_TODAY } from '@/lib/today';
 import { fmtDate } from '@/lib/format';
 
@@ -15,8 +13,6 @@ const tools = [
 ];
 
 export function More() {
-  const { densityMode } = useApp();
-
   return (
     <div>
       <PageHeader
@@ -24,9 +20,6 @@ export function More() {
         description="Power tools and settings live here so mobile can stay focused on the day."
         meta={
           <div className="flex flex-wrap items-center gap-2">
-            <Chip tone="neutral" variant="outline">
-              {densityMode === 'pro' ? 'Pro mode' : 'Simple mode'}
-            </Chip>
             <Chip tone="mock" variant="outline">
               Demo date: {fmtDate(MOCK_TODAY, 'MMM d, yyyy')}
             </Chip>
@@ -54,18 +47,6 @@ export function More() {
           );
         })}
       </div>
-
-      <Card className="mt-5">
-        <div className="flex items-start gap-3">
-          <Icon.Info size={16} className="mt-0.5 text-[var(--color-ocean)] shrink-0" />
-          <div>
-            <div className="text-[13px] font-semibold text-[var(--color-ink)]">Simple / Pro</div>
-            <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-ink-3)]">
-              Use the Simple/Pro switch in the top bar like a light/dark mode setting. It changes layout density; source tags stay visible in both modes while this prototype is being built.
-            </p>
-          </div>
-        </div>
-      </Card>
     </div>
   );
 }

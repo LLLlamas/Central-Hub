@@ -21,6 +21,8 @@ import type {
   PendingVisibilityEdit,
   VisibilityEditRecord,
   ScheduleItem,
+  ScheduleItemPatch,
+  ScheduleItemEditRecord,
   Travel,
   Hotel,
   Task,
@@ -34,8 +36,8 @@ import type {
   Conflict,
 } from '@/types';
 import { defaultVisibilityForType } from '@/lib/visibilityDefaults';
+import { scheduleItemLabel } from '@/lib/format';
 
-export type DensityMode = 'simple' | 'pro';
 export type { ParsedRoute } from '@/lib/routeCsv';
 
 export interface ConflictResolution {
@@ -73,8 +75,6 @@ interface AppState {
   userKey: string;
   setUserKey: (k: string) => void;
   allUsers: Record<string, CurrentUser>;
-  densityMode: DensityMode;
-  setDensityMode: (mode: DensityMode) => void;
 
   // The tour starts as an empty shell the user builds up by uploading fixture
   // files. Reset wipes it back to the shell. See CLAUDE.md "Data modes".
@@ -185,15 +185,18 @@ interface AppState {
   approvePendingVisibilityEdit: (itemId: ID) => void;
   rejectPendingVisibilityEdit: (itemId: ID) => void;
   getVisibilityHistory: (itemId: ID) => VisibilityEditRecord[];
+
+  // Schedule-item content edits (times / title / location / notes / type) plus
+  // add + delete. These mutate the tour directly (not an overlay) so every read
+  // site reflects them; the audit log lives in `scheduleItemEditHistory`.
+  // Manager-only surface today — no propose/approve yet.
+  updateScheduleItem: (itemId: ID, patch: ScheduleItemPatch) => void;
+  addScheduleItem: (dayId: ID, init?: Partial<ScheduleItem>) => ID;
+  deleteScheduleItem: (itemId: ID) => void;
+  getScheduleItemHistory: (itemId: ID) => ScheduleItemEditRecord[];
 }
 
 const Ctx = createContext<AppState | null>(null);
-const DENSITY_STORAGE_KEY = 'tour-hub:density-mode';
-
-function getInitialDensityMode(): DensityMode {
-  if (typeof window === 'undefined') return 'pro';
-  return window.localStorage.getItem(DENSITY_STORAGE_KEY) === 'simple' ? 'simple' : 'pro';
-}
 
 // Stamp used when the rider import seeds approvals for sections the rider
 // marks already-approved — dated to when the PM reviewed revision 2.
@@ -284,6 +287,19 @@ function computeVisibilityChanges(before: Visibility, after: Visibility): FieldC
   return changes;
 }
 
+function computeScheduleItemChanges(before: ScheduleItem, patch: ScheduleItemPatch): FieldChange[] {
+  const changes: FieldChange[] = [];
+  const fields: (keyof ScheduleItemPatch)[] = ['startTime', 'endTime', 'title', 'location', 'notes', 'type'];
+  const rowLabel = patch.title ?? before.title;
+  for (const field of fields) {
+    if (!(field in patch)) continue;
+    const bv = String(before[field] ?? '');
+    const av = String(patch[field] ?? '');
+    if (bv !== av) changes.push({ rowLabel, field, before: bv, after: av });
+  }
+  return changes;
+}
+
 export function AppStateProvider({ children }: { children: ReactNode }) {
   // Read persisted scratch state once, lazily. Scratch is the default mode, so
   // a scratch shell is created up front when none was restored.
@@ -297,7 +313,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [userKey, setUserKey] = useState<string>(
     () => initialOverlays?.userKey ?? scratchDefaultUserKey(tour),
   );
-  const [densityMode, setDensityMode] = useState<DensityMode>(getInitialDensityMode);
   const [lockedDays, setLockedDays] = useState<ReadonlySet<ID>>(
     () => new Set(initialOverlays?.lockedDays ?? []),
   );
@@ -334,13 +349,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [visibilityEditHistory, setVisibilityEditHistory] = useState<ReadonlyMap<ID, VisibilityEditRecord[]>>(
     () => new Map(initialOverlays?.visibilityEditHistory ?? []),
   );
+  const [scheduleItemEditHistory, setScheduleItemEditHistory] = useState<ReadonlyMap<ID, ScheduleItemEditRecord[]>>(
+    () => new Map(initialOverlays?.scheduleItemEditHistory ?? []),
+  );
   const [flightPassengerResolutions, setFlightPassengerResolutionsMap] = useState<
     ReadonlyMap<string, FlightPassengerResolution>
   >(() => new Map(initialOverlays?.flightPassengerResolutions ?? []));
-
-  useEffect(() => {
-    window.localStorage.setItem(DENSITY_STORAGE_KEY, densityMode);
-  }, [densityMode]);
 
   // Persist the tour so a reload resumes where the user left off.
   useEffect(() => {
@@ -363,6 +377,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       visibilityEdits: [...visibilityEdits.entries()],
       pendingVisibilityEdits: [...pendingVisibilityEdits.entries()],
       visibilityEditHistory: [...visibilityEditHistory.entries()],
+      scheduleItemEditHistory: [...scheduleItemEditHistory.entries()],
       flightPassengerResolutions: [...flightPassengerResolutions.entries()],
       userKey,
     });
@@ -379,6 +394,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     visibilityEdits,
     pendingVisibilityEdits,
     visibilityEditHistory,
+    scheduleItemEditHistory,
     flightPassengerResolutions,
     userKey,
   ]);
@@ -408,6 +424,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setVisibilityEdits(new Map());
     setPendingVisibilityEdits(new Map());
     setVisibilityEditHistory(new Map());
+    setScheduleItemEditHistory(new Map());
     setFlightPassengerResolutionsMap(new Map());
     clearOverlays();
   }, []);
@@ -1199,6 +1216,113 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [visibilityEditHistory],
   );
 
+  // ---- Schedule-item content edits (direct tour mutation + history) -------
+  const updateScheduleItem = useCallback(
+    (itemId: ID, patch: ScheduleItemPatch) => {
+      const item = tour.scheduleItems.find((i) => i.id === itemId);
+      if (!item) return;
+      const changes = computeScheduleItemChanges(item, patch);
+      if (changes.length === 0) return;
+      updateScratchTour((t) => ({
+        ...t,
+        scheduleItems: t.scheduleItems.map((i) => (i.id === itemId ? { ...i, ...patch } : i)),
+      }));
+      stampDay(item.dayId);
+      setScheduleItemEditHistory((prev) => {
+        const next = new Map(prev);
+        const record: ScheduleItemEditRecord = {
+          patch,
+          changes,
+          status: 'direct',
+          resolvedAt: { at: MOCK_NOW, by: currentName },
+        };
+        next.set(itemId, [...(prev.get(itemId) ?? []), record]);
+        return next;
+      });
+    },
+    [tour.scheduleItems, updateScratchTour, stampDay, currentName],
+  );
+
+  const addScheduleItem = useCallback(
+    (dayId: ID, init?: Partial<ScheduleItem>): ID => {
+      const type = init?.type ?? 'other';
+      const existingIds = new Set(tour.scheduleItems.map((i) => i.id));
+      let n = tour.scheduleItems.length + 1;
+      let id = `si_new_${n}`;
+      while (existingIds.has(id)) id = `si_new_${++n}`;
+      const newItem: ScheduleItem = {
+        id,
+        dayId,
+        type,
+        title: init?.title ?? scheduleItemLabel(type),
+        startTime: init?.startTime ?? '12:00',
+        endTime: init?.endTime,
+        location: init?.location,
+        notes: init?.notes,
+        ownerPersonId: init?.ownerPersonId,
+        visibility: init?.visibility ?? getScheduleTypeDefault(type),
+        sensitive: init?.sensitive,
+      };
+      updateScratchTour((t) => ({ ...t, scheduleItems: [...t.scheduleItems, newItem] }));
+      stampDay(dayId);
+      setScheduleItemEditHistory((prev) => {
+        const next = new Map(prev);
+        const record: ScheduleItemEditRecord = {
+          patch: { startTime: newItem.startTime, title: newItem.title, type },
+          changes: [{ rowLabel: newItem.title, field: 'created', before: '', after: `${newItem.startTime} ${newItem.title}` }],
+          status: 'created',
+          resolvedAt: { at: MOCK_NOW, by: currentName },
+        };
+        next.set(id, [record]);
+        return next;
+      });
+      return id;
+    },
+    [tour.scheduleItems, getScheduleTypeDefault, updateScratchTour, stampDay, currentName],
+  );
+
+  const deleteScheduleItem = useCallback(
+    (itemId: ID) => {
+      const item = tour.scheduleItems.find((i) => i.id === itemId);
+      if (!item) return;
+      updateScratchTour((t) => ({
+        ...t,
+        scheduleItems: t.scheduleItems.filter((i) => i.id !== itemId),
+      }));
+      stampDay(item.dayId);
+      // Drop any visibility overlay / pending proposal for the dead item.
+      setVisibilityEdits((prev) => {
+        if (!prev.has(itemId)) return prev;
+        const next = new Map(prev);
+        next.delete(itemId);
+        return next;
+      });
+      setPendingVisibilityEdits((prev) => {
+        if (!prev.has(itemId)) return prev;
+        const next = new Map(prev);
+        next.delete(itemId);
+        return next;
+      });
+      setScheduleItemEditHistory((prev) => {
+        const next = new Map(prev);
+        const record: ScheduleItemEditRecord = {
+          patch: {},
+          changes: [{ rowLabel: item.title, field: 'deleted', before: `${item.startTime} ${item.title}`, after: '' }],
+          status: 'deleted',
+          resolvedAt: { at: MOCK_NOW, by: currentName },
+        };
+        next.set(itemId, [...(prev.get(itemId) ?? []), record]);
+        return next;
+      });
+    },
+    [tour.scheduleItems, updateScratchTour, stampDay, currentName],
+  );
+
+  const getScheduleItemHistory = useCallback(
+    (itemId: ID): ScheduleItemEditRecord[] => scheduleItemEditHistory.get(itemId) ?? [],
+    [scheduleItemEditHistory],
+  );
+
   const getPendingConflictResolution = useCallback(
     (id: ID) => pendingConflictResolutions.get(id),
     [pendingConflictResolutions],
@@ -1251,8 +1375,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       userKey,
       setUserKey,
       allUsers,
-      densityMode,
-      setDensityMode,
       resetScratchTour,
       applyRouteToScratch,
       addRiderImportToScratch,
@@ -1317,8 +1439,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       approvePendingVisibilityEdit,
       rejectPendingVisibilityEdit,
       getVisibilityHistory,
+      updateScheduleItem,
+      addScheduleItem,
+      deleteScheduleItem,
+      getScheduleItemHistory,
     }),
-    [tour, user, userKey, allUsers, densityMode, resetScratchTour, applyRouteToScratch, addRiderImportToScratch, addFlightImportToScratch, commitFlightImportToScratch, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory],
+    [tour, user, userKey, allUsers, resetScratchTour, applyRouteToScratch, addRiderImportToScratch, addFlightImportToScratch, commitFlightImportToScratch, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

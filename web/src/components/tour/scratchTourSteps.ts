@@ -50,7 +50,7 @@ export const scratchTourSteps: TourStep[] = [
     route: '/ingest/riders',
     target: 'rider-sections',
     title: 'Review what the AI extracted',
-    body: 'Each section can be corrected inline, then approved. Conflicts the rider contradicts itself on are flagged for your decision — never auto-resolved.',
+    body: 'Sections the parser wasn’t fully confident on are marked for review — click in to check the values and correct anything it got wrong, then approve. High-confidence sections can go straight to approved.',
   },
   {
     id: 'flight',
@@ -89,6 +89,12 @@ export const scratchTourSteps: TourStep[] = [
     body: 'Each day has a printable run-of-day: schedule, travel, hotel, contacts. It’s what you’d hand the crew. Print or share it from here.',
   },
   {
+    id: 'edit-daysheet',
+    route: '/daysheet',
+    title: 'Edit the day directly',
+    body: 'Switch to Edit to fix call times, rename items, or add and remove them. Save once and it updates everywhere — every crew member’s sheet and the calendar — and notes who changed what, and when.',
+  },
+  {
     id: 'locking',
     route: '/daysheet',
     title: 'Lock a day when it’s final',
@@ -98,13 +104,13 @@ export const scratchTourSteps: TourStep[] = [
     id: 'conflicts',
     route: '/ingest/riders',
     title: 'Conflicts wait for your call',
-    body: 'When the rider contradicts itself, the hub flags it rather than guessing. Open a conflict, pick the right value, and it records who decided.',
+    body: 'When an updated rider or a new document disagrees with what’s on file, the hub flags it rather than guessing. Open a conflict, pick the right value, and it records who decided.',
   },
   {
     id: 'permissions',
     route: '/schedule',
     title: 'Who sees what',
-    body: 'Schedule permissions are per-person. Switch viewer in the top bar to see the same day as the FOH engineer or the artist — same data, different views.',
+    body: 'Schedule permissions are per-person. Switch viewer in the top bar to see the same day as the FOH engineer or the artist — same data, different views. You can also add or remove schedule items right here.',
   },
   {
     id: 'done',

@@ -29,8 +29,10 @@ export interface RealSource {
   artifactLabel?: string;
 }
 
+import { RIDER_PDF_PATH } from '@/lib/riderSections';
+
 const RIDER_DOC = 'Rider PDF · Elsa y Elmar — Full Band 2025';
-const RIDER_FILE = '/RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf';
+const RIDER_FILE = RIDER_PDF_PATH;
 
 export const realSources = {
   // ---- Rider cover (page 1) ----------------------------------

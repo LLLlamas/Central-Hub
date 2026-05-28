@@ -37,7 +37,7 @@ export function DataSourcesPanel({ sourceKeys, intro }: DataSourcesPanelProps) {
             </div>
             <div className="text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
               {intro ??
-                `Every entity on this page is mocked. Click to see the real-system source for each — pipeline phase, ingestion mechanism, and notes.`}
+                `Everything on this page is sample data for now. Open this to see where each piece would really come from — and which uploaded file fills it in.`}
             </div>
           </div>
         </div>

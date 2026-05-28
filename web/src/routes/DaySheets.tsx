@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
@@ -8,6 +8,7 @@ import { Card, EmptyState } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
+import { EditableText, EditableSelect } from '@/components/ui/EditableText';
 import { MockBadge } from '@/components/provenance/MockBadge';
 import { MockTag } from '@/components/provenance/MockTag';
 import { SourceTag } from '@/components/provenance/SourceTag';
@@ -18,11 +19,13 @@ import { LastUpdated } from '@/components/LastUpdated';
 import { getMockVenue } from '@/data/mockVenues';
 import type { SourceKey } from '@/data/sources';
 import type { RealSourceKey } from '@/data/realSources';
-import type { Day, ScheduleItem, UpdateStamp, DayLockRecord } from '@/types';
+import type { Day, ScheduleItem, ScheduleItemType, ScheduleItemPatch, ScheduleItemEditRecord, UpdateStamp, DayLockRecord } from '@/types';
+import { isValidHHMM } from '@/lib/time';
 import {
   fmtFullDate,
   fmtDate,
   dayTypeLabel,
+  scheduleItemLabel,
   travelModeIcon,
   travelModeLabel,
 } from '@/lib/format';
@@ -43,7 +46,6 @@ export function DaySheets() {
     toggleDayLocked,
     getDayLockHistory,
     getDayLastUpdated,
-    densityMode,
     getDay,
     getScheduleItemsForDay,
     getTravelForDay,
@@ -94,7 +96,7 @@ export function DaySheets() {
     <div>
       <PageHeader
         title="Day sheet"
-        description="The sheet is the hero. Pro mode keeps publishing tools close; Simple mode keeps the readable sheet front and center."
+        description="The sheet is the hero. Switch to Edit to change call times and items; Personal previews the sheet as any crew member sees it."
         actions={
           <>
             <button
@@ -219,29 +221,22 @@ export function DaySheets() {
         <MobileDaySheet day={day} mode={effectiveMode} nextDay={nextDay} />
       </div>
 
-      <div
-        className={cn(
-          'hidden lg:grid gap-5 mt-5',
-          densityMode === 'pro' ? 'lg:grid-cols-[260px_1fr]' : 'lg:grid-cols-1',
-        )}
-      >
-        {densityMode === 'pro' && (
-          <ToolsRail
-            day={day}
-            mode={effectiveMode}
-            managerView={managerView}
-            userKey={userKey}
-            allUsers={allUsers}
-            setUserKey={setUserKey}
-            lastUpdated={getDayLastUpdated(day)}
-          />
-        )}
+      <div className="hidden lg:grid gap-5 mt-5 lg:grid-cols-[260px_1fr]">
+        <ToolsRail
+          day={day}
+          mode={effectiveMode}
+          managerView={managerView}
+          userKey={userKey}
+          allUsers={allUsers}
+          setUserKey={setUserKey}
+          lastUpdated={getDayLastUpdated(day)}
+        />
         <DaySheet day={day} mode={effectiveMode} />
       </div>
 
       <DataSourcesPanel
         sourceKeys={['schedule_item', 'travel', 'hotel', 'visibility', 'day_weather']}
-        intro="The day sheet pulls together schedule, movement, lodging, and visibility. Source tags stay visible even when Simple mode tucks tools away."
+        intro="The day sheet pulls together schedule, movement, lodging, and visibility. Source tags stay visible throughout."
       />
     </div>
   );
@@ -523,7 +518,9 @@ function MobileDaySheet({ day, mode, nextDay }: { day: Day; mode: Mode; nextDay?
         )}
 
         <SheetSection title={mode === 'edit' ? 'Show clock' : 'Your day'} eyebrow={`${items.length} items`} mockSource="schedule_item">
-          {items.length === 0 ? (
+          {mode === 'edit' ? (
+            <ScheduleEditor day={day} items={items} />
+          ) : items.length === 0 ? (
             <p className="text-[13px] text-[var(--color-ink-3)]">Nothing visible for this viewer.</p>
           ) : (
             <ol className="divide-y divide-[var(--color-rule-soft)]">
@@ -704,13 +701,13 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
           mockSource="schedule_item"
           mockNote="Every time shown here is mock. Load-in, soundcheck, doors, set, curfew, and load-out are negotiated with the venue PM during advance. Some constraints, like soundcheck being 6h after load-in, are real rider rules."
         >
-          {items.length === 0 ? (
+          {mode === 'edit' ? (
+            <ScheduleEditor day={day} items={items} />
+          ) : items.length === 0 ? (
             <p className="text-[12.5px] text-[var(--color-ink-3)]">Nothing scheduled.</p>
           ) : (
             <ol className="divide-y divide-[var(--color-rule-soft)]">
               {items.map((it) => {
-                const lvl = resolveVisibility(it.visibility, user);
-                const hiddenForUser = lvl === 'blocked';
                 const ruleKey = realRuleFor(it);
                 return (
                   <li key={it.id} className="py-2.5 flex items-start gap-4">
@@ -726,19 +723,6 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
                           {it.title}
                           {ruleKey && <SourceTag source={ruleKey} field={`${it.title} - rule source`} />}
                         </span>
-                        {mode === 'edit' && it.sensitive && (
-                          <span className="inline-flex items-center">
-                            <Chip tone="critical" size="sm">
-                              <Icon.Lock size={9} /> Sensitive
-                            </Chip>
-                            <SensitiveExplain />
-                          </span>
-                        )}
-                        {mode === 'edit' && hiddenForUser && (
-                          <Chip tone="off" size="sm">
-                            Hidden for {user.name.split(' ')[0]}
-                          </Chip>
-                        )}
                       </div>
                       {it.location && <div className="text-[12px] text-[var(--color-ink-3)] mt-0.5">{it.location}</div>}
                     </div>
@@ -844,6 +828,259 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
         <span>Generated {getGeneratedAtLabel()}</span>
       </footer>
     </article>
+  );
+}
+
+const SCHEDULE_TYPE_OPTIONS: { value: string; label: string }[] = (
+  [
+    'load_in', 'soundcheck', 'doors', 'set', 'changeover', 'curfew', 'load_out',
+    'bus_call', 'lobby_call', 'breakfast', 'lunch', 'dinner', 'press', 'meet_greet',
+    'rehearsal', 'other',
+  ] as ScheduleItemType[]
+).map((t) => ({ value: t, label: scheduleItemLabel(t) }));
+
+// Edit-mode schedule list. Field edits collect in local draft state and commit
+// in one batch via the Save bar (one history record per changed item); add /
+// delete mutate the tour immediately. Used by both the desktop and mobile
+// sheets — only one is visible at a time.
+function ScheduleEditor({ day, items }: { day: Day; items: ScheduleItem[] }) {
+  const { user, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory } = useApp();
+  const [drafts, setDrafts] = useState<Record<string, ScheduleItemPatch>>({});
+  useEffect(() => {
+    setDrafts({});
+  }, [day.id]);
+
+  const setField = (id: string, field: keyof ScheduleItemPatch, value: string) =>
+    setDrafts((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+
+  const val = (it: ScheduleItem, field: keyof ScheduleItemPatch): string => {
+    const d = drafts[it.id];
+    if (d && field in d) return String(d[field] ?? '');
+    return String(it[field] ?? '');
+  };
+
+  // Only the fields that actually differ from the saved item.
+  const patchFor = (it: ScheduleItem): ScheduleItemPatch => {
+    const d = drafts[it.id];
+    if (!d) return {};
+    const patch: ScheduleItemPatch = {};
+    (Object.keys(d) as (keyof ScheduleItemPatch)[]).forEach((field) => {
+      if (field === 'endTime') {
+        const cur = it.endTime ?? '';
+        const nv = String(d.endTime ?? '').trim();
+        if (nv !== cur) patch.endTime = nv === '' ? undefined : nv;
+      } else if (field === 'type') {
+        const nv = String(d.type ?? '');
+        if (nv && nv !== it.type) patch.type = nv as ScheduleItemType;
+      } else {
+        const cur = String(it[field] ?? '');
+        const nv = String(d[field] ?? '');
+        const norm = field === 'startTime' ? nv.trim() : nv;
+        if (norm !== cur) (patch as Record<string, string>)[field] = norm;
+      }
+    });
+    return patch;
+  };
+
+  const rowInvalid = (it: ScheduleItem): boolean => {
+    const start = val(it, 'startTime').trim();
+    const end = val(it, 'endTime').trim();
+    if (!isValidHHMM(start)) return true;
+    if (end !== '' && !isValidHHMM(end)) return true;
+    if (val(it, 'title').trim() === '') return true;
+    return false;
+  };
+
+  const dirtyItems = items.filter((it) => Object.keys(patchFor(it)).length > 0);
+  const dirtyCount = dirtyItems.length;
+  const hasInvalid = dirtyItems.some(rowInvalid);
+
+  const handleSave = () => {
+    if (hasInvalid) return;
+    for (const it of dirtyItems) {
+      const patch = patchFor(it);
+      if (Object.keys(patch).length > 0) updateScheduleItem(it.id, patch);
+    }
+    setDrafts({});
+  };
+  const handleDiscard = () => setDrafts({});
+  const handleAdd = () => addScheduleItem(day.id, { title: 'New item', type: 'other', startTime: '12:00' });
+  const handleDelete = (it: ScheduleItem) => {
+    if (!window.confirm(`Delete "${it.title}"? This removes it from everyone's day sheet.`)) return;
+    setDrafts((prev) => {
+      const next = { ...prev };
+      delete next[it.id];
+      return next;
+    });
+    deleteScheduleItem(it.id);
+  };
+
+  return (
+    <div>
+      <p className="text-[11.5px] text-[var(--color-ink-3)] mb-3 leading-relaxed">
+        Editing as <span className="font-semibold text-[var(--color-ink)]">{user.name}</span>. Times and titles apply
+        to every day sheet and calendar once you Save.
+      </p>
+      {items.length === 0 ? (
+        <p className="text-[12.5px] text-[var(--color-ink-3)]">Nothing scheduled yet — add the first item below.</p>
+      ) : (
+        <ol className="divide-y divide-[var(--color-rule-soft)]">
+          {items.map((it) => {
+            const startBad = !isValidHHMM(val(it, 'startTime').trim());
+            const endRaw = val(it, 'endTime').trim();
+            const endBad = endRaw !== '' && !isValidHHMM(endRaw);
+            return (
+              <li key={it.id} className="py-2.5 flex items-start gap-3">
+                <div className="w-[88px] shrink-0 space-y-1">
+                  <EditableText
+                    mono
+                    value={val(it, 'startTime')}
+                    placeholder="HH:MM"
+                    disabled={false}
+                    invalid={startBad}
+                    onChange={(v) => setField(it.id, 'startTime', v)}
+                  />
+                  <EditableText
+                    mono
+                    value={val(it, 'endTime')}
+                    placeholder="end —"
+                    disabled={false}
+                    invalid={endBad}
+                    onChange={(v) => setField(it.id, 'endTime', v)}
+                  />
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <EditableText
+                    value={val(it, 'title')}
+                    placeholder="Title"
+                    disabled={false}
+                    className="text-[13.5px] font-semibold"
+                    onChange={(v) => setField(it.id, 'title', v)}
+                  />
+                  <div className="flex gap-2">
+                    <div className="w-[42%] min-w-0">
+                      <EditableSelect
+                        value={val(it, 'type')}
+                        options={SCHEDULE_TYPE_OPTIONS}
+                        disabled={false}
+                        onChange={(v) => setField(it.id, 'type', v)}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <EditableText
+                        value={val(it, 'location')}
+                        placeholder="Location"
+                        disabled={false}
+                        className="text-[12px] text-[var(--color-ink-3)]"
+                        onChange={(v) => setField(it.id, 'location', v)}
+                      />
+                    </div>
+                  </div>
+                  <EditableText
+                    value={val(it, 'notes')}
+                    placeholder="Notes"
+                    disabled={false}
+                    className="text-[12px] text-[var(--color-ink-3)] italic"
+                    onChange={(v) => setField(it.id, 'notes', v)}
+                  />
+                  {(it.sensitive || resolveVisibility(it.visibility, user) === 'blocked') && (
+                    <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                      {it.sensitive && (
+                        <span className="inline-flex items-center">
+                          <Chip tone="critical" size="sm">
+                            <Icon.Lock size={9} /> Sensitive
+                          </Chip>
+                          <SensitiveExplain />
+                        </span>
+                      )}
+                      {resolveVisibility(it.visibility, user) === 'blocked' && (
+                        <Chip tone="off" size="sm">
+                          Hidden for {user.name.split(' ')[0]}
+                        </Chip>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(it)}
+                  title={`Delete ${it.title}`}
+                  className="shrink-0 mt-0.5 inline-flex items-center justify-center w-7 h-7 rounded-[3px] text-[var(--color-ink-4)] hover:bg-[var(--color-accent)]/10 hover:text-[var(--color-accent)]"
+                >
+                  <Icon.X size={13} />
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+        <button
+          type="button"
+          onClick={handleAdd}
+          className="inline-flex items-center gap-1.5 min-h-9 px-2 -mx-2 rounded-[3px] text-[12px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)] hover:bg-[var(--color-paper-2)]"
+        >
+          <Icon.Plus size={12} /> Add item
+        </button>
+        {dirtyCount > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-[10.5px] font-mono uppercase tracking-[0.08em] text-[var(--color-warn)]">
+              {hasInvalid ? 'Fix times / titles' : `${dirtyCount} unsaved`}
+            </span>
+            <Button size="sm" variant="outline" onClick={handleDiscard}>
+              Discard
+            </Button>
+            <Button size="sm" variant="primary" onClick={handleSave} disabled={hasInvalid}>
+              Save changes
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <ScheduleEditHistory items={items} getScheduleItemHistory={getScheduleItemHistory} />
+    </div>
+  );
+}
+
+function ScheduleEditHistory({
+  items,
+  getScheduleItemHistory,
+}: {
+  items: ScheduleItem[];
+  getScheduleItemHistory: (id: string) => ScheduleItemEditRecord[];
+}) {
+  const records = items
+    .flatMap((it) => getScheduleItemHistory(it.id).map((r) => ({ r, title: it.title })))
+    .sort((a, b) => b.r.resolvedAt.at.localeCompare(a.r.resolvedAt.at));
+  if (records.length === 0) return null;
+  return (
+    <details className="mt-3 border-t border-[var(--color-rule-soft)] pt-3">
+      <summary className="cursor-pointer text-[11.5px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]">
+        {records.length} edit event{records.length === 1 ? '' : 's'} on this day
+      </summary>
+      <ol className="mt-2 divide-y divide-[var(--color-rule-soft)]">
+        {records.map(({ r, title }, i) => (
+          <li key={i} className="py-2 flex items-start gap-2.5">
+            <Chip
+              tone={r.status === 'deleted' ? 'critical' : r.status === 'created' ? 'success' : 'neutral'}
+              size="sm"
+            >
+              {r.status === 'created' ? 'Added' : r.status === 'deleted' ? 'Deleted' : 'Edited'}
+            </Chip>
+            <div className="min-w-0">
+              <div className="text-[12px] text-[var(--color-ink-2)]">
+                {title} · {r.changes.length} change{r.changes.length === 1 ? '' : 's'} by{' '}
+                <span className="font-semibold text-[var(--color-ink)]">{r.resolvedAt.by}</span>
+              </div>
+              <div className="font-mono text-[10.5px] tabular text-[var(--color-ink-4)]">
+                {fmtDate(r.resolvedAt.at, 'MMM d, yyyy')} · {fmtDate(r.resolvedAt.at, 'h:mm a')}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </details>
   );
 }
 

@@ -38,7 +38,7 @@ const LEG_LABEL_COLOR: Record<string, string> = {
   leg_sa: '#5a6638',
 };
 
-export function RouteMap() {
+export function RouteMap({ embedded = false }: { embedded?: boolean } = {}) {
   const { tour } = useApp();
 
   // Build numbered stops in date order, deduped by city. The first time we
@@ -83,9 +83,9 @@ export function RouteMap() {
 
   if (stops.length === 0) {
     return (
-      <section className="card p-6">
-        <div className="eyebrow">Route map</div>
-        <p className="mt-2 text-[12.5px] text-[var(--color-ink-3)]">
+      <section className={embedded ? '' : 'card p-6'}>
+        {!embedded && <div className="eyebrow">Route map</div>}
+        <p className={cn('text-[12.5px] text-[var(--color-ink-3)]', !embedded && 'mt-2')}>
           No show cities to plot yet.
         </p>
       </section>
@@ -113,11 +113,14 @@ export function RouteMap() {
   });
 
   return (
-    <section className="card overflow-hidden">
-      <header className="flex items-baseline justify-between px-6 pt-5 pb-3 border-b border-[var(--color-rule-soft)]">
+    <section className={embedded ? 'overflow-hidden' : 'card overflow-hidden'}>
+      <header className={cn(
+        'flex items-baseline justify-between border-b border-[var(--color-rule-soft)]',
+        embedded ? 'pb-3' : 'px-6 pt-5 pb-3',
+      )}>
         <div>
           <div className="eyebrow mb-1 inline-flex items-center gap-1">
-            Route map
+            {embedded ? 'Stops' : 'Route map'}
             <MockTag source="tour_route" field="Tour route" />
           </div>
           <h3 className="font-display text-[18px] font-bold tracking-tight text-[var(--color-ink)]">

@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card, SectionCard } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { MockTag } from '@/components/provenance/MockTag';
 import { SourceTag } from '@/components/provenance/SourceTag';
 import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
@@ -17,7 +18,7 @@ import { fmtFullDate, fmtDate, dayTypeLabel } from '@/lib/format';
 import { MOCK_TODAY } from '@/lib/today';
 
 export function TourOverview() {
-  const { tour, lockedDays, densityMode, resolvedConflicts, getAllConflicts } = useApp();
+  const { tour, lockedDays, resolvedConflicts, getAllConflicts } = useApp();
   const scratchEmpty = tour.days.length === 0;
   const today = MOCK_TODAY;
 
@@ -33,8 +34,7 @@ export function TourOverview() {
   const conflicts = getAllConflicts();
   const unresolvedCount = conflicts.filter((c) => !resolvedConflicts.has(c.id)).length;
   const lockedCount = tour.days.filter((d) => lockedDays.has(d.id)).length;
-  const upcoming = tour.days.filter((d) => d.date >= today).slice(0, densityMode === 'simple' ? 4 : 6);
-  const simple = densityMode === 'simple';
+  const upcoming = tour.days.filter((d) => d.date >= today).slice(0, 6);
 
   return (
     <div>
@@ -76,52 +76,62 @@ export function TourOverview() {
         <Stat label="Conflicts" value={unresolvedCount} sublabel={unresolvedCount === 0 ? 'All clear' : 'Need decision'} />
       </div>
 
-      {simple ? (
-        <details className="card mt-5 overflow-hidden">
-          <summary className="cursor-pointer px-5 py-4 text-[13px] font-semibold text-[var(--color-ink)]">
-            Tour shape and rider facts
-          </summary>
-          <div className="border-t border-[var(--color-rule-soft)] p-5 space-y-5">
-            <UpcomingDays days={upcoming} />
-            <RiderFacts />
-          </div>
-        </details>
-      ) : (
-        <>
-          {conflicts.length > 0 && (
-            <div className="mt-5">
-              <ConflictFeed limit={3} compact />
+      {/* Secondary surfaces start collapsed so the daily picture leads and a
+          new TM isn't met with a wall of panels. Each header carries a count
+          so what's inside is legible without expanding. */}
+      <div className="mt-5 space-y-3">
+        {conflicts.length > 0 && (
+          <CollapsibleSection
+            title="Rider conflicts"
+            eyebrow="Needs decision"
+            defaultOpen={false}
+            badge={
+              <Chip tone={unresolvedCount > 0 ? 'critical' : 'neutral'} variant="outline" size="sm">
+                {unresolvedCount > 0 ? `${unresolvedCount} open` : 'All clear'}
+              </Chip>
+            }
+          >
+            <ConflictFeed limit={3} compact />
+          </CollapsibleSection>
+        )}
+
+        <CollapsibleSection
+          title="Route map"
+          eyebrow="Where the tour goes"
+          defaultOpen={false}
+          badge={
+            <Chip tone="neutral" variant="outline" size="sm">
+              {tour.legs.length} leg{tour.legs.length === 1 ? '' : 's'}
+            </Chip>
+          }
+        >
+          <RouteMap embedded />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          title="Tour shape & rider facts"
+          eyebrow={`Next ${upcoming.length} days`}
+          defaultOpen={false}
+          badge={
+            <Link to="/calendar" className="text-[12px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]">
+              View calendar
+            </Link>
+          }
+        >
+          <div className="grid gap-5 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <UpcomingDays days={upcoming} />
             </div>
-          )}
-
-          <div className="mt-7">
-            <RouteMap />
-          </div>
-
-          <div className="mt-5 grid gap-5 lg:grid-cols-3">
-            <SectionCard
-              title="Upcoming days"
-              eyebrow={`Next ${upcoming.length}`}
-              className="lg:col-span-2"
-              action={
-                <Link to="/calendar" className="text-[12px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]">
-                  View calendar
-                </Link>
-              }
-            >
-              <UpcomingDays days={upcoming} flush />
-            </SectionCard>
-
             <Card>
               <RiderFacts />
             </Card>
           </div>
-        </>
-      )}
+        </CollapsibleSection>
+      </div>
 
       <DataSourcesPanel
         sourceKeys={['tour', 'tour_route', 'leg', 'day', 'tour_person', 'group', 'rider_cover_contacts']}
-        intro="The overview blends real rider data with mocked route, venue, and schedule data. Source tags stay visible in both Simple and Pro while this prototype is being built."
+        intro="The overview blends real rider data with mocked route, venue, and schedule data. Source tags stay visible while this prototype is being built."
       />
     </div>
   );

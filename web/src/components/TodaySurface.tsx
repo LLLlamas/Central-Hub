@@ -21,7 +21,6 @@ export function TodaySurface({ className }: { className?: string }) {
   const {
     tour,
     user,
-    densityMode,
     isDayLocked,
     toggleDayLocked,
     getDayLastUpdated,
@@ -179,7 +178,7 @@ export function TodaySurface({ className }: { className?: string }) {
         <aside className="border-t lg:border-t-0 lg:border-l border-[var(--color-rule)] bg-[var(--color-paper)]/45 p-5 sm:p-6 space-y-5">
           <VenuePanel venue={venue} dayCity={day.city} />
 
-          {(travel.length > 0 || hotels.length > 0) && densityMode === 'pro' && (
+          {(travel.length > 0 || hotels.length > 0) && (
             <div className="border-t border-[var(--color-rule-soft)] pt-5">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-[13px] font-semibold text-[var(--color-ink)]">Movement</h3>

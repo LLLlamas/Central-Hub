@@ -13,6 +13,10 @@
 // Phases mirror tour-management-deep-research.md §2.
 // =============================================================
 
+import { FIXTURES } from '@/lib/fixtureMatcher';
+import { RIDER_PDF_PATH } from '@/lib/riderSections';
+import type { Tour, UpdateStamp } from '@/types';
+
 export type RealSource =
   | 'manual_entry'        // user types it into the app
   | 'csv_import'          // bulk-imported spreadsheet
@@ -39,6 +43,21 @@ export interface ProvenanceArtifact {
   kind?: 'csv' | 'doc' | 'pdf' | 'email' | 'image' | 'json';
 }
 
+/** Live upload provenance — returned by `Provenance.resolveLive` when the
+ *  scratch tour has a real uploaded file backing this source key. The modal
+ *  uses this to show "From your uploaded {filename}, imported {at} by {by}"
+ *  instead of the static "where this would come from in production" copy. */
+export interface LiveSource {
+  filename: string;
+  kind: 'csv' | 'pdf';
+  /** Public URL of the fixture so PDF filenames can open in-app. */
+  url?: string;
+  /** UpdateStamp for the import — date + user. */
+  stamp?: UpdateStamp;
+  /** One-line note explaining the production flow that would replace this. */
+  productionNote: string;
+}
+
 export interface Provenance {
   source: string;       // short label, e.g. "Booking agent deal memo"
   realSource: RealSource;
@@ -46,6 +65,45 @@ export interface Provenance {
   detail?: string;      // long-form: how the real-system flow works
   /** Mock source documents that would have populated this in production. */
   artifacts?: ProvenanceArtifact[];
+  /** When set and a scratch-tour import exists, the popup switches from
+   *  "would come from..." copy to "From your uploaded {filename}..." +
+   *  the productionNote as the secondary line. Return null when nothing has
+   *  been uploaded yet — the modal then renders a "not yet imported" hint. */
+  resolveLive?: (tour: Tour) => LiveSource | null;
+}
+
+// Internal helper — pull the fixture filename + URL for a given kind. All
+// scratch uploads are filename-matched against this registry (see
+// lib/fixtureMatcher.ts) so the canonical filename is always known.
+function fixtureFor(kind: 'route' | 'travel_grid' | 'hotel' | 'rider'): {
+  filename: string;
+  url: string;
+  kind: 'csv' | 'pdf';
+} | null {
+  const f = FIXTURES.find((x) => x.kind === kind);
+  if (!f) return null;
+  const isCsv = f.filename.toLowerCase().endsWith('.csv');
+  return {
+    filename: f.filename,
+    url: `/${f.filename}`,
+    kind: isCsv ? 'csv' : 'pdf',
+  };
+}
+
+// Shared resolver for every rider-section key — they all map to the same
+// uploaded rider PDF, so the productionNote is the only thing that varies
+// (and that's covered by the existing per-key `detail`).
+function riderLive(tour: Tour): LiveSource | null {
+  const latest = tour.riderImports[0];
+  if (!latest) return null;
+  return {
+    filename: latest.filename,
+    kind: 'pdf',
+    url: RIDER_PDF_PATH,
+    stamp: { at: latest.uploadedAt, by: latest.uploadedBy },
+    productionNote:
+      'Normally each rider section is read from the uploaded PDF and reviewed next to the original before you approve it.',
+  };
 }
 
 // =============================================================
@@ -55,28 +113,41 @@ export interface Provenance {
 export const sources = {
   // ----- Top-level tour shell ---------------------------------
   organization: {
-    source: 'Org admin setup',
+    source: 'Set up when the team first signs up',
     realSource: 'manual_entry',
     phase: 'ongoing',
     detail:
-      'Created when the artist team / management company first signs up. Top of the data tree.',
+      'Created when the artist team or management company first signs up.',
   },
   tour: {
-    source: 'TM setup wizard after agent hand-off',
+    source: 'Set up by the tour manager after the agent hand-off',
     realSource: 'manual_entry',
     phase: 'booking',
     detail:
-      'Agent emails the deal memo. TM enters the tour shell (name, artist, dates, status) into the hub. v2: import directly from booking platforms (Eventric, Prism).',
+      'The booking agent emails the deal memo. The tour manager types the basics — name, artist, dates — into the hub. Later this could come straight from the booking software.',
   },
   tour_route: {
     source: 'Booking agent deal memos + routing spreadsheet',
     realSource: 'manual_entry',
     phase: 'booking',
     detail:
-      'The agent sells the shows and emails a routing spreadsheet with dates, cities, venues, capacities, and deal terms. The TM enters this into the hub manually in v1 (or imports the CSV). The rider PDF never contains a route — it is a per-show requirements document.',
+      'The agent sells the shows and emails a routing spreadsheet — dates, cities, venues, capacities, and deal terms. You import that spreadsheet (or type it in). The rider PDF never has the route in it; it only covers what each show needs.',
     artifacts: [
       { label: 'Mock 7-day route (Mexico leg)', url: '/mock-tour-route-mexico-7day.csv', kind: 'csv' },
     ],
+    resolveLive: (tour) => {
+      if (!tour.routeImport) return null;
+      const fx = fixtureFor('route');
+      if (!fx) return null;
+      return {
+        filename: fx.filename,
+        kind: fx.kind,
+        url: fx.url,
+        stamp: tour.routeImport,
+        productionNote:
+          'Normally this would sync from the booking software, or be entered after the booking agent sends the deal memo.',
+      };
+    },
   },
   leg: {
     source: 'Routing decisions by agent + TM',
@@ -84,26 +155,52 @@ export const sources = {
     phase: 'booking',
     detail:
       'Tours are usually broken into legs by routing or by month. Defined when the TM sets up the calendar.',
+    resolveLive: (tour) => {
+      if (!tour.routeImport || tour.legs.length === 0) return null;
+      const fx = fixtureFor('route');
+      if (!fx) return null;
+      return {
+        filename: fx.filename,
+        kind: fx.kind,
+        url: fx.url,
+        stamp: tour.routeImport,
+        productionNote:
+          'Legs come from the routing spreadsheet — the rows grouped under the same leg name.',
+      };
+    },
   },
   day: {
     source: 'Auto-generated from tour date range',
     realSource: 'derived',
     phase: 'booking',
     detail:
-      'Every date between start and end gets a Day row. DayType defaults to "hold" until TM/PM sets it. Shows attach when DayType=show.',
+      'Every date between the start and end of the tour becomes a day. Each day starts as "hold" until it’s marked a show, travel, or off day. Show details attach to show days.',
+    resolveLive: (tour) => {
+      if (!tour.routeImport || tour.days.length === 0) return null;
+      const fx = fixtureFor('route');
+      if (!fx) return null;
+      return {
+        filename: fx.filename,
+        kind: fx.kind,
+        url: fx.url,
+        stamp: tour.routeImport,
+        productionNote:
+          'One day is created per row of the routing spreadsheet — its date, city, venue, and day type.',
+      };
+    },
   },
   day_weather: {
     source: 'Weather API (OpenWeather / Tomorrow.io)',
     realSource: 'external_api',
     phase: 'show_day',
-    detail: 'Fetched the morning of the show. Surfaced on day sheets.',
+    detail: 'Pulled from a weather service the morning of the show and shown on the day sheet.',
   },
   venue: {
     source: 'Reusable venue database',
     realSource: 'manual_entry',
     phase: 'advance',
     detail:
-      'Venues are a global entity, reused across tours. Master Tour has 15k+ venues — your hub builds its own venue DB as TMs use it.',
+      'Venues are reused across tours, so the hub remembers each one. The list grows as you add shows.',
   },
 
   // ----- People -----------------------------------------------
@@ -112,83 +209,140 @@ export const sources = {
     realSource: 'manual_entry',
     phase: 'advance',
     detail:
-      'Persons are global — a person reused across tours keeps the same record. TourPerson links Person → Tour + Role + Group + Tags + DateRange.',
+      'People are reused across tours, so the same person keeps one record. On each tour they get a role, a group, and the dates they’re on.',
   },
   tour_person: {
     source: 'TM/PM crew roster build-out',
     realSource: 'manual_entry',
     phase: 'advance',
     detail:
-      'Three input paths in v1: (1) search/create, (2) CSV import, (3) copy from previous tour. The copy-from-previous flow is what gets TMs to switch off Master Tour.',
+      'You build the crew list three ways: add people one at a time, upload a spreadsheet, or copy the crew from a previous tour.',
   },
   group: {
     source: 'Per-tour group definitions',
     realSource: 'manual_entry',
     phase: 'advance',
     detail:
-      'Primary groups (Artist, A Party, Mgmt, Audio, Lighting, Video, Backline) are mostly identical across tours — copy-from-previous helps.',
+      'The main groups (Artist, A Party, Mgmt, Audio, Lighting, Video, Backline) are nearly the same on every tour, so they can be copied from a previous one.',
   },
   group_tag: {
     source: 'Sub-groups inside a Group',
     realSource: 'manual_entry',
     phase: 'advance',
     detail:
-      'Daysheets-style sub-groups (Audio → FOH vs Audio → Monitors) so visibility/notifications can target precisely without admin re-tagging.',
+      'Smaller groups inside a group (Audio → FOH vs Audio → Monitors) so you can share with exactly the right people.',
   },
 
   // ----- Daily ops --------------------------------------------
   schedule_item: {
-    source: 'Advance with venue PM + template-driven entry',
+    source: 'Agreed with the venue, or edited on the day sheet',
     realSource: 'manual_entry',
     phase: 'advance',
     detail:
-      'Load-in, soundcheck, doors, set, curfew, load-out times are agreed between PM and venue PM in advance emails. Templates ("Arena Show Day") pre-fill common shapes; one click applies.',
+      'Load-in, soundcheck, doors, set, curfew, and load-out times are agreed with the venue while advancing the show. You can also fix any time, or add and remove items, right on the day sheet in Edit mode.',
+    resolveLive: (tour) => {
+      if (!tour.routeImport) return null;
+      const fx = fixtureFor('route');
+      if (!fx) return null;
+      return {
+        filename: fx.filename,
+        kind: fx.kind,
+        url: fx.url,
+        stamp: tour.routeImport,
+        productionNote:
+          'The starter times (load-in, soundcheck, doors, set, curfew) came from the routing spreadsheet. Real times get set while advancing the show — or edited here on the day sheet. Still sample times for now.',
+      };
+    },
   },
   travel: {
-    source: 'Travel agent + AI flight-PDF ingest',
+    source: 'Travel agent’s confirmations, read from the file',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
-      'Travel agent emails confirmation PDFs. User drops the PDF into the hub; Claude extracts a structured Flight/Travel object; TM reviews side-by-side and approves. v1 supports flights, bus, drive, ferry, train.',
+      'The travel agent emails confirmation PDFs (or a grid spreadsheet). You drop the file in, the app reads the flight details out of it, and you check them before approving. Works for flights, buses, drives, ferries and trains.',
+    resolveLive: (tour) => {
+      const imported = tour.flightImports.filter((f) => f.status === 'imported');
+      if (imported.length === 0) return null;
+      const latest = [...imported].sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))[0];
+      const isCsv = latest.filename.toLowerCase().endsWith('.csv');
+      return {
+        filename: latest.filename,
+        kind: isCsv ? 'csv' : 'pdf',
+        url: `/${latest.filename}`,
+        stamp: { at: latest.uploadedAt, by: latest.uploadedBy ?? 'Tour Manager' },
+        productionNote:
+          'Normally the travel agent’s confirmations (a grid plus per-flight PDFs) arrive by email; the app reads the flight details, you check them, and approve.',
+      };
+    },
   },
   hotel: {
     source: 'Travel agent + manual block confirmation',
     realSource: 'manual_entry',
     phase: 'advance',
     detail:
-      'Hotel blocks are negotiated by the travel agent. Block confirmations come in as PDFs or spreadsheets. Hotel addresses for the artist are *sensitive* and auto-redacted on posted/printed day sheets.',
+      'The travel agent books the hotel blocks and sends a confirmation (PDF or spreadsheet). The artist’s hotel address is sensitive, so it’s hidden on printed and shared day sheets.',
+    resolveLive: (tour) => {
+      if (!tour.hotelImport) return null;
+      const fx = fixtureFor('hotel');
+      if (!fx) return null;
+      return {
+        filename: fx.filename,
+        kind: fx.kind,
+        url: fx.url,
+        stamp: tour.hotelImport,
+        productionNote:
+          'Normally the hotel block confirmation PDF would be read and reviewed before approving; here it’s loaded straight from a sample file.',
+      };
+    },
   },
   task: {
     source: 'TM/PM in-app entry',
     realSource: 'manual_entry',
     phase: 'ongoing',
     detail:
-      'Ad-hoc tasks attached to a day or floating. Often created in response to a chat message — future Slack/SMS integration would auto-create tasks from "@TM remember to ..." messages.',
+      'One-off to-dos, either pinned to a day or floating. Later, a chat or text integration could turn "@TM remember to…" messages into tasks automatically.',
   },
 
   // ----- Documents --------------------------------------------
   document_rider: {
-    source: 'Artist/PM rider PDF + AI section extraction',
+    source: 'The rider PDF, read section by section',
     realSource: 'document_upload',
     phase: 'advance',
     detail:
-      'The rider PDF is uploaded as-is. Claude classifies which sections are present, then per-section extractors pull structured data (input list, labor call, schedule). Original PDF is always preserved. Live link per show always serves the current revision (Showvella-style).',
+      'You upload the rider PDF as-is. The app figures out which sections it contains, then reads each one into a tidy, editable form (input list, labor call, schedule). The original PDF is always kept, and the link always points at the latest version.',
+    resolveLive: (tour) => riderLive(tour),
   },
 
   // ----- AI ingest --------------------------------------------
   flight_import: {
-    source: 'AI extraction from uploaded confirmation PDF',
+    source: 'Read from an uploaded flight confirmation',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
-      'User drags flight PDFs into upload zone. Server stores in R2, sends base64 + structured-output prompt to Claude Sonnet. Returns typed Flight object. Review UI shows PDF on left, parsed data on right. Passenger names matched to existing TourPerson records.',
+      'You drag flight PDFs into the upload area. The app reads the flight out of the file and shows the PDF next to the details it found, so you can check them. Passenger names are matched against your crew list.',
+    resolveLive: (tour) => {
+      if (tour.flightImports.length === 0) return null;
+      const latest = [...tour.flightImports].sort((a, b) =>
+        b.uploadedAt.localeCompare(a.uploadedAt),
+      )[0];
+      const isCsv = latest.filename.toLowerCase().endsWith('.csv');
+      return {
+        filename: latest.filename,
+        kind: isCsv ? 'csv' : 'pdf',
+        url: `/${latest.filename}`,
+        stamp: { at: latest.uploadedAt, by: latest.uploadedBy ?? 'Tour Manager' },
+        productionNote:
+          'Normally these flights are read from the uploaded PDF; the review step and passenger-matching you see here are exactly how it works.',
+      };
+    },
   },
   rider_import: {
-    source: 'AI section-by-section extraction from rider PDF',
+    source: 'Read section by section from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
-      'Two-step pipeline: (1) classifier identifies which sections are present, (2) per-section structured-output extractors run. Multi-language: parse-in-language, present bilingually (original + English translation per field). Each section reviewed independently in side-by-side UI before approval.',
+      'First the app spots which sections the rider contains, then it reads each one. It handles other languages too — showing the original wording with an English translation. You review and approve each section on its own.',
+    resolveLive: (tour) => riderLive(tour),
   },
 
   // ----- Per-rider-section provenance (everything below this
@@ -198,109 +352,123 @@ export const sources = {
   //       MockTag wrapping is for OTHER sections that haven't
   //       been wired to extractors yet).
   rider_cover_contacts: {
-    source: 'Rider cover page — AI extraction',
+    source: 'Rider cover page — read from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
-      'Step 1 of the pipeline (classifier) returns artist_name, revision_info, and production_manager contact (name, email, phone) from page 1.',
+      'Read from page 1 of the rider: the artist name, the revision date, and the production manager’s name, email and phone.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_input_list: {
-    source: 'Rider §6 — AI extraction',
+    source: 'Rider §6 — read from the PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
-      'Highest-value section. Step 2 extractor returns 44 channels with verbatim source labels, mic/DI models, stand types, phantom power flags. Extraction flags surface duplicates / missing data for human review.',
+      'The most important section — 44 channels read straight from the rider, with the exact source labels, mic/DI models, stand types and phantom-power flags. Anything that looks duplicated or missing is flagged for you to check.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_monitor_mix: {
-    source: 'Rider §6 monitor outputs — AI extraction',
+    source: 'Rider §6 monitor outputs — read from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
-      '8 stereo monitor mixes parsed from the input-output table. Person names (Elsa, Juan, Daniel, Julian) are cross-referenced against the personnel extractor.',
+      '8 stereo monitor mixes read from the input-output table. The names on the mixes (Elsa, Juan, Daniel, Julian) are matched to the crew list.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_foh_outputs: {
-    source: 'Rider §6 FOH output patch — AI extraction',
+    source: 'Rider §6 FOH output patch — read from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
-      '8 FOH outputs (SMPTE, talkback speaker, light & video mix, main LR, sub, front fill) parsed from the input-output table.',
+      '8 FOH outputs (SMPTE, talkback speaker, light & video mix, main LR, sub, front fill) read from the input-output table.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_stage_specs: {
-    source: 'Rider §4 — AI extraction',
+    source: 'Rider §4 — read from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
       'Stage dimensions, ground support, barricade requirements, generators/power, ambulance requirement.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_audio_pa: {
-    source: 'Rider §5 — AI extraction',
+    source: 'Rider §5 — read from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
       'PA system specifications, SPL targets, brand alternates, console preferences, monitor system, RF system.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_stage_plot: {
-    source: 'Rider §7 — AI vision extraction',
+    source: 'Rider §7 — read from the diagram',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
-      'Stage plot is a visual diagram — sent to Claude as an image, returns performer positions, instruments, monitor placements. Lower accuracy than text sections (~70-80%); UI lets human drag to correct.',
+      'The stage plot is a picture, so the app reads it as an image — performer positions, instruments, monitor spots. It’s less precise than the text sections, so you can drag things to correct them.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_lighting: {
-    source: 'Rider §8 — AI extraction',
+    source: 'Rider §8 — read from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
-      'Lighting equipment list + truss + power. CAD pages are stored as attached references only; v1 does not extract structure from drawings.',
+      'Lighting gear list, truss and power. The CAD drawings are kept as attachments — the app doesn’t try to read structure out of drawings.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_backline: {
-    source: 'Rider §9 — AI extraction',
+    source: 'Rider §9 — read from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
       'Drums, bass, guitar, miscellaneous. Schema captures both preferred and EXCLUDED brands ("NOT Yamaha hi-hat stand", "NOT motorcycle seat"). Negative constraints are as important as positive specs.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_soundcheck: {
-    source: 'Rider §10 — AI extraction',
+    source: 'Rider §10 — read from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
       'Closed-door soundcheck requirement, minimum hours from load-in.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_transport: {
-    source: 'Rider §11 — AI extraction',
+    source: 'Rider §11 — read from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
       'Ground transport (vans, cargo) + air transport ticket counts and class requirements. Sourced by travel agent against these specs.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_lodging: {
-    source: 'Rider §12 rooming list — AI extraction',
+    source: 'Rider §12 rooming list — read from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
-      'Rooming list reveals the touring party roster. 10 rooms for 11 occupants. Names where given; role placeholders where not. Used by personnel cross-reference resolver.',
+      'The rooming list shows the touring party — 10 rooms for 11 people. Real names where the rider gives them, role placeholders where it doesn’t. Used to match names to the crew list.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_dressing_rooms: {
-    source: 'Rider §13 — AI extraction',
+    source: 'Rider §13 — read from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
       'Dressing room requirements — dimensions, contents, hospitality items. Excluded items ("no roses or sunflowers") are captured.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_catering: {
-    source: 'Rider §14 — AI extraction',
+    source: 'Rider §14 — read from the rider PDF',
     realSource: 'ai_extraction',
     phase: 'advance',
     detail:
       '7 menus across 3 dressing rooms by time-of-day (load-in, soundcheck, show, post-show). Excluded brands captured ("no Sol or Corona"). Dietary tags, biodegradable requirements, donation plans.',
+    resolveLive: (tour) => riderLive(tour),
   },
   rider_conflicts: {
-    source: 'Conflict detector (derived after extraction)',
+    source: 'Found by checking the rider against itself',
     realSource: 'derived',
     phase: 'advance',
     detail:
-      'Runs after all section extractors complete. Flags contradictions, missing references, count mismatches. The parser does not auto-resolve — humans always decide.',
+      'After every section is read, the app checks the rider for contradictions, missing references, and counts that don’t add up. It never fixes them on its own — you always decide.',
   },
 
   // ----- Scratch mode (Start From Scratch onboarding) ---------
@@ -309,47 +477,60 @@ export const sources = {
     realSource: 'manual_entry',
     phase: 'booking',
     detail:
-      'In scratch mode the app starts as an empty tour a new TM builds up by uploading the project mock fixtures. Uploads are matched by filename to known sample files — there is no backend parsing yet. See CLAUDE.md "Data modes".',
+      'In this starter mode the app begins as an empty tour you build up by uploading the sample files. Uploads are matched to known sample files by their name.',
   },
   route_import: {
-    source: 'Booking-agent routing CSV — scratch-mode import',
+    source: 'The booking agent’s routing spreadsheet',
     realSource: 'csv_import',
     phase: 'booking',
     detail:
-      'The routing spreadsheet builds a Day per row, sets each day type, attaches venues to show days, and seeds a show-day schedule skeleton (load-in, soundcheck +6h, doors, set, curfew). In production this is the same CSV the booking agent sends with the deal memo.',
+      'The routing spreadsheet makes one day per row, sets each day type, attaches venues to show days, and fills in a starter schedule for each show (load-in, soundcheck, doors, set, curfew). This is the same spreadsheet the booking agent sends with the deal memo.',
     artifacts: [
       { label: 'Mock 7-day route (Mexico leg)', url: '/mock-tour-route-mexico-7day.csv', kind: 'csv' },
     ],
+    resolveLive: (tour) => {
+      if (!tour.routeImport) return null;
+      const fx = fixtureFor('route');
+      if (!fx) return null;
+      return {
+        filename: fx.filename,
+        kind: fx.kind,
+        url: fx.url,
+        stamp: tour.routeImport,
+        productionNote:
+          'Normally this would sync from the booking software, or stay as the spreadsheet the booking agent emails.',
+      };
+    },
   },
 
   // ----- Cross-cutting ---------------------------------------
   visibility: {
-    source: 'Per-item attribute spec set by item owner',
+    source: 'Who-can-see-it settings, set by whoever owns the item',
     realSource: 'manual_entry',
     phase: 'advance',
     detail:
-      'Visibility is ABAC, not RBAC. Each schedule item / travel / hotel / task / doc has a visibility blob: default + group overrides + tag overrides + person overrides. Most specific wins. Postgres RLS enforces in DB, never in app layer.',
+      'Every item — a schedule entry, a flight, a hotel, a task, a document — carries its own who-can-see-it setting: a default for everyone, plus exceptions per group, sub-group, or person. The most specific setting wins, and it’s enforced so nobody sees what they shouldn’t.',
   },
   audit_trail: {
-    source: 'Database audit columns (updated_at / updated_by)',
+    source: 'Recorded automatically on every change',
     realSource: 'system',
     phase: 'ongoing',
     detail:
-      'Every record carries updated_at / updated_by columns the database writes on each save, backed by an append-only change log. In this prototype the seeded history is mock; in-app actions like locking a day stamp the current demo viewer against the pinned demo clock (Sep 25, 2025).',
+      'Every change records who made it and when, kept as a running history. In this prototype the starting history is sample data; actions you take — locking a day, editing a time — are stamped with the current viewer and the demo date (Sep 25, 2025).',
   },
   settlement: {
-    source: 'Box office settlement + tour accounting',
+    source: 'Box-office settlement after the show',
     realSource: 'manual_entry',
     phase: 'settlement',
     detail:
-      'Promoter rep settles with TM each night. Ticket counts, walk-up, comps, fees, splits, taxes, expenses. Wide-open product area — most tour accountants still use Excel.',
+      'The promoter settles with the tour manager each night — ticket counts, walk-up, comps, fees, splits, taxes, expenses.',
   },
   truck_tracking: {
-    source: 'HET Hub or similar telemetry integration',
+    source: 'A live truck-tracking service',
     realSource: 'external_api',
     phase: 'show_day',
     detail:
-      'Real-time truck position + ETA for 50-90 truck convoys at arena/stadium scale. Embed in PM dashboard so they know where every truck is.',
+      'A live feed of where each truck is and when it’ll arrive, for the big touring convoys, shown on the production manager’s dashboard.',
   },
 } satisfies Record<string, Provenance>;
 
@@ -359,22 +540,22 @@ export function getSource(key: SourceKey): Provenance {
   return sources[key] as Provenance;
 }
 
-// Helper to pretty-print a real-source enum for the UI
+// Helper to pretty-print a real-source enum for the UI — plain English, no jargon.
 export const realSourceLabels: Record<RealSource, string> = {
-  manual_entry: 'Manual entry',
-  csv_import: 'CSV / spreadsheet import',
-  ai_extraction: 'AI extraction (Claude)',
-  document_upload: 'Document upload',
-  external_api: 'External API',
-  derived: 'Derived',
-  system: 'System-generated',
+  manual_entry: 'Typed in by the team',
+  csv_import: 'From an uploaded spreadsheet',
+  ai_extraction: 'Read from an uploaded file',
+  document_upload: 'From an uploaded document',
+  external_api: 'From a connected service',
+  derived: 'Worked out by the app',
+  system: 'Added automatically',
 };
 
 export const phaseLabels: Record<LifecyclePhase, string> = {
-  booking: 'Booking phase',
-  advance: 'Advance phase',
-  rehearsal: 'Rehearsal phase',
-  show_day: 'Show day',
-  settlement: 'Settlement',
-  ongoing: 'Ongoing',
+  booking: 'When the tour is booked',
+  advance: 'While advancing the shows',
+  rehearsal: 'During rehearsals',
+  show_day: 'On the day of the show',
+  settlement: 'Settling up after the show',
+  ongoing: 'Anytime',
 };

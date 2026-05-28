@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { useApp } from '@/state/AppState';
 import { useCommandPalette } from '@/components/CommandPalette';
 import { Icon } from '@/components/ui/Icon';
-import { Modal } from '@/components/ui/Modal';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
 
 export function TopBar() {
-  const { user, userKey, setUserKey, allUsers, tour, densityMode, setDensityMode } = useApp();
+  const { user, userKey, setUserKey, allUsers, tour } = useApp();
   const [open, setOpen] = useState(false);
-  const [densityInfoOpen, setDensityInfoOpen] = useState(false);
   const palette = useCommandPalette();
   const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 
@@ -36,36 +34,6 @@ export function TopBar() {
         </div>
 
         <div className="flex items-center gap-2 md:gap-3">
-          <div className="inline-flex h-11 md:h-9 rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] p-0.5">
-            {(['simple', 'pro'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setDensityMode(mode)}
-                className={cn(
-                  'px-2.5 text-[11px] font-mono font-semibold uppercase tracking-[0.08em] rounded-[3px] transition-colors',
-                  densityMode === mode
-                    ? 'bg-[var(--color-ink)] text-[var(--color-paper)]'
-                    : 'text-[var(--color-ink-3)] hover:bg-[var(--color-paper-2)]',
-                )}
-                title={`Switch to ${mode === 'simple' ? 'Simple' : 'Pro'} mode`}
-              >
-                {mode}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setDensityInfoOpen(true)}
-              className="ml-0.5 w-8 md:w-7 inline-flex items-center justify-center rounded-[3px] border-l border-[var(--color-rule-soft)] text-[var(--color-ocean)] hover:bg-[var(--color-paper-2)] hover:text-[var(--color-ink)] transition-colors"
-              title="What changes between Simple and Pro?"
-              aria-label="What changes between Simple and Pro?"
-            >
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-[var(--color-ocean)]/45 text-[10px] font-bold leading-none">
-                i
-              </span>
-            </button>
-          </div>
-
           <div className="relative">
             <button
               type="button"
@@ -131,37 +99,6 @@ export function TopBar() {
           </div>
         </div>
       </div>
-
-      <Modal
-        open={densityInfoOpen}
-        onClose={() => setDensityInfoOpen(false)}
-        eyebrow="Layout density"
-        title="Simple vs Pro"
-        size="sm"
-      >
-        <div className="space-y-4 text-[12.5px] leading-relaxed text-[var(--color-ink-3)]">
-          <div>
-            <div className="text-[13px] font-semibold text-[var(--color-ink)]">Simple</div>
-            <p className="mt-1">
-              Keeps the daily read clean: Today first, secondary overview sections collapsed, day-sheet tools tucked away, and the mobile sheet optimized for quick reading and taps.
-            </p>
-          </div>
-
-          <div>
-            <div className="text-[13px] font-semibold text-[var(--color-ink)]">Pro</div>
-            <p className="mt-1">
-              Shows the working surfaces: attention strip, route map, upcoming days, rider facts, day-sheet tools rail, revision/lobby-call tools, and editor controls.
-            </p>
-          </div>
-
-          <div className="rounded-[4px] border border-[var(--color-rule-soft)] bg-[var(--color-paper)]/55 px-3 py-2.5">
-            <div className="text-[12px] font-semibold text-[var(--color-ink)]">Always on during the build</div>
-            <p className="mt-1">
-              Source markers like <span className="font-mono text-[10px]">(mock)</span> and <span className="font-serif italic text-[var(--color-ocean)]">i</span> stay visible in both modes so it is always clear what is real, mocked, or rider-sourced.
-            </p>
-          </div>
-        </div>
-      </Modal>
     </header>
   );
 }

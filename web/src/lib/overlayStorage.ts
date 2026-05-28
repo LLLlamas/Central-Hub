@@ -18,6 +18,7 @@ import type {
   Visibility,
   PendingVisibilityEdit,
   VisibilityEditRecord,
+  ScheduleItemEditRecord,
   FlightPassengerResolution,
 } from '@/types';
 import type {
@@ -41,6 +42,7 @@ export interface OverlayBundle {
   visibilityEdits: [ID, Visibility][];
   pendingVisibilityEdits: [ID, PendingVisibilityEdit][];
   visibilityEditHistory: [ID, VisibilityEditRecord[]][];
+  scheduleItemEditHistory: [ID, ScheduleItemEditRecord[]][];
   flightPassengerResolutions: [string, FlightPassengerResolution][];
   userKey?: string;
 }

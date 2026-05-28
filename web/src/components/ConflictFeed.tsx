@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { Icon } from '@/components/ui/Icon';
 import { Chip } from '@/components/ui/Chip';
 import { SectionCard } from '@/components/ui/Card';
-import { SourceTag } from '@/components/provenance/SourceTag';
 import { RiderRef, linkifyRiderRefs } from '@/components/RiderRef';
 import { ConflictResolveModal } from '@/components/ConflictResolveModal';
 import { ConflictExplain } from '@/components/ExplainTag';
@@ -27,19 +26,15 @@ export function ConflictFeed({ limit, compact = false }: { limit?: number; compa
 
   const titleNode = (
     <span className="inline-flex items-baseline gap-1.5">
-      Rider conflicts
-      <SourceTag
-        source="rider_conflicts_derived"
-        field="Rider conflicts — real findings"
-      />
+      Document conflicts
     </span>
   );
 
   if (all.length === 0) {
     return (
-      <SectionCard title={titleNode} eyebrow="All clear">
+      <SectionCard title={titleNode} eyebrow="No conflicts">
         <p className="text-[12.5px] text-[var(--color-ink-3)]">
-          The conflict detector found no contradictions in the current rider.
+          No conflicts yet. Upload a new version of the rider or a supplemental document to compare against what's on file.
         </p>
       </SectionCard>
     );
@@ -72,9 +67,9 @@ export function ConflictFeed({ limit, compact = false }: { limit?: number; compa
         {/* Intro / help text */}
         <div className={cn('mb-3 -mt-2', compact ? 'text-[11.5px]' : 'text-[12px]')}>
           <p className="text-[var(--color-ink-3)] leading-relaxed">
-            These are real contradictions inside the rider PDF — the detector
-            compares claims between sections (e.g., "Stage specs" vs "Lighting
-            equipment") and flags disagreements. Click any{' '}
+            Conflicts appear when an updated rider or supplemental document disagrees with what's
+            already on file — for example, a new rider version that changes a stage spec, or a
+            partial document that overrides an approved section. Click any{' '}
             <span className="font-mono text-[var(--color-ocean)]">p.N</span>{' '}
             link to open that section in the PDF. Click <strong>Resolve</strong>{' '}
             on a row to record which value is correct.

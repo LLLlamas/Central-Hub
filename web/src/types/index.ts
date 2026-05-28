@@ -587,6 +587,22 @@ export interface VisibilityEditRecord {
   resolvedAt: UpdateStamp;
 }
 
+// The editable surface of a ScheduleItem — what a manager can change from the
+// day-sheet Edit mode. Times + free text only; visibility/owner are edited on
+// the Schedule Permissions page.
+export type ScheduleItemPatch = Partial<
+  Pick<ScheduleItem, 'startTime' | 'endTime' | 'title' | 'location' | 'notes' | 'type'>
+>;
+
+// Archived record of a schedule-item change — a field edit, a create, or a
+// delete. Mirrors VisibilityEditRecord so the audit surfaces read the same.
+export interface ScheduleItemEditRecord {
+  patch: ScheduleItemPatch;
+  changes: FieldChange[];
+  status: 'direct' | 'created' | 'deleted';
+  resolvedAt: UpdateStamp;
+}
+
 // ============================================================
 // View types
 // ============================================================

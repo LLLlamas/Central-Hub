@@ -5,6 +5,7 @@ import { Icon } from '@/components/ui/Icon';
 import { SourceTag } from '@/components/provenance/SourceTag';
 import { useApp } from '@/state/AppState';
 import type { Day, ScheduleItemType } from '@/types';
+import { parseHHMM, fmtHHMM } from '@/lib/time';
 import { cn } from '@/lib/cn';
 
 /**
@@ -35,16 +36,6 @@ const STEPS: {
   { key: 'doors', label: 'Doors', offsetMin: 0 },
 ];
 
-function parseHHMM(s: string): number {
-  const [h, m] = s.split(':').map((x) => parseInt(x, 10));
-  return h * 60 + m;
-}
-function fmtHHMM(min: number): string {
-  while (min < 0) min += 24 * 60;
-  const h = Math.floor((min % (24 * 60)) / 60);
-  const m = min % 60;
-  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-}
 function fmtDiff(min: number): string {
   if (min === 0) return '0';
   const sign = min > 0 ? '+' : '−';

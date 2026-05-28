@@ -8,6 +8,7 @@ import { Card, SectionCard } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
+import { EditableText, EditableSelect } from '@/components/ui/EditableText';
 import { MockBadge } from '@/components/provenance/MockBadge';
 import { SourceTag } from '@/components/provenance/SourceTag';
 import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
@@ -36,6 +37,8 @@ import type {
   SectionEditRecord,
   UpdateStamp,
 } from '@/types';
+
+const VISUAL_SECTION_TYPES = new Set<RiderSectionType>(['stage_plot', 'lighting_plot', 'video']);
 
 // Friendly labels for the canonical section types (handoff §1).
 const SECTION_LABELS: Record<RiderSectionType, string> = {
@@ -72,6 +75,7 @@ export function RiderIngest() {
     if (inputListIdx >= 0) return `input_list-${inputListIdx}`;
     return imp.sections[0] ? `${imp.sections[0].type}-0` : null;
   });
+  const [view, setView] = useState<'sections' | 'visuals'>('sections');
   const [sectionFilter, setSectionFilter] = useState<'all' | 'needs-review' | 'conflicts'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'needs-review' | 'approved' | 'pending'>('all');
   const [confSort, setConfSort] = useState<'desc' | 'asc'>('desc');
@@ -95,6 +99,7 @@ export function RiderIngest() {
   imp.sections.forEach((s, i) => sectionMap.set(`${s.type}-${i}`, s));
   const section = activeSection ? sectionMap.get(activeSection) ?? null : null;
   const approvedCount = imp.sections.filter((s, i) => isSectionApproved(`${s.type}-${i}`)).length;
+  const visualSectionCount = imp.sections.filter((s) => VISUAL_SECTION_TYPES.has(s.type)).length;
 
   // Pipeline step (sectionFilter) and status chips (statusFilter) are two
   // dimensions; only one is active at a time — selecting one resets the other.
@@ -171,6 +176,29 @@ export function RiderIngest() {
         activeFilter={sectionFilter}
         onFilter={selectPipelineFilter}
       />
+
+      {/* View toggle */}
+      <div className="flex items-center gap-2 mt-5">
+        {(['sections', 'visuals'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className={cn(
+              'h-7 px-3 text-[11px] font-mono uppercase tracking-[0.10em] rounded-[3px] border transition-colors',
+              view === v
+                ? 'bg-[var(--color-ink)] text-[var(--color-paper)] border-[var(--color-ink)]'
+                : 'border-[var(--color-rule)] text-[var(--color-ink-3)] hover:border-[var(--color-ink-4)]',
+            )}
+          >
+            {v === 'sections' ? `Sections (${imp.sections.length})` : `Visuals (${visualSectionCount})`}
+          </button>
+        ))}
+      </div>
+
+      {view === 'visuals' ? (
+        <VisualsPanel imp={imp} sourceLang={imp.sourceLanguage} />
+      ) : (
 
       <div className="grid lg:grid-cols-[260px_1fr] gap-5 mt-6">
         {/* Sections list */}
@@ -269,6 +297,8 @@ export function RiderIngest() {
             lets children stretch the column. */}
         <div className="space-y-5 min-w-0">{section && activeSection ? <SectionView section={section} sectionKey={activeSection} sourceLang={imp.sourceLanguage} /> : null}</div>
       </div>
+
+      )}
 
       <DataSourcesPanel
         sourceKeys={[
@@ -421,7 +451,7 @@ function PipelineStrip({
         <PipelineStep num="01" label="Classify" value={`${total} sections detected`} hint="Single API call. Returns sections present, page ranges, language, PM contact." status="done" filterTarget="all" activeFilter={activeFilter} onFilter={onFilter} />
         <PipelineStep num="02" label="Extract" value={`${processed}/${total} extracted`} hint="One structured-output call per section. Schemas per type." status={processed < total ? 'doing' : 'done'} filterTarget="all" activeFilter={activeFilter} onFilter={onFilter} />
         <PipelineStep num="03" label="Review" value={`${approvedCount}/${total} approved`} hint="Correct any wrong field inline, then approve the section." status={approvedCount < total ? 'doing' : 'done'} filterTarget="needs-review" activeFilter={activeFilter} onFilter={onFilter} />
-        <PipelineStep num="04" label="Conflicts" value={`${conflictCount} flagged · avg conf ${(avgConf * 100).toFixed(0)}%`} hint="Never auto-resolved. Human always decides." status={conflictCount > 0 ? 'doing' : 'done'} filterTarget="conflicts" activeFilter={activeFilter} onFilter={onFilter} />
+        <PipelineStep num="04" label="Conflicts" value={`${conflictCount} flagged · avg conf ${(avgConf * 100).toFixed(0)}%`} hint="Flagged when a new version or supplemental document disagrees with what's on file. Human always decides." status={conflictCount > 0 ? 'doing' : 'done'} filterTarget="conflicts" activeFilter={activeFilter} onFilter={onFilter} />
       </div>
     </Card>
   );
@@ -538,6 +568,103 @@ function PendingEditBanner({
   );
 }
 
+function VisualsPanel({ imp, sourceLang }: { imp: RiderImport; sourceLang: string }) {
+  const { openPdf } = usePdfViewer();
+  const { isSectionApproved, approveSection, reopenSection, user } = useApp();
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
+
+  const visuals = imp.sections
+    .map((s, i) => ({ s, i, key: `${s.type}-${i}` }))
+    .filter(({ s }) => VISUAL_SECTION_TYPES.has(s.type));
+
+  if (visuals.length === 0) {
+    return (
+      <div className="mt-6 rounded-[4px] border border-dashed border-[var(--color-rule)] py-16 text-center">
+        <p className="text-[13px] text-[var(--color-ink-3)]">No stage plot or visual sections detected in this rider.</p>
+        <p className="mt-1 text-[11.5px] text-[var(--color-ink-4)]">Stage plot and lighting plot pages will appear here once the rider is imported.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 grid md:grid-cols-2 gap-5">
+      {visuals.map(({ s, key }) => {
+        const approved = isSectionApproved(key);
+        const firstPage = s.pages[0];
+        const src = firstPage ? `${RIDER_PDF_PATH}#page=${firstPage}` : RIDER_PDF_PATH;
+
+        return (
+          <Card key={key} padded={false} className="overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div className="min-w-0">
+                  <div className="eyebrow mb-0.5">
+                    <SectionPageLinks pages={s.pages} sectionLabel={SECTION_LABELS[s.type]} />
+                    {(s.language ?? sourceLang).toUpperCase()}
+                  </div>
+                  <div className="font-display font-bold text-[15px] leading-tight">{SECTION_LABELS[s.type]}</div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <SectionStatusChip status={approved ? 'approved' : s.status} />
+                  {managerView && (
+                    approved
+                      ? <Button size="sm" variant="outline" onClick={() => reopenSection(key)}>Reopen</Button>
+                      : <Button size="sm" variant="primary" leading={<Icon.Check size={12} />} onClick={() => approveSection(key)}>Approve</Button>
+                  )}
+                </div>
+              </div>
+              {(s.freeTextEn ?? s.freeText) && (
+                <p className="mt-2 text-[12px] text-[var(--color-ink-3)] leading-relaxed line-clamp-3">
+                  {s.freeTextEn ?? s.freeText}
+                </p>
+              )}
+            </div>
+            <div className="relative bg-[var(--color-paper-2)]">
+              <iframe
+                key={src}
+                src={src}
+                title={SECTION_LABELS[s.type]}
+                className="w-full border-0 block"
+                style={{ height: '340px' }}
+              />
+              <button
+                type="button"
+                onClick={() => openPdf({ url: RIDER_PDF_PATH, page: firstPage, title: SECTION_LABELS[s.type] })}
+                className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-semibold rounded-[3px] border bg-[var(--color-card)] border-[var(--color-rule)] hover:border-[var(--color-ink-4)] text-[var(--color-ink)] shadow-sm"
+              >
+                Full view <Icon.Arrow size={11} />
+              </button>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function SectionPageLinks({ pages, sectionLabel }: { pages: number[]; sectionLabel: string }) {
+  const { openPdf } = usePdfViewer();
+  if (pages.length === 0) return null;
+  return (
+    <span>
+      {'pp. '}
+      {pages.map((p, i) => (
+        <span key={p}>
+          {i > 0 && ', '}
+          <button
+            type="button"
+            onClick={() => openPdf({ url: RIDER_PDF_PATH, page: p, title: `${sectionLabel} — p.${p}` })}
+            className="font-mono text-[var(--color-ocean)] underline decoration-dotted underline-offset-[3px] hover:decoration-solid hover:text-[var(--color-ink)] transition-colors"
+          >
+            {p}
+          </button>
+        </span>
+      ))}
+      {' · '}
+    </span>
+  );
+}
+
 function SectionView({
   section,
   sectionKey,
@@ -592,7 +719,12 @@ function SectionView({
     <>
       <SectionCard
         title={SECTION_LABELS[section.type]}
-        eyebrow={`${section.pages.length > 0 ? `pp. ${section.pages.join(', ')} · ` : ''}${section.language?.toUpperCase() ?? sourceLang.toUpperCase()}`}
+        eyebrow={
+          <span className="inline-flex items-baseline">
+            <SectionPageLinks pages={section.pages} sectionLabel={SECTION_LABELS[section.type]} />
+            {(section.language ?? sourceLang).toUpperCase()}
+          </span>
+        }
         action={
           <div className="flex items-center gap-2 flex-wrap justify-end">
             {section.confidence != null && (
@@ -721,77 +853,8 @@ function stripUiNoise(s: RiderSection) {
 // Per-section review components
 // =========================================================
 
-// --- Inline-edit primitives ------------------------------
-// Borderless inputs that read as plain text until hovered/focused, so a
-// dense review table stays calm but every value is one click from editable.
-// Disabled (= section approved) renders them as static, locked text.
-
-function EditableText({
-  value,
-  onChange,
-  disabled,
-  mono = false,
-  placeholder,
-  className,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  disabled: boolean;
-  mono?: boolean;
-  placeholder?: string;
-  className?: string;
-}) {
-  return (
-    <input
-      type="text"
-      value={value}
-      placeholder={placeholder}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        'w-full min-w-0 bg-transparent rounded-[2px] px-1 py-0.5 outline-none border border-transparent',
-        disabled
-          ? 'cursor-default'
-          : 'hover:border-[var(--color-rule)] focus:border-[var(--color-ocean)] focus:bg-[var(--color-card)]',
-        mono && 'font-mono',
-        className,
-      )}
-    />
-  );
-}
-
-function EditableSelect({
-  value,
-  options,
-  onChange,
-  disabled,
-}: {
-  value: string | undefined;
-  options: readonly { value: string; label: string }[];
-  onChange: (v: string) => void;
-  disabled: boolean;
-}) {
-  return (
-    <select
-      value={value ?? ''}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        'w-full min-w-0 bg-transparent rounded-[2px] px-1 py-0.5 text-[11px] uppercase tracking-[0.04em] outline-none border border-transparent',
-        disabled
-          ? 'cursor-default appearance-none text-[var(--color-ink-3)]'
-          : 'hover:border-[var(--color-rule)] focus:border-[var(--color-ocean)] focus:bg-[var(--color-card)] cursor-pointer',
-      )}
-    >
-      <option value="">—</option>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
-  );
-}
+// Inline-edit primitives (EditableText / EditableSelect) now live in
+// components/ui/EditableText.tsx — shared with the day-sheet schedule editor.
 
 const STAND_OPTIONS = [
   { value: 'boom', label: 'Boom' },

@@ -56,7 +56,7 @@ export function SourceTag({ source, field, className }: SourceTagProps) {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        eyebrow="Real data · source"
+        eyebrow="Real data · where it came from"
         title={field ?? src.section}
         size="sm"
       >
@@ -92,7 +92,7 @@ export function SourceTag({ source, field, className }: SourceTagProps) {
           {src.quote && (
             <div>
               <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-3)] mb-1">
-                Verbatim
+                Exact words from the rider
               </div>
               <blockquote className="border-l-2 border-[var(--color-ocean)] pl-3 text-[12.5px] text-[var(--color-ink-2)] italic leading-[1.5]">
                 {src.quote}
