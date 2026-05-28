@@ -229,30 +229,24 @@ function CompactPicker({
 }) {
   return (
     <div className="inline-flex rounded-[3px] border border-[var(--color-rule)] overflow-hidden text-[10.5px]">
-      <button
-        onClick={() => onChange(null)}
-        className={cn(
-          'px-2 h-6 font-mono font-semibold uppercase tracking-[0.06em] border-r border-[var(--color-rule)]',
-          value === null ? 'bg-[var(--color-paper-2)] text-[var(--color-ink-2)]' : 'text-[var(--color-ink-4)] hover:bg-[var(--color-paper-2)]',
-        )}
-      >
-        Inherit
-      </button>
-      {LEVELS.map((l, i) => (
-        <button
-          key={l}
-          onClick={() => onChange(l)}
-          className={cn(
-            'px-2 h-6 font-mono font-semibold uppercase tracking-[0.06em]',
-            i < LEVELS.length - 1 && 'border-r border-[var(--color-rule)]',
-            value === l ? 'text-[var(--color-paper)]' : 'text-[var(--color-ink-3)] hover:bg-[var(--color-paper-2)]',
-          )}
-          style={value === l ? { background: LEVEL_COLOR[l] } : undefined}
-          title={visibilityLabel(l)}
-        >
-          {l[0]!.toUpperCase()}
-        </button>
-      ))}
+      {LEVELS.map((l, i) => {
+        const active = value === l;
+        return (
+          <button
+            key={l}
+            onClick={() => onChange(active ? null : l)}
+            className={cn(
+              'px-2 h-6 font-mono font-semibold uppercase tracking-[0.06em]',
+              i < LEVELS.length - 1 && 'border-r border-[var(--color-rule)]',
+              active ? 'text-[var(--color-paper)]' : 'text-[var(--color-ink-3)] hover:bg-[var(--color-paper-2)]',
+            )}
+            style={active ? { background: LEVEL_COLOR[l] } : undefined}
+            title={active ? `${visibilityLabel(l)} — click to clear` : visibilityLabel(l)}
+          >
+            {l[0]!.toUpperCase()}
+          </button>
+        );
+      })}
     </div>
   );
 }

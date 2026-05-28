@@ -8,9 +8,12 @@
 import type { ScheduleItemType, Visibility } from '@/types';
 
 /**
- * Which department "owns" each item type by default — granted `owns` (edit
- * rights). Most operational items belong to Production; audio-specific items
- * to Audio; performance items to Artist; calls/meals to Management.
+ * Suggested owning department per item type — shown as a hint chip in the
+ * type-defaults editor so the TM knows who would *normally* edit each kind
+ * of item. No longer auto-granted: the seed Visibility starts locked to
+ * Management + Production only, and the TM grants the owner group (and
+ * anyone else) explicitly. Operational items map to Production; audio to
+ * Audio; performance to Artist; calls/meals to Management.
  */
 export const SCHEDULE_TYPE_OWNER: Record<ScheduleItemType, string> = {
   load_in: 'grp_production',
@@ -32,15 +35,21 @@ export const SCHEDULE_TYPE_OWNER: Record<ScheduleItemType, string> = {
 };
 
 /**
- * The seed Visibility for an item of this type — everyone sees by default,
- * the owning group gets `owns`. Sensitive items still get manually flagged
- * via `ScheduleItem.sensitive`, which the resolver / UI handle separately.
+ * The seed Visibility for an item of this type — everyone is **blocked** by
+ * default; only Management and Production start with `owns`. The TM is
+ * expected to open the type-defaults editor and grant visibility outward
+ * (audio for soundcheck, artist for set, etc.), then **Sync to all** to push
+ * the template down. Sensitive items still get manually flagged via
+ * `ScheduleItem.sensitive`, which the resolver / UI handle separately.
  */
-export function defaultVisibilityForType(type: ScheduleItemType): Visibility {
-  const owner = SCHEDULE_TYPE_OWNER[type];
-  return owner
-    ? { default: 'sees', groups: { [owner]: 'owns' } }
-    : { default: 'sees' };
+export function defaultVisibilityForType(_type: ScheduleItemType): Visibility {
+  return {
+    default: 'blocked',
+    groups: {
+      grp_mgmt: 'owns',
+      grp_production: 'owns',
+    },
+  };
 }
 
 /**

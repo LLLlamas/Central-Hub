@@ -110,6 +110,11 @@ interface AppState {
   // inherit the blob for their type; per-item edits override it.
   getScheduleTypeDefault: (type: ScheduleItemType) => Visibility;
   setScheduleTypeDefault: (type: ScheduleItemType, v: Visibility) => void;
+  /** Push the type's current template to every existing schedule item of that
+   *  type — used by the "Sync to all N existing items" action in the type
+   *  defaults editor. Returns the count of items synced. Records per-item
+   *  history entries so the audit trail shows the bulk sync. */
+  applyTypeTemplateToAllItems: (type: ScheduleItemType) => number;
 
   // Tour query helpers, bound to the active tour.
   getDay: (date: string) => Day | undefined;
@@ -683,6 +688,35 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [updateScratchTour],
   );
 
+  const applyTypeTemplateToAllItems = useCallback(
+    (type: ScheduleItemType): number => {
+      const template = getScheduleTypeDefault(type);
+      const matching = tour.scheduleItems.filter((i) => i.type === type);
+      if (matching.length === 0) return 0;
+      setVisibilityEdits((prev) => {
+        const next = new Map(prev);
+        for (const item of matching) next.set(item.id, template);
+        return next;
+      });
+      setVisibilityEditHistory((prev) => {
+        const next = new Map(prev);
+        for (const item of matching) {
+          const before = visibilityEdits.get(item.id) ?? item.visibility;
+          const record: VisibilityEditRecord = {
+            patch: template,
+            changes: computeVisibilityChanges(before, template),
+            status: 'direct',
+            resolvedAt: { at: MOCK_NOW, by: currentName },
+          };
+          next.set(item.id, [...(prev.get(item.id) ?? []), record]);
+        }
+        return next;
+      });
+      return matching.length;
+    },
+    [getScheduleTypeDefault, tour.scheduleItems, visibilityEdits, currentName],
+  );
+
   const cancelHotelImport = useCallback(
     (_reason?: string) => {
       updateScratchTour((t) => ({
@@ -1123,6 +1157,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       getFlightPassengerResolution,
       getScheduleTypeDefault,
       setScheduleTypeDefault,
+      applyTypeTemplateToAllItems,
       getDay,
       getDayById,
       getScheduleItemsForDay,
