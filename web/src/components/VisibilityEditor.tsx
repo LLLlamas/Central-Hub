@@ -39,6 +39,12 @@ export function VisibilityEditor({ value, groups, tags, persons, onChange, compa
     else t[tid] = lvl;
     onChange({ ...value, tags: t });
   };
+  const setPerson = (pid: string, lvl: VisibilityLevel | null) => {
+    const p = { ...(value.persons ?? {}) };
+    if (lvl === null) delete p[pid];
+    else p[pid] = lvl;
+    onChange({ ...value, persons: p });
+  };
 
   const overrideCount =
     Object.keys(value.groups ?? {}).length +
@@ -74,22 +80,34 @@ export function VisibilityEditor({ value, groups, tags, persons, onChange, compa
               const lvl = value.groups?.[g.id];
               const isOpen = openGroup === g.id;
               const groupTags = tags.filter((t) => t.groupId === g.id);
+              const groupPersons = persons.filter((p) => p.groupId === g.id);
+              const metaParts: string[] = [];
+              if (groupPersons.length > 0)
+                metaParts.push(`${groupPersons.length} ${groupPersons.length === 1 ? 'person' : 'people'}`);
+              if (groupTags.length > 0)
+                metaParts.push(`${groupTags.length} tag${groupTags.length === 1 ? '' : 's'}`);
+              const expandable = groupPersons.length > 0 || groupTags.length > 0;
               return (
                 <div key={g.id} className="border-b border-[var(--color-rule-soft)] last:border-0 -mx-1">
                   <div className="px-1 py-1.5 flex items-center gap-2">
                     <button
-                      onClick={() => setOpenGroup(isOpen ? null : g.id)}
-                      className="flex items-center gap-2 flex-1 text-left"
+                      onClick={() => expandable && setOpenGroup(isOpen ? null : g.id)}
+                      disabled={!expandable}
+                      className="flex items-center gap-2 flex-1 text-left disabled:cursor-default"
                     >
                       <Icon.Chevron
                         size={11}
-                        className={cn('text-[var(--color-ink-4)] transition-transform', isOpen && 'rotate-90')}
+                        className={cn(
+                          'text-[var(--color-ink-4)] transition-transform',
+                          isOpen && 'rotate-90',
+                          !expandable && 'opacity-30',
+                        )}
                       />
                       <span className="w-1.5 h-1.5 rounded-full" style={{ background: g.color }} />
                       <span className="text-[12.5px] font-semibold">{g.name}</span>
-                      {groupTags.length > 0 && (
+                      {metaParts.length > 0 && (
                         <span className="text-[10.5px] font-mono text-[var(--color-ink-4)]">
-                          {groupTags.length} tag{groupTags.length === 1 ? '' : 's'}
+                          {metaParts.join(' · ')}
                         </span>
                       )}
                     </button>
@@ -98,7 +116,7 @@ export function VisibilityEditor({ value, groups, tags, persons, onChange, compa
                       onChange={(l) => setGroup(g.id, l)}
                     />
                   </div>
-                  {isOpen && groupTags.length > 0 && (
+                  {isOpen && (
                     <div className="pl-7 pb-2 space-y-1">
                       {groupTags.map((t) => {
                         const tlvl = value.tags?.[t.id];
@@ -110,6 +128,23 @@ export function VisibilityEditor({ value, groups, tags, persons, onChange, compa
                             <CompactPicker
                               value={tlvl ?? null}
                               onChange={(l) => setTag(t.id, l)}
+                            />
+                          </div>
+                        );
+                      })}
+                      {groupPersons.map((p) => {
+                        const plvl = value.persons?.[p.id];
+                        return (
+                          <div key={p.id} className="flex items-center gap-2">
+                            <span
+                              className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-mono font-bold text-[var(--color-paper)] bg-[var(--color-ink-2)] shrink-0"
+                            >
+                              {initials(p.person.name)}
+                            </span>
+                            <span className="text-[12px] flex-1 truncate">{p.person.name}</span>
+                            <CompactPicker
+                              value={plvl ?? null}
+                              onChange={(l) => setPerson(p.id, l)}
                             />
                           </div>
                         );
