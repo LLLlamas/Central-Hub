@@ -19,6 +19,7 @@ const nav: NavEntry[] = [
   { to: '/', label: 'Today', icon: 'Home', group: 'tour' },
   { to: '/calendar', label: 'Calendar', icon: 'Calendar', group: 'tour' },
   { to: '/personnel', label: 'People', icon: 'Users', group: 'tour' },
+  { to: '/plots', label: 'Plots', icon: 'Image', group: 'tour' },
   { to: '/schedule', label: 'Schedule Permissions', icon: 'Layers', group: 'ops' },
   { to: '/daysheet', label: 'Day Sheets', icon: 'Document', group: 'ops' },
   { to: '/ingest/flights', label: 'Import route & travel', icon: 'Plane', group: 'ingest' },

@@ -205,6 +205,13 @@ export const realSources = {
     artifactUrl: RIDER_FILE,
     artifactLabel: 'Open rider PDF',
   },
+  rider_plots: {
+    document: RIDER_DOC,
+    section: '§7 Stage Plot · §8 Lightplot',
+    detail: 'Image-only pages — stage plot and lightplot CAD sheets — pulled out of the rider so you do not have to scroll past every drawing to find them. Each thumbnail opens its source page in the in-app viewer.',
+    artifactUrl: RIDER_FILE,
+    artifactLabel: 'Open rider PDF',
+  },
 
   // ---- Conflicts (derived from real rider sections) ---------
   rider_conflicts_derived: {

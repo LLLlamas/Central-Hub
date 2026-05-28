@@ -361,6 +361,33 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     saveScratchTour(tour);
   }, [tour]);
 
+  // Re-derive plot data URLs after a reload. `scratchStorage` strips them on
+  // save (base64 PNGs blow the localStorage quota), so a restored tour has
+  // plot metadata but no images — render them once from the rider PDF.
+  useEffect(() => {
+    const ri = tour.riderImports[0];
+    if (!ri) return;
+    const needs = ri.sections.some((s) => s.plots?.some((p) => !p.dataUrl));
+    if (!needs) return;
+    let cancelled = false;
+    (async () => {
+      const { hydrateRiderPlotImages } = await import('@/data/riderFixture');
+      const hydrated = await hydrateRiderPlotImages(ri);
+      if (cancelled) return;
+      setTour((t) => {
+        // Bail if the import has been swapped in the meantime.
+        if (t.riderImports[0]?.id !== ri.id) return t;
+        return { ...t, riderImports: [hydrated, ...t.riderImports.slice(1)] };
+      });
+    })().catch(() => {
+      /* render failure is non-fatal — UI just shows captions without images */
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Re-run only when the rider import id changes (a fresh upload or reset).
+  }, [tour.riderImports[0]?.id]);
+
   // Persist the overlay bundle — every Map/Set above. Each write replaces the
   // whole bundle (small payload — entry arrays of typed records).
   useEffect(() => {

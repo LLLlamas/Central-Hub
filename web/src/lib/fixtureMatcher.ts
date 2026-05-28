@@ -15,6 +15,8 @@ export interface Fixture {
   kind: FixtureKind;
   /** Exact filename shipped in web/public/. */
   filename: string;
+  /** Alternate filenames that point at the same underlying fixture data. */
+  aliases?: string[];
   /** Short human label for the file. */
   label: string;
   /** Terse description of what importing it populates. */
@@ -33,8 +35,12 @@ export const FIXTURES: Fixture[] = [
     id: 'rider_elsa_elmar',
     kind: 'rider',
     filename: 'RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf',
+    aliases: [
+      'RIDER ELSA Y ELMAR 2025 - English Translation.pdf',
+      'RIDER ELSA Y ELMAR 2025 - English Side-by-Side.pdf',
+    ],
     label: 'Tech rider — Elsa y Elmar Full Band 2025',
-    extracts: 'Rider sections, band roster, PM contact, and party size.',
+    extracts: 'Rider sections, band roster, PM contact, and party size. Spanish, English, or side-by-side PDF accepted.',
   },
   {
     id: 'travel_grid_mexico',
@@ -79,7 +85,10 @@ function normalize(name: string): string {
 /** Match an uploaded file (by name) to a known fixture, or null if unknown. */
 export function matchFixture(filename: string): Fixture | null {
   const target = normalize(filename);
-  return FIXTURES.find((f) => normalize(f.filename) === target) ?? null;
+  return FIXTURES.find((f) =>
+    normalize(f.filename) === target ||
+    (f.aliases?.some((a) => normalize(a) === target) ?? false)
+  ) ?? null;
 }
 
 /** All fixtures of a given kind — used to tell the user what to upload. */

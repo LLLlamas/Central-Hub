@@ -10,6 +10,7 @@ import { DaySheets } from '@/routes/DaySheets';
 import { DaySheetPrint } from '@/routes/DaySheetPrint';
 import { FlightIngest } from '@/routes/FlightIngest';
 import { RiderIngest } from '@/routes/RiderIngest';
+import { Plots } from '@/routes/Plots';
 import { More } from '@/routes/More';
 
 export const router = createBrowserRouter([
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([
       { path: 'calendar', element: <CalendarPage /> },
       { path: 'calendar/:date', element: <DayDetail /> },
       { path: 'personnel', element: <Personnel /> },
+      { path: 'plots', element: <Plots /> },
       { path: 'schedule', element: <ScheduleAndVisibility /> },
       { path: 'daysheet', element: <DaySheets /> },
       { path: 'daysheet/:date', element: <DaySheets /> },

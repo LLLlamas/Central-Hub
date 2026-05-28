@@ -18,20 +18,20 @@ export interface RiderSectionInfo {
 }
 
 export const RIDER_SECTIONS: RiderSectionInfo[] = [
-  { num: 1, name: 'Cover & contacts', pages: [1] },
-  { num: 2, name: 'Production control', pages: [2] },
-  { num: 3, name: 'Permits', pages: [3] },
-  { num: 4, name: 'Stage specs', pages: [4] },
-  { num: 5, name: 'Audio · PA', pages: [5] },
-  { num: 6, name: 'Input / Output', pages: [6, 7] },
-  { num: 7, name: 'Stage plot', pages: [8] },
-  { num: 8, name: 'Lighting equipment', pages: [9, 10] },
-  { num: 9, name: 'Backline', pages: [19, 20] },
-  { num: 10, name: 'Soundcheck', pages: [21] },
-  { num: 11, name: 'Transport', pages: [22] },
-  { num: 12, name: 'Lodging', pages: [23] },
-  { num: 13, name: 'Dressing rooms', pages: [24] },
-  { num: 14, name: 'Catering', pages: [25, 26] },
+  { num: 1,  name: 'Cover & contacts',    pages: [1, 2] },
+  { num: 2,  name: 'Production control',  pages: [2, 3] },
+  { num: 3,  name: 'Permits',             pages: [3] },
+  { num: 4,  name: 'Stage specs',         pages: [3, 4] },
+  { num: 5,  name: 'Audio · PA',          pages: [5, 6] },
+  { num: 6,  name: 'Input / Output',      pages: [7, 8, 9, 10] },
+  { num: 7,  name: 'Stage plot',          pages: [11] },
+  { num: 8,  name: 'Lighting equipment',  pages: [12, 13, 14, 15, 16, 17] },
+  { num: 9,  name: 'Backline',            pages: [18] },
+  { num: 10, name: 'Soundcheck',          pages: [19] },
+  { num: 11, name: 'Transport',           pages: [19, 20] },
+  { num: 12, name: 'Lodging',             pages: [20] },
+  { num: 13, name: 'Dressing rooms',      pages: [21] },
+  { num: 14, name: 'Catering',            pages: [22, 23, 24, 25, 26, 27] },
 ];
 
 /** RiderSectionType (from types/index.ts) → §N. */

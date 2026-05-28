@@ -5,6 +5,7 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 const inputFileName = 'RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf';
 const outputFileName = 'RIDER ELSA Y ELMAR 2025 - English Side-by-Side.pdf';
+const englishOnlyFileName = 'RIDER ELSA Y ELMAR 2025 - English Translation.pdf';
 
 const translations = [
   String.raw`TECH RIDER | Full Band 2025
@@ -689,6 +690,8 @@ const rootDir = path.resolve(process.cwd());
 const inputPath = path.join(rootDir, inputFileName);
 const outputPath = path.join(rootDir, outputFileName);
 const publicOutputPath = path.join(rootDir, 'web', 'public', outputFileName);
+const englishOnlyPath = path.join(rootDir, englishOnlyFileName);
+const publicEnglishOnlyPath = path.join(rootDir, 'web', 'public', englishOnlyFileName);
 
 const sourceBytes = readFileSync(inputPath);
 const sourcePdf = await PDFDocument.load(sourceBytes);
@@ -752,13 +755,13 @@ function layoutText(text, font, size, maxWidth) {
   const lines = [];
   for (const paragraphLine of text.split('\n')) {
     if (!paragraphLine.trim()) {
-      lines.push({ text: '', font: regular });
+      lines.push({ text: '', fontKind: 'regular' });
       continue;
     }
 
     const lineFont = paragraphLine.includes(' | ') ? mono : font;
     for (const wrapped of wrapLine(paragraphLine, lineFont, size, maxWidth)) {
-      lines.push({ text: wrapped, font: lineFont });
+      lines.push({ text: wrapped, fontKind: lineFont === mono ? 'mono' : 'regular' });
     }
   }
   return lines;
@@ -878,6 +881,73 @@ function drawHeader(page, label, pageNumber, x) {
   });
 }
 
+function drawAlignedTranslation({
+  page,
+  text,
+  sourceLayout,
+  frameX,
+  frameY,
+  frameWidth,
+  frameHeight,
+  scale,
+  fonts,
+  drawFrame = false,
+}) {
+  if (drawFrame) {
+    page.drawRectangle({
+      x: frameX,
+      y: frameY,
+      width: frameWidth,
+      height: frameHeight,
+      borderWidth: 0.75,
+      borderColor: rgb(0.78, 0.81, 0.85),
+      color: rgb(1, 1, 1),
+    });
+  }
+
+  const textX = frameX + sourceLayout.leftMargin * scale;
+  const maxTextWidth = frameWidth - (sourceLayout.leftMargin + sourceLayout.rightMargin) * scale;
+  const topY = frameY + sourceLayout.topY * scale;
+  const bottomY = frameY + sourceLayout.bottomY * scale;
+  const preferredSize = Math.max(6.2, 11.5 * scale);
+  const preferredLineHeight = Math.max(7, sourceLayout.medianGap * scale);
+  const maxTextHeight = Math.max(120 * scale, topY - bottomY + preferredLineHeight);
+  const layout = pickAlignedTextLayout(text, maxTextWidth, maxTextHeight, preferredSize, preferredLineHeight);
+  const scaledSlots = sourceLayout.slots.map((slot) => frameY + slot * scale);
+
+  const drawTextLine = (line, y) => {
+    if (!line.text) return;
+
+    const baseFont = line.fontKind === 'mono' ? fonts.mono : fonts.regular;
+    const lineFont = shouldEmphasize(line.text) ? fonts.bold : baseFont;
+    page.drawText(line.text, {
+      x: textX,
+      y,
+      size: line.fontKind === 'mono' ? layout.size * 0.88 : layout.size,
+      font: lineFont,
+      color: rgb(0.08, 0.1, 0.13),
+    });
+  };
+
+  if (layout.lines.length <= scaledSlots.length && scaledSlots.length > 0) {
+    let slotIndex = 0;
+    for (const line of layout.lines) {
+      if (slotIndex >= scaledSlots.length) break;
+      drawTextLine(line, scaledSlots[slotIndex]);
+      slotIndex += 1;
+    }
+    return;
+  }
+
+  let y = topY;
+  const bottomLimit = frameY + 34 * scale;
+  for (const line of layout.lines) {
+    if (y < bottomLimit) break;
+    drawTextLine(line, y);
+    y -= line.text ? layout.lineHeight : layout.lineHeight * 0.7;
+  }
+}
+
 for (let i = 0; i < embeddedPages.length; i += 1) {
   const pageNumber = i + 1;
   const page = outputPdf.addPage([pageWidth, pageHeight]);
@@ -926,61 +996,18 @@ for (let i = 0; i < embeddedPages.length; i += 1) {
   const rightPageX = rightX + (columnWidth - originalWidth) / 2;
   const rightPageY = margin + (bodyHeight - originalHeight) / 2;
 
-  page.drawRectangle({
-    x: rightPageX,
-    y: rightPageY,
-    width: originalWidth,
-    height: originalHeight,
-    borderWidth: 0.75,
-    borderColor: rgb(0.78, 0.81, 0.85),
-    color: rgb(1, 1, 1),
+  drawAlignedTranslation({
+    page,
+    text: translations[i],
+    sourceLayout: originalTextLayouts[i],
+    frameX: rightPageX,
+    frameY: rightPageY,
+    frameWidth: originalWidth,
+    frameHeight: originalHeight,
+    scale,
+    fonts: { regular, bold, mono },
+    drawFrame: true,
   });
-
-  const sourceLayout = originalTextLayouts[i];
-  const textX = rightPageX + sourceLayout.leftMargin * scale;
-  const maxTextWidth = originalWidth - (sourceLayout.leftMargin + sourceLayout.rightMargin) * scale;
-  const topY = rightPageY + sourceLayout.topY * scale;
-  const bottomY = rightPageY + sourceLayout.bottomY * scale;
-  const preferredSize = Math.max(6.2, 11.5 * scale);
-  const preferredLineHeight = Math.max(7, sourceLayout.medianGap * scale);
-  const maxTextHeight = Math.max(120, topY - bottomY + preferredLineHeight);
-  const layout = pickAlignedTextLayout(translations[i], maxTextWidth, maxTextHeight, preferredSize, preferredLineHeight);
-  const scaledSlots = sourceLayout.slots.map((slot) => rightPageY + slot * scale);
-
-  if (layout.lines.length <= scaledSlots.length && scaledSlots.length > 0) {
-    let slotIndex = 0;
-    for (const line of layout.lines) {
-      if (slotIndex >= scaledSlots.length) break;
-      const y = scaledSlots[slotIndex];
-      slotIndex += 1;
-      if (!line.text) continue;
-
-      const lineFont = shouldEmphasize(line.text) ? bold : line.font;
-      page.drawText(line.text, {
-        x: textX,
-        y,
-        size: line.font === mono ? layout.size * 0.88 : layout.size,
-        font: lineFont,
-        color: rgb(0.08, 0.1, 0.13),
-      });
-    }
-  } else {
-    let y = topY;
-    for (const line of layout.lines) {
-      if (y < rightPageY + 34) break;
-      if (line.text) {
-        const lineFont = shouldEmphasize(line.text) ? bold : line.font;
-        page.drawText(line.text, {
-          x: textX,
-          y,
-          size: line.font === mono ? layout.size * 0.88 : layout.size,
-          font: lineFont,
-          color: rgb(0.08, 0.1, 0.13),
-        });
-      }
-      y -= line.text ? layout.lineHeight : layout.lineHeight * 0.7;
-    }
-  }
 }
 
 function shouldEmphasize(text) {
@@ -995,9 +1022,36 @@ function shouldEmphasize(text) {
 const translatedBytes = await outputPdf.save();
 writeFileSync(outputPath, translatedBytes);
 
+const englishOnlyPdf = await PDFDocument.create();
+const englishRegular = await englishOnlyPdf.embedFont(StandardFonts.Helvetica);
+const englishBold = await englishOnlyPdf.embedFont(StandardFonts.HelveticaBold);
+const englishMono = await englishOnlyPdf.embedFont(StandardFonts.Courier);
+
+for (let i = 0; i < translations.length; i += 1) {
+  const sourcePageSize = sourcePdf.getPage(i).getSize();
+  const page = englishOnlyPdf.addPage([sourcePageSize.width, sourcePageSize.height]);
+  drawAlignedTranslation({
+    page,
+    text: translations[i],
+    sourceLayout: originalTextLayouts[i],
+    frameX: 0,
+    frameY: 0,
+    frameWidth: sourcePageSize.width,
+    frameHeight: sourcePageSize.height,
+    scale: 1,
+    fonts: { regular: englishRegular, bold: englishBold, mono: englishMono },
+  });
+}
+
+const englishOnlyBytes = await englishOnlyPdf.save();
+writeFileSync(englishOnlyPath, englishOnlyBytes);
+
 const publicDir = path.dirname(publicOutputPath);
 if (!existsSync(publicDir)) mkdirSync(publicDir, { recursive: true });
 writeFileSync(publicOutputPath, translatedBytes);
+writeFileSync(publicEnglishOnlyPath, englishOnlyBytes);
 
 console.log(`Wrote ${outputPath}`);
 console.log(`Wrote ${publicOutputPath}`);
+console.log(`Wrote ${englishOnlyPath}`);
+console.log(`Wrote ${publicEnglishOnlyPath}`);

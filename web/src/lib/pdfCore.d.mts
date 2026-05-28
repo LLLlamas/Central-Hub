@@ -21,8 +21,24 @@ export function multiPageItems(sPages: PPage[]): PItem[];
 export function headingItems(page: PPage): PItem[];
 export function pageText(page: PPage): string;
 export function pagesText(pages: PPage[], nums?: number[]): string;
+export interface ExtractPageTextOpts {
+  clipAboveY?: number;
+  keepFromY?: number;
+  headerBandPt?: number;
+  footerBandPt?: number;
+}
+export function extractPageText(page: PPage, opts?: ExtractPageTextOpts): string;
+export function findNextHeadingY(page: PPage, afterNum: number): number | undefined;
+export function findHeadingY(page: PPage, num: number): number | undefined;
 export function parseDateToISO(text: string): string | undefined;
 export function avgHeight(row: PItem[]): number;
 export function personnelNameMap(personnel: TourPerson[]): Map<string, string>;
 export function colAliasLookup(t: string): string | null;
 export function extractFlightTickets(text: string): number | undefined;
+
+export interface TocEntry { num: number; title: string }
+export type TocEntries = TocEntry[] & { tocPage?: number };
+export function parseTocEntries(pages: PPage[]): TocEntries;
+export function findHeadingPages(pages: PPage[], tocEntries: TocEntries): Map<number, number>;
+export function isPlotPage(page: PPage): boolean;
+export function classifyTocTitle(title: string): RiderSectionType;

@@ -43,11 +43,35 @@ export function loadScratchTour(): Tour | null {
   }
 }
 
+/**
+ * Strip large/derivable fields from the tour before serializing. Today this is
+ * just `RiderSection.plots[*].dataUrl` — base64-encoded PNGs of plot pages.
+ * Even a handful of 2x-scale pages can push 2-3 MB into localStorage (quota is
+ * 5-10 MB). They're re-derived from the source PDF on app boot — see
+ * `hydrateRiderPlotImages` in `data/riderFixture.ts`.
+ */
+function stripForPersistence(tour: Tour): Tour {
+  return {
+    ...tour,
+    riderImports: tour.riderImports.map((ri) => ({
+      ...ri,
+      sections: ri.sections.map((s) =>
+        s.plots
+          ? {
+              ...s,
+              plots: s.plots.map(({ dataUrl: _omit, width: _w, height: _h, ...rest }) => rest),
+            }
+          : s,
+      ),
+    })),
+  };
+}
+
 export function saveScratchTour(scratchTour: Tour | null): void {
   if (typeof window === 'undefined') return;
   try {
     if (scratchTour) {
-      window.localStorage.setItem(TOUR_KEY, JSON.stringify(scratchTour));
+      window.localStorage.setItem(TOUR_KEY, JSON.stringify(stripForPersistence(scratchTour)));
     } else {
       window.localStorage.removeItem(TOUR_KEY);
     }

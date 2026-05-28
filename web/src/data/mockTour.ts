@@ -785,10 +785,30 @@ const riderSections: RiderSection[] = [
     freeTextEn:
       'TECH RIDER | Full Band 2025. Updated: September 2025. PLEASE IGNORE PREVIOUS VERSIONS. PM: Manuel González · magcs81@gmail.com · +52 55 54 74 70 48',
   },
-  // §2 Production control (boilerplate)
-  { type: 'production_control', pages: [2], status: 'approved', confidence: 0.96, language: 'es', freeText: 'Cláusulas de control de producción (boilerplate).', freeTextEn: 'Production control clauses (boilerplate).' },
-  // §3 Permits (boilerplate)
-  { type: 'permits', pages: [3], status: 'approved', confidence: 0.95, language: 'es', freeText: 'Cláusulas de permisos y licencias.', freeTextEn: 'Permits and licensing clauses.' },
+  // §2 Production control — verbatim from rider p.3
+  {
+    type: 'production_control',
+    pages: [3],
+    status: 'approved',
+    confidence: 0.96,
+    language: 'es',
+    freeText:
+      '2- NOTAS\nCONTROL DE PRODUCCIÓN\nEl promotor/empresario acepta que la producción de ELSA Y ELMAR tenga el control total y puede tomar decisiones sobre todos los temas relacionados con el show: horarios, escenario, vallas, acceso al venue, bandas abridoras, anuncios de cualquier tipo, publicidad en el venue, control de las luces de casa, aire acondicionado, calefacción, fotógrafos, video, circuito cerrado, acreditaciones, etc.',
+    freeTextEn:
+      '2 — NOTES\nPRODUCTION CONTROL\nThe promoter agrees that ELSA Y ELMAR\'s production team has full control and can make decisions on all matters related to the show: schedule, stage, barricades, venue access, opening acts, announcements of any kind, in-venue advertising, house-light control, A/C, heating, photographers, video, closed-circuit, credentials, etc.',
+  },
+  // §3 Permits — verbatim from rider p.3
+  {
+    type: 'permits',
+    pages: [3],
+    status: 'approved',
+    confidence: 0.95,
+    language: 'es',
+    freeText:
+      '3- PERMISOS\nPERMISOS, LICENCIAS Y CERTIFICADOS\nEn caso de ser necesario obtener y/o pagar cualquier tipo de licencias, permisos, seguros, certificados, visas y/o cualquier trámite requerido por cualquier sindicato, autoridad local o nacional, sociedad de autores y/o similares que tengan jurisdicción sobre las actuaciones, estos trámites y cargos serán responsabilidad del Promotor o Contratante.',
+    freeTextEn:
+      '3 — PERMITS\nPERMITS, LICENSES AND CERTIFICATES\nIf any licenses, permits, insurance, certificates, visas or any other paperwork is required by any union, local or national authority, performance-rights society or similar body with jurisdiction over the performances, the responsibility for obtaining and paying for them falls on the Promoter or Contractor.',
+  },
   // §4 Stage specs
   {
     type: 'stage_specs',

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Modal } from '@/components/ui/Modal';
 import { useApp } from '@/state/AppState';
 import type { PendingEdit } from '@/state/AppState';
@@ -12,17 +13,15 @@ import { EditableText, EditableSelect } from '@/components/ui/EditableText';
 import { MockBadge } from '@/components/provenance/MockBadge';
 import { SourceTag } from '@/components/provenance/SourceTag';
 import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
-import { RiderRef, linkifyRiderRefs } from '@/components/RiderRef';
-import { ConflictResolveModal } from '@/components/ConflictResolveModal';
-import { ExplainTag, ConflictExplain, ExcludedBrandExplain } from '@/components/ExplainTag';
+import { ExplainTag, ExcludedBrandExplain } from '@/components/ExplainTag';
 import { LastUpdated } from '@/components/LastUpdated';
-import { usePdfViewer } from '@/components/PdfViewer';
+import { usePdfViewer, PdfViewerInline } from '@/components/PdfViewer';
 import { FileDropZone } from '@/components/ingest/FileDropZone';
 import { UploadResultNote } from '@/components/ingest/UploadResultNote';
 import type { UploadNote } from '@/components/ingest/UploadResultNote';
 import { RIDER_PDF_PATH } from '@/lib/riderSections';
 import { matchFixture, fixturesOfKind, nonMatchNote } from '@/lib/fixtureMatcher';
-import { buildScratchRiderImport, buildScratchRiderPersonnel } from '@/data/riderFixture';
+import { buildScratchRiderImport, buildScratchRiderPersonnel, hydrateRiderPlotImages } from '@/data/riderFixture';
 import { parseRiderPdf } from '@/lib/pdfParser';
 import { cn } from '@/lib/cn';
 import type {
@@ -30,7 +29,6 @@ import type {
   RiderSection,
   RiderSectionType,
   RiderSectionStatus,
-  Conflict,
   InputChannel,
   MonitorMix,
   FOHOutput,
@@ -38,9 +36,9 @@ import type {
   UpdateStamp,
 } from '@/types';
 
-const VISUAL_SECTION_TYPES = new Set<RiderSectionType>(['stage_plot', 'lighting_plot', 'video']);
-
-// Friendly labels for the canonical section types (handoff §1).
+// Friendly English fallback labels per RiderSectionType — used only when a
+// section has no TOC-verbatim title (legacy data, derived "other", etc.).
+// New TOC-driven sections render `section.title` verbatim instead.
 const SECTION_LABELS: Record<RiderSectionType, string> = {
   cover_and_contacts: 'Cover & Contacts',
   production_control: 'Production Control',
@@ -62,84 +60,86 @@ const SECTION_LABELS: Record<RiderSectionType, string> = {
   dressing_rooms: 'Dressing Rooms',
   catering: 'Catering',
   settlement: 'Settlement',
-  other: 'Conflicts & Notes',
+  other: 'Other',
 };
+
+/** TOC-verbatim title when present (the rider's own language), else the fallback. */
+function sectionLabel(s: RiderSection): string {
+  return s.title?.trim() || SECTION_LABELS[s.type];
+}
+
+/** All plot images across every section — drives the "Plots" tab. */
+function collectPlots(imp: RiderImport): Array<{ sectionKey: string; section: RiderSection; plot: import('@/types').PlotImage }> {
+  const out: Array<{ sectionKey: string; section: RiderSection; plot: import('@/types').PlotImage }> = [];
+  imp.sections.forEach((s, i) => {
+    for (const plot of s.plots ?? []) out.push({ sectionKey: `${s.type}-${i}`, section: s, plot });
+  });
+  return out;
+}
 
 export function RiderIngest() {
   const { tour, isSectionApproved, getPendingEdit } = useApp();
   const { openPdf } = usePdfViewer();
   const imp = tour.riderImports[0];
-  const [activeSection, setActiveSection] = useState<string | null>(() => {
-    if (!imp) return null;
-    const inputListIdx = imp.sections.findIndex((s) => s.type === 'input_list');
-    if (inputListIdx >= 0) return `input_list-${inputListIdx}`;
-    return imp.sections[0] ? `${imp.sections[0].type}-0` : null;
-  });
-  const [view, setView] = useState<'sections' | 'visuals'>('sections');
-  const [sectionFilter, setSectionFilter] = useState<'all' | 'needs-review' | 'conflicts'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'needs-review' | 'approved' | 'pending'>('all');
-  const [confSort, setConfSort] = useState<'desc' | 'asc'>('desc');
 
-  if (!imp) {
+  // Active selection: either a section key (`type-index`) or the special "plots" sentinel.
+  // The trailing "other"-type conflicts pseudo-section is excluded — it lived
+  // here as a rail entry but felt overkill at the section-review altitude.
+  const [active, setActive] = useState<string>(() => {
+    if (!imp) return 'plots';
+    const first = imp.sections.find((s) => s.type !== 'other');
+    if (!first) return 'plots';
+    const idx = imp.sections.indexOf(first);
+    return `${first.type}-${idx}`;
+  });
+  const [isReuploading, setIsReuploading] = useState(false);
+
+  if (!imp || isReuploading) {
     return (
       <div>
         <PageHeader
           eyebrow="Import rider"
           title="Rider import"
-          description="Drop a rider PDF and the AI ingest extracts every section for review."
+          description="Drop a rider PDF — the parser reads the table of contents and produces one review surface per section."
+          actions={isReuploading && (
+            <Button variant="outline" onClick={() => setIsReuploading(false)}>
+              Cancel
+            </Button>
+          )}
         />
-        <ScratchRiderUpload />
+        <ScratchRiderUpload onDone={() => setIsReuploading(false)} />
       </div>
     );
   }
 
-  // Sections are keyed by `type-index` so we can disambiguate
-  // multiple sections with the same type if there ever are.
-  const sectionMap = new Map<string, RiderSection>();
-  imp.sections.forEach((s, i) => sectionMap.set(`${s.type}-${i}`, s));
-  const section = activeSection ? sectionMap.get(activeSection) ?? null : null;
-  const approvedCount = imp.sections.filter((s, i) => isSectionApproved(`${s.type}-${i}`)).length;
-  const visualSectionCount = imp.sections.filter((s) => VISUAL_SECTION_TYPES.has(s.type)).length;
-
-  // Pipeline step (sectionFilter) and status chips (statusFilter) are two
-  // dimensions; only one is active at a time — selecting one resets the other.
-  const selectPipelineFilter = (f: 'all' | 'needs-review' | 'conflicts') => {
-    setSectionFilter(f);
-    setStatusFilter('all');
-  };
-  const selectStatusFilter = (f: 'all' | 'needs-review' | 'approved' | 'pending') => {
-    setStatusFilter(f);
-    setSectionFilter('all');
-  };
-
-  const filteredSections = imp.sections
+  // The 14 TOC entries keyed by `type-index`. Sort by tocIndex when present so
+  // the rail reads §1 → §14 even if section order in the import is shuffled.
+  // Any legacy "other"-type pseudo-section (the old conflicts rail entry) is
+  // dropped — its rail surface was removed; conflict data still flows through
+  // the Tour Overview's ConflictFeed via AppState.
+  const sectionRows = imp.sections
     .map((s, i) => ({ s, i, key: `${s.type}-${i}` }))
-    .filter(({ s, key }) => {
-      if (sectionFilter === 'needs-review' && isSectionApproved(key)) return false;
-      if (sectionFilter === 'conflicts' && (s.conflicts?.length ?? 0) === 0) return false;
-      if (statusFilter === 'needs-review' && (isSectionApproved(key) || !!getPendingEdit(key))) return false;
-      if (statusFilter === 'approved' && !isSectionApproved(key)) return false;
-      if (statusFilter === 'pending' && !getPendingEdit(key)) return false;
-      return true;
+    .filter(({ s }) => s.type !== 'other')
+    .sort((a, b) => {
+      const ai = a.s.tocIndex ?? 99;
+      const bi = b.s.tocIndex ?? 99;
+      return ai - bi;
     });
-  const sortedFilteredSections = [...filteredSections].sort((a, b) => {
-    const ca = a.s.confidence ?? 0;
-    const cb = b.s.confidence ?? 0;
-    return confSort === 'desc' ? cb - ca : ca - cb;
-  });
+  const approvedCount = sectionRows.filter(({ key }) => isSectionApproved(key)).length;
+  const plots = collectPlots(imp);
+
+  const activeSection = active !== 'plots'
+    ? sectionRows.find((r) => r.key === active)?.s
+    : undefined;
 
   return (
     <div>
       <PageHeader
         eyebrow="Import rider"
-        title={
-          <>
-            Rider import
-          </>
-        }
-        description="Review each extracted section, correct anything the AI got wrong inline, then approve it. Conflicts surface for a human decision and are never auto-resolved."
+        title="Rider import"
+        description="Read each section in the rider against the parser's extraction and approve it. The PDF on the left is the source; the extracted text on the right is editable."
         actions={
-          <Button variant="primary" leading={<Icon.Plus size={14} />}>
+          <Button variant="primary" leading={<Icon.Plus size={14} />} onClick={() => setIsReuploading(true)}>
             Upload rider
           </Button>
         }
@@ -162,6 +162,9 @@ export function RiderIngest() {
               Source: {imp.sourceLanguage.toUpperCase()}
             </Chip>
             <Chip tone="rehearsal">Revision {imp.revision}</Chip>
+            <Chip tone="neutral" variant="outline">
+              {approvedCount}/{imp.sections.length} approved
+            </Chip>
             <MockBadge source="rider_import" className="ml-2" />
           </div>
         }
@@ -170,135 +173,67 @@ export function RiderIngest() {
       {/* Cover & revision banner */}
       <CoverBanner imp={imp} />
 
-      <PipelineStrip
-        sections={imp.sections}
-        approvedCount={approvedCount}
-        activeFilter={sectionFilter}
-        onFilter={selectPipelineFilter}
-      />
-
-      {/* View toggle */}
-      <div className="flex items-center gap-2 mt-5">
-        {(['sections', 'visuals'] as const).map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setView(v)}
-            className={cn(
-              'h-7 px-3 text-[11px] font-mono uppercase tracking-[0.10em] rounded-[3px] border transition-colors',
-              view === v
-                ? 'bg-[var(--color-ink)] text-[var(--color-paper)] border-[var(--color-ink)]'
-                : 'border-[var(--color-rule)] text-[var(--color-ink-3)] hover:border-[var(--color-ink-4)]',
-            )}
-          >
-            {v === 'sections' ? `Sections (${imp.sections.length})` : `Visuals (${visualSectionCount})`}
-          </button>
-        ))}
-      </div>
-
-      {view === 'visuals' ? (
-        <VisualsPanel imp={imp} sourceLang={imp.sourceLanguage} />
-      ) : (
-
-      <div className="grid lg:grid-cols-[260px_1fr] gap-5 mt-6">
-        {/* Sections list */}
+      <div className="grid lg:grid-cols-[240px_1fr] gap-5 mt-6">
+        {/* Left rail — TOC-ordered section list + Plots entry */}
         <Card padded={false} className="overflow-hidden">
           <div data-tour="rider-sections" className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
-            <div className="eyebrow">Detected sections</div>
+            <div className="eyebrow">Sections</div>
             <div className="text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
-              {imp.sections.length} found · {approvedCount} approved
-            </div>
-            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-              {(['all', 'needs-review', 'approved', 'pending'] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => selectStatusFilter(f)}
-                  className={cn(
-                    'h-6 px-2 text-[10.5px] font-mono uppercase tracking-[0.08em] rounded-[2px] border transition-colors',
-                    statusFilter === f
-                      ? 'bg-[var(--color-ink)] text-[var(--color-paper)] border-[var(--color-ink)]'
-                      : 'border-[var(--color-rule)] text-[var(--color-ink-3)] hover:border-[var(--color-ink-4)]',
-                  )}
-                >
-                  {f === 'all' ? 'All' : f === 'needs-review' ? 'Needs review' : f === 'approved' ? 'Approved' : 'Pending'}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2">
-              <button
-                onClick={() => setConfSort((cs) => (cs === 'desc' ? 'asc' : 'desc'))}
-                className="inline-flex items-center gap-1 text-[10.5px] font-mono uppercase tracking-[0.08em] text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
-              >
-                Conf {confSort === 'asc' ? '↑' : '↓'}
-              </button>
+              {imp.sections.filter((s) => s.tocIndex != null).length || imp.sections.length} from the table of contents
             </div>
           </div>
-          <ul className="divide-y divide-[var(--color-rule-soft)] max-h-[600px] overflow-y-auto">
-            {sortedFilteredSections.map(({ s, i, key }) => {
-              const active = key === activeSection;
-              const hasConflicts = (s.conflicts?.length ?? 0) > 0;
-              const hasPending = !!getPendingEdit(key);
-              return (
-                <li key={key}>
-                  <button
-                    onClick={() => setActiveSection(key)}
+          <ul className="divide-y divide-[var(--color-rule-soft)] max-h-[680px] overflow-y-auto">
+            {sectionRows.map(({ s, key }) => (
+              <SectionRailItem
+                key={key}
+                section={s}
+                active={key === active}
+                onSelect={() => setActive(key)}
+                pendingEdit={!!getPendingEdit(key)}
+                approved={isSectionApproved(key)}
+              />
+            ))}
+            {plots.length > 0 && (
+              <li>
+                <button
+                  onClick={() => setActive('plots')}
+                  className={cn(
+                    'w-full text-left px-4 py-2.5 hover:bg-[var(--color-paper)]/60 transition-colors',
+                    active === 'plots' && 'bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]',
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[12.5px] font-semibold inline-flex items-center gap-1.5">
+                      <Icon.Document size={11} /> Plots
+                    </span>
+                  </div>
+                  <div
                     className={cn(
-                      'w-full text-left px-4 py-2.5 hover:bg-[var(--color-paper)]/60 transition-colors',
-                      active && 'bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]',
+                      'mt-1 text-[10.5px] font-mono tabular',
+                      active === 'plots' ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-ink-4)]',
                     )}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[12.5px] font-semibold">{SECTION_LABELS[s.type]}</span>
-                      <div className="flex items-center gap-1.5">
-                        {hasPending && (
-                          <span
-                            className="w-1.5 h-1.5 rounded-full"
-                            style={{ background: 'var(--color-accent)' }}
-                            title="Proposed edit pending approval"
-                          />
-                        )}
-                        {hasConflicts && (
-                          <span
-                            className="w-1.5 h-1.5 rounded-full"
-                            style={{ background: 'var(--color-accent)' }}
-                            title="Conflicts detected"
-                          />
-                        )}
-                        <SectionStatusDot status={isSectionApproved(key) ? 'approved' : s.status} />
-                      </div>
-                    </div>
-                    <div
-                      className={cn(
-                        'flex items-center gap-2 mt-1 text-[10.5px] font-mono tabular',
-                        active ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-ink-4)]',
-                      )}
-                    >
-                      <span>{s.pages.length > 0 ? `pp. ${s.pages.join(', ')}` : 'derived'}</span>
-                      {s.confidence != null && <span>· conf {(s.confidence * 100).toFixed(0)}%</span>}
-                      {s.type === 'input_list' && s.inputList?.length && (
-                        <span>· {s.inputList.length} ch{s.monitorMix?.length ? ` · ${s.monitorMix.length} mx` : ''}{s.fohOutputs?.length ? ` · ${s.fohOutputs.length} foh` : ''}</span>
-                      )}
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
-            {sortedFilteredSections.length === 0 && (
-              <li className="px-4 py-6 text-[11.5px] text-[var(--color-ink-3)] text-center">
-                No sections match this filter.
+                    {plots.length} image page{plots.length === 1 ? '' : 's'}
+                  </div>
+                </button>
               </li>
             )}
           </ul>
         </Card>
 
-        {/* Section detail. min-w-0 lets long content (JSON, free text, wide
-            tables) live inside the 1fr column without pushing the grid
-            past the page max-width. Without it, CSS Grid auto-min-width
-            lets children stretch the column. */}
-        <div className="space-y-5 min-w-0">{section && activeSection ? <SectionView section={section} sectionKey={activeSection} sourceLang={imp.sourceLanguage} /> : null}</div>
+        {/* Right side — Plots grid OR section two-pane review */}
+        <div className="min-w-0">
+          {active === 'plots' ? (
+            <PlotsPanel imp={imp} onSelectSection={(key) => setActive(key)} />
+          ) : activeSection && active !== 'plots' ? (
+            <SectionReviewSplit
+              section={activeSection}
+              sectionKey={active}
+              sourceLang={imp.sourceLanguage}
+            />
+          ) : null}
+        </div>
       </div>
-
-      )}
 
       <DataSourcesPanel
         sourceKeys={[
@@ -312,9 +247,257 @@ export function RiderIngest() {
           'rider_catering',
           'rider_conflicts',
         ]}
-        intro="Every section on this page is REAL data extracted from the Elsa y Elmar rider PDF. The pipeline behavior — section classification, per-section extraction, conflict detection — is documented in handoff-post-pdf-interpret.md and implemented per the schemas there."
+        intro="Every section on this page is REAL data extracted from the Elsa y Elmar rider PDF. The parser reads the rider's own table of contents to produce one review surface per section, then applies typed extractors where it can (input list, rooming, catering)."
       />
     </div>
+  );
+}
+
+function SectionRailItem({
+  section,
+  active,
+  onSelect,
+  pendingEdit,
+  approved,
+}: {
+  section: RiderSection;
+  active: boolean;
+  onSelect: () => void;
+  pendingEdit: boolean;
+  approved: boolean;
+}) {
+  const label = sectionLabel(section);
+  const hasConflicts = (section.conflicts?.length ?? 0) > 0;
+  const num = section.tocIndex;
+  return (
+    <li className={cn(hasConflicts && !active && 'border-l-2 border-[var(--color-accent)]')}>
+      <button
+        onClick={onSelect}
+        className={cn(
+          'w-full text-left px-4 py-2.5 hover:bg-[var(--color-paper)]/60 transition-colors',
+          active && 'bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]',
+          hasConflicts && active && 'bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]',
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[12.5px] font-semibold inline-flex items-baseline gap-1.5 min-w-0">
+            {hasConflicts && (
+              <Icon.Alert size={10} className={cn('shrink-0', active ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-accent)]')} />
+            )}
+            {num != null && (
+              <span
+                className={cn(
+                  'font-mono text-[10px] tabular shrink-0',
+                  active ? 'text-[var(--color-paper)] opacity-70' : 'text-[var(--color-ink-4)]',
+                )}
+              >
+                §{num}
+              </span>
+            )}
+            <span className="truncate">{label}</span>
+          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {pendingEdit && (
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: 'var(--color-accent)' }}
+                title="Proposed edit pending approval"
+              />
+            )}
+            {hasConflicts && (
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: 'var(--color-accent)' }}
+                title="Conflicts detected"
+              />
+            )}
+            <SectionStatusDot status={approved ? 'approved' : section.status} />
+          </div>
+        </div>
+        <div
+          className={cn(
+            'flex items-center gap-2 mt-1 text-[10.5px] font-mono tabular',
+            active ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-ink-4)]',
+          )}
+        >
+          <span>{section.pages.length > 0 ? `pp. ${section.pages[0]}${section.endPage && section.endPage !== section.pages[0] ? `–${section.endPage}` : ''}` : 'derived'}</span>
+          {section.confidence != null && <span>· conf {(section.confidence * 100).toFixed(0)}%</span>}
+        </div>
+      </button>
+    </li>
+  );
+}
+
+function SectionReviewSplit({
+  section,
+  sectionKey,
+  sourceLang,
+}: {
+  section: RiderSection;
+  sectionKey: string;
+  sourceLang: string;
+}) {
+  // Plot sections (stage plot / lightplot) are CAD drawings, not text. Skip
+  // the source PDF iframe + the text-extraction surface entirely and render
+  // the rendered plot images as a single-pane review.
+  const isPlotSection =
+    section.type === 'stage_plot' ||
+    section.type === 'lighting_plot' ||
+    (section.plots?.length ?? 0) > 0;
+  if (isPlotSection) {
+    return (
+      <div className="min-w-0">
+        <PlotSectionReview section={section} sectionKey={sectionKey} />
+      </div>
+    );
+  }
+
+  // The conflicts pseudo-section has no source pages — render extracted only.
+  const showPdf = section.pages.length > 0;
+  return (
+    <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5 min-w-0">
+      {showPdf && (
+        <div className="space-y-2 min-w-0">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <div className="eyebrow">
+              Source · pages {section.pages[0]}{section.endPage && section.endPage !== section.pages[0] ? `–${section.endPage}` : ''}
+            </div>
+          </div>
+          <PdfViewerInline
+            url={RIDER_PDF_PATH}
+            page={section.pages[0]}
+            title={sectionLabel(section)}
+            height="50vh"
+          />
+        </div>
+      )}
+      <div className="space-y-5 min-w-0">
+        <SectionView section={section} sectionKey={sectionKey} sourceLang={sourceLang} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Plot-section review surface — used when the selected section is a stage
+ * plot or lightplot. No text extraction, no editable fields: the reviewer is
+ * confirming the right images came across, then approving them.
+ */
+function PlotSectionReview({
+  section,
+  sectionKey,
+}: {
+  section: RiderSection;
+  sectionKey: string;
+}) {
+  const {
+    user,
+    isSectionApproved,
+    getSectionApproval,
+    approveSection,
+    reopenSection,
+  } = useApp();
+  const { openPdf } = usePdfViewer();
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
+  const approved = isSectionApproved(sectionKey);
+  const approval = getSectionApproval(sectionKey);
+  const effStatus: RiderSectionStatus = approved ? 'approved' : section.status;
+  const label = sectionLabel(section);
+  const plots = section.plots ?? [];
+
+  return (
+    <SectionCard
+      title={
+        <span className="inline-flex items-baseline gap-2">
+          {section.tocIndex != null && (
+            <span className="font-mono text-[12px] text-[var(--color-ink-4)] tabular">§{section.tocIndex}</span>
+          )}
+          <span>{label}</span>
+        </span>
+      }
+      eyebrow={
+        <span className="inline-flex items-baseline">
+          <SectionPageLinks pages={section.pages} sectionLabel={label} />
+          Plot images
+        </span>
+      }
+      action={
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <SectionStatusChip status={effStatus} />
+          {managerView && (approved ? (
+            <Button size="sm" variant="outline" onClick={() => reopenSection(sectionKey)}>
+              Reopen
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="primary"
+              leading={<Icon.Check size={12} />}
+              onClick={() => approveSection(sectionKey)}
+            >
+              Approve images
+            </Button>
+          ))}
+        </div>
+      }
+    >
+      {approved && approval ? (
+        <div className="mb-4 inline-flex items-center gap-2 rounded-[3px] border border-[var(--color-moss)]/35 bg-[var(--color-moss)]/8 px-2.5 py-1.5">
+          <Icon.Check size={12} className="text-[var(--color-moss)] shrink-0" />
+          <LastUpdated label="Approved" stamp={approval} />
+        </div>
+      ) : (
+        <p className="mb-4 text-[11.5px] text-[var(--color-ink-3)] leading-relaxed">
+          {managerView
+            ? 'Confirm these are the right plot images for this section, then approve.'
+            : 'Plot images extracted from the rider — read-only.'}
+        </p>
+      )}
+      {plots.length === 0 ? (
+        <p className="text-[12.5px] text-[var(--color-ink-3)] italic">No plot images detected for this section.</p>
+      ) : (
+        <div className="space-y-4">
+          {plots.map((plot, i) => (
+            <figure
+              key={`${plot.page}-${i}`}
+              className="rounded-[4px] border border-[var(--color-rule-soft)] overflow-hidden bg-[var(--color-paper-2)]"
+            >
+              <button
+                type="button"
+                onClick={() => openPdf({ url: RIDER_PDF_PATH, page: plot.page, title: plot.caption })}
+                className="block w-full text-left"
+                title={`Open page ${plot.page} in the rider PDF`}
+              >
+                {plot.dataUrl ? (
+                  <img
+                    src={plot.dataUrl}
+                    alt={plot.caption}
+                    className="block w-full h-auto"
+                  />
+                ) : (
+                  <div className="py-16 flex flex-col items-center justify-center gap-2 text-[var(--color-ink-3)]">
+                    <Icon.Document size={22} />
+                    <span className="text-[12px] font-semibold">Rendering page {plot.page}…</span>
+                  </div>
+                )}
+              </button>
+              <figcaption className="px-3 py-2 flex items-center justify-between gap-2 text-[11px] border-t border-[var(--color-rule-soft)] bg-[var(--color-card)]">
+                <span className="font-mono uppercase tracking-[0.10em] text-[var(--color-ink-3)]">
+                  {plot.caption} · page {plot.page}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => openPdf({ url: RIDER_PDF_PATH, page: plot.page, title: plot.caption })}
+                  className="inline-flex items-center gap-1 font-semibold text-[var(--color-ocean)] hover:underline"
+                >
+                  Open in viewer <Icon.Arrow size={11} />
+                </button>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
@@ -429,90 +612,6 @@ function Fact({
   );
 }
 
-function PipelineStrip({
-  sections,
-  approvedCount,
-  activeFilter,
-  onFilter,
-}: {
-  sections: RiderSection[];
-  approvedCount: number;
-  activeFilter: 'all' | 'needs-review' | 'conflicts';
-  onFilter: (f: 'all' | 'needs-review' | 'conflicts') => void;
-}) {
-  const total = sections.length;
-  const processed = sections.filter((s) => s.status !== 'pending').length;
-  const avgConf = sections.reduce((a, s) => a + (s.confidence ?? 0), 0) / Math.max(1, sections.length);
-  const conflictCount = sections.reduce((a, s) => a + (s.conflicts?.length ?? 0), 0);
-
-  return (
-    <Card padded={false}>
-      <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-[var(--color-rule-soft)]">
-        <PipelineStep num="01" label="Classify" value={`${total} sections detected`} hint="Single API call. Returns sections present, page ranges, language, PM contact." status="done" filterTarget="all" activeFilter={activeFilter} onFilter={onFilter} />
-        <PipelineStep num="02" label="Extract" value={`${processed}/${total} extracted`} hint="One structured-output call per section. Schemas per type." status={processed < total ? 'doing' : 'done'} filterTarget="all" activeFilter={activeFilter} onFilter={onFilter} />
-        <PipelineStep num="03" label="Review" value={`${approvedCount}/${total} approved`} hint="Correct any wrong field inline, then approve the section." status={approvedCount < total ? 'doing' : 'done'} filterTarget="needs-review" activeFilter={activeFilter} onFilter={onFilter} />
-        <PipelineStep num="04" label="Conflicts" value={`${conflictCount} flagged · avg conf ${(avgConf * 100).toFixed(0)}%`} hint="Flagged when a new version or supplemental document disagrees with what's on file. Human always decides." status={conflictCount > 0 ? 'doing' : 'done'} filterTarget="conflicts" activeFilter={activeFilter} onFilter={onFilter} />
-      </div>
-    </Card>
-  );
-}
-
-function PipelineStep({
-  num,
-  label,
-  value,
-  hint,
-  status,
-  filterTarget,
-  activeFilter,
-  onFilter,
-}: {
-  num: string;
-  label: string;
-  value: string;
-  hint: string;
-  status: 'done' | 'doing' | 'pending';
-  filterTarget: 'all' | 'needs-review' | 'conflicts';
-  activeFilter: 'all' | 'needs-review' | 'conflicts';
-  onFilter: (f: 'all' | 'needs-review' | 'conflicts') => void;
-}) {
-  const isActive = activeFilter === filterTarget && filterTarget !== 'all';
-  return (
-    <button
-      type="button"
-      onClick={() => onFilter(filterTarget === activeFilter ? 'all' : filterTarget)}
-      className={cn(
-        'px-4 py-4 text-left w-full transition-colors',
-        isActive
-          ? 'bg-[var(--color-ink)] text-[var(--color-paper)]'
-          : 'hover:bg-[var(--color-paper-2)]/60',
-      )}
-    >
-      <div className="flex items-baseline gap-2 mb-1">
-        <span
-          className="font-mono text-[11px] font-bold tracking-[0.10em]"
-          style={{
-            color: isActive
-              ? 'var(--color-paper)'
-              : status === 'done' ? 'var(--color-day-promo)'
-              : status === 'doing' ? 'var(--color-day-rehearsal)'
-              : 'var(--color-ink-4)',
-          }}
-        >
-          {num}
-        </span>
-        <span className={cn('text-[11px] font-mono font-semibold uppercase tracking-[0.10em]', isActive ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-ink-3)]')}>
-          {label}
-        </span>
-        {!isActive && status === 'doing' && <Chip tone="rehearsal" size="sm">Active</Chip>}
-        {!isActive && status === 'done' && <Chip tone="success" size="sm">Done</Chip>}
-        {isActive && <span className="font-mono text-[10px] text-[var(--color-paper)] opacity-60 ml-auto">filtered ×</span>}
-      </div>
-      <div className={cn('text-[15px] font-semibold', isActive ? 'text-[var(--color-paper)]' : 'text-[var(--color-ink)]')}>{value}</div>
-      <div className={cn('text-[11.5px] mt-0.5 leading-relaxed', isActive ? 'text-[var(--color-paper)] opacity-70' : 'text-[var(--color-ink-3)]')}>{hint}</div>
-    </button>
-  );
-}
 
 function SectionStatusDot({ status }: { status: RiderSectionStatus }) {
   const color = {
@@ -568,76 +667,135 @@ function PendingEditBanner({
   );
 }
 
-function VisualsPanel({ imp, sourceLang }: { imp: RiderImport; sourceLang: string }) {
+export function PlotCard({
+  sectionKey,
+  section,
+  plot,
+  onSelectSection,
+}: {
+  sectionKey: string;
+  section: RiderSection;
+  plot: import('@/types').PlotImage;
+  // Omit on /plots — there's no embedded section navigator at that altitude.
+  onSelectSection?: (key: string) => void;
+}) {
   const { openPdf } = usePdfViewer();
-  const { isSectionApproved, approveSection, reopenSection, user } = useApp();
-  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
+  return (
+    <Card
+      padded={false}
+      className="overflow-hidden group ring-1 ring-transparent hover:ring-[var(--color-ocean)]/40 transition-shadow"
+    >
+      <button
+        type="button"
+        onClick={() => openPdf({ url: RIDER_PDF_PATH, page: plot.page, title: plot.caption })}
+        className="block w-full bg-[var(--color-paper-2)] aspect-[4/3] overflow-hidden"
+        title={`Open page ${plot.page} in the rider PDF`}
+      >
+        {plot.dataUrl ? (
+          <img
+            src={plot.dataUrl}
+            alt={plot.caption}
+            className="block w-full h-full object-contain"
+            style={{ maxHeight: '100%' }}
+          />
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center gap-2 text-[var(--color-ink-3)]">
+            <Icon.Image size={22} />
+            <span className="text-[11px] font-semibold">Rendering page {plot.page}…</span>
+          </div>
+        )}
+      </button>
+      <div className="px-3 py-2 border-t border-[var(--color-rule-soft)]">
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="min-w-0">
+            <div className="eyebrow truncate">
+              {section.tocIndex != null ? `§${section.tocIndex} · ` : ''}
+              {sectionLabel(section)}
+            </div>
+            <div className="font-semibold text-[12px] leading-tight mt-0.5 truncate" title={plot.caption}>
+              {plot.caption}
+            </div>
+          </div>
+          <span className="shrink-0 font-mono tabular text-[10px] text-[var(--color-ink-4)]">
+            p.{plot.page}
+          </span>
+        </div>
+        {onSelectSection && (
+          <div className="mt-1.5 flex items-center justify-between gap-2 text-[10.5px]">
+            <button
+              type="button"
+              onClick={() => onSelectSection(sectionKey)}
+              className="font-mono uppercase tracking-[0.10em] text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+            >
+              §{section.tocIndex ?? '?'} review
+            </button>
+            <span className="inline-flex items-center gap-1 font-semibold text-[var(--color-ocean)] opacity-0 group-hover:opacity-100 transition-opacity">
+              Click to enlarge <Icon.Arrow size={10} />
+            </span>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
 
-  const visuals = imp.sections
-    .map((s, i) => ({ s, i, key: `${s.type}-${i}` }))
-    .filter(({ s }) => VISUAL_SECTION_TYPES.has(s.type));
+// Re-export for the top-level /plots surface so it can reuse the same shape.
+export function collectAllPlots(imp: RiderImport) {
+  return collectPlots(imp);
+}
 
-  if (visuals.length === 0) {
+function PlotsPanel({
+  imp,
+  onSelectSection,
+}: {
+  imp: RiderImport;
+  onSelectSection: (sectionKey: string) => void;
+}) {
+  const plots = collectPlots(imp);
+
+  if (plots.length === 0) {
     return (
-      <div className="mt-6 rounded-[4px] border border-dashed border-[var(--color-rule)] py-16 text-center">
-        <p className="text-[13px] text-[var(--color-ink-3)]">No stage plot or visual sections detected in this rider.</p>
-        <p className="mt-1 text-[11.5px] text-[var(--color-ink-4)]">Stage plot and lighting plot pages will appear here once the rider is imported.</p>
+      <div className="rounded-[4px] border border-dashed border-[var(--color-rule)] py-16 text-center">
+        <p className="text-[13px] text-[var(--color-ink-3)]">No stage plot or lightplot pages detected.</p>
+        <p className="mt-1 text-[11.5px] text-[var(--color-ink-4)]">Plot images extracted from §7 Stage Plot and §8 Lightplot will appear here once the rider is imported.</p>
       </div>
     );
   }
 
   return (
-    <div className="mt-6 grid md:grid-cols-2 gap-5">
-      {visuals.map(({ s, key }) => {
-        const approved = isSectionApproved(key);
-        const firstPage = s.pages[0];
-        const src = firstPage ? `${RIDER_PDF_PATH}#page=${firstPage}` : RIDER_PDF_PATH;
-
-        return (
-          <Card key={key} padded={false} className="overflow-hidden">
-            <div className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <div className="min-w-0">
-                  <div className="eyebrow mb-0.5">
-                    <SectionPageLinks pages={s.pages} sectionLabel={SECTION_LABELS[s.type]} />
-                    {(s.language ?? sourceLang).toUpperCase()}
-                  </div>
-                  <div className="font-display font-bold text-[15px] leading-tight">{SECTION_LABELS[s.type]}</div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <SectionStatusChip status={approved ? 'approved' : s.status} />
-                  {managerView && (
-                    approved
-                      ? <Button size="sm" variant="outline" onClick={() => reopenSection(key)}>Reopen</Button>
-                      : <Button size="sm" variant="primary" leading={<Icon.Check size={12} />} onClick={() => approveSection(key)}>Approve</Button>
-                  )}
-                </div>
-              </div>
-              {(s.freeTextEn ?? s.freeText) && (
-                <p className="mt-2 text-[12px] text-[var(--color-ink-3)] leading-relaxed line-clamp-3">
-                  {s.freeTextEn ?? s.freeText}
-                </p>
-              )}
-            </div>
-            <div className="relative bg-[var(--color-paper-2)]">
-              <iframe
-                key={src}
-                src={src}
-                title={SECTION_LABELS[s.type]}
-                className="w-full border-0 block"
-                style={{ height: '340px' }}
-              />
-              <button
-                type="button"
-                onClick={() => openPdf({ url: RIDER_PDF_PATH, page: firstPage, title: SECTION_LABELS[s.type] })}
-                className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-semibold rounded-[3px] border bg-[var(--color-card)] border-[var(--color-rule)] hover:border-[var(--color-ink-4)] text-[var(--color-ink)] shadow-sm"
-              >
-                Full view <Icon.Arrow size={11} />
-              </button>
-            </div>
-          </Card>
-        );
-      })}
+    <div className="space-y-4">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h2 className="font-display text-[18px] font-bold leading-tight inline-flex items-baseline gap-1">
+            Plots
+            <SourceTag source="rider_plots" field="Stage plot & lightplot" />
+          </h2>
+          <p className="text-[12px] text-[var(--color-ink-3)] mt-0.5 leading-relaxed">
+            Image-only pages — stage plot and lightplot drawings — pulled out of the rider so you don't have to scroll past every CAD sheet to find them. Click any thumbnail to open the source page in the viewer.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Chip tone="neutral" variant="outline">{plots.length} image page{plots.length === 1 ? '' : 's'}</Chip>
+          <Link
+            to="/plots"
+            className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[var(--color-ocean)] hover:underline"
+            title="Open the full Plots surface"
+          >
+            Open Plots <Icon.Arrow size={11} />
+          </Link>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        {plots.map(({ sectionKey, section, plot }, i) => (
+          <PlotCard
+            key={`${sectionKey}-${plot.page}-${i}`}
+            sectionKey={sectionKey}
+            section={section}
+            plot={plot}
+            onSelectSection={onSelectSection}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -715,13 +873,21 @@ function SectionView({
     }
   };
 
+  const label = sectionLabel(section);
   return (
     <>
       <SectionCard
-        title={SECTION_LABELS[section.type]}
+        title={
+          <span className="inline-flex items-baseline gap-2">
+            {section.tocIndex != null && (
+              <span className="font-mono text-[12px] text-[var(--color-ink-4)] tabular">§{section.tocIndex}</span>
+            )}
+            <span>{label}</span>
+          </span>
+        }
         eyebrow={
           <span className="inline-flex items-baseline">
-            <SectionPageLinks pages={section.pages} sectionLabel={SECTION_LABELS[section.type]} />
+            <SectionPageLinks pages={section.pages} sectionLabel={label} />
             {(section.language ?? sourceLang).toUpperCase()}
           </span>
         }
@@ -810,15 +976,12 @@ function SectionView({
           <LodgingReview lodging={section.lodging} />
         ) : section.catering ? (
           <CateringReview catering={section.catering} />
-        ) : section.conflicts ? (
-          <ConflictsReview conflicts={section.conflicts} />
         ) : (
           <FreeTextReview
             es={freeText}
-            en={freeTextEn}
+            pageTexts={section.pageTexts}
             disabled={approved}
             onChangeEs={(v) => editOrPropose({ freeText: v })}
-            onChangeEn={(v) => editOrPropose({ freeTextEn: v })}
           />
         )}
       </SectionCard>
@@ -1582,180 +1745,34 @@ function CateringReview({ catering }: { catering: NonNullable<RiderSection['cate
   );
 }
 
-function ConflictsReview({ conflicts }: { conflicts: Conflict[] }) {
-  const { resolvedConflicts, getPendingConflictResolution, user } = useApp();
-  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
-  const [active, setActive] = useState<Conflict | null>(null);
-
-  if (conflicts.length === 0) {
-    return <p className="text-[12.5px] text-[var(--color-ink-3)]">No conflicts detected.</p>;
-  }
-  const unresolvedCount = conflicts.filter((c) => !resolvedConflicts.has(c.id)).length;
-  return (
-    <div className="space-y-3">
-      <p className="text-[12.5px] text-[var(--color-ink-3)] leading-relaxed">
-        Cross-section comparison detected {conflicts.length} conflict{conflicts.length === 1 ? '' : 's'} ·{' '}
-        <span className="text-[var(--color-ink)] font-semibold">{unresolvedCount} unresolved</span>.
-        Never auto-resolved — humans always decide. Click <strong>Resolve</strong> on a row to record the
-        correct value.
-      </p>
-      {conflicts.map((c) => {
-        const res = resolvedConflicts.get(c.id);
-        const pending = getPendingConflictResolution(c.id);
-        return (
-          <div
-            key={c.id}
-            className={cn(
-              'border-l-4 px-4 py-3 rounded-[3px]',
-              res
-                ? 'bg-[var(--color-paper-2)]/15 opacity-75'
-                : 'bg-[var(--color-paper-2)]/30',
-            )}
-            style={{
-              borderLeftColor: res
-                ? 'var(--color-moss)'
-                : c.severity === 'high'
-                ? 'var(--color-accent)'
-                : c.severity === 'medium'
-                ? 'var(--color-day-rehearsal)'
-                : 'var(--color-ink-4)',
-            }}
-          >
-            <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
-              <div className="flex items-center gap-2 flex-wrap">
-                {res ? (
-                  <Chip tone="success" size="sm">
-                    <Icon.Check size={9} /> Resolved
-                  </Chip>
-                ) : pending ? (
-                  <Chip tone="rehearsal" size="sm" variant="outline">
-                    Pending
-                  </Chip>
-                ) : (
-                  <Chip
-                    tone={c.severity === 'high' ? 'critical' : c.severity === 'medium' ? 'rehearsal' : 'neutral'}
-                    size="sm"
-                  >
-                    {c.severity}
-                  </Chip>
-                )}
-                <Chip tone="neutral" size="sm" variant="outline">
-                  {c.type.replace('_', ' ')}
-                </Chip>
-                <span className="inline-flex items-baseline gap-1 text-[12px] font-semibold">
-                  {c.sectionsInvolved.map((s, i) => (
-                    <span key={s} className="inline-flex items-baseline gap-1">
-                      {i > 0 && <span className="text-[var(--color-ink-4)]">↔</span>}
-                      <RiderRef section={s} />
-                    </span>
-                  ))}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActive(c)}
-                className="inline-flex items-center gap-1 h-7 px-2.5 text-[11.5px] font-semibold rounded-[3px] border border-[var(--color-rule)] bg-[var(--color-card)] hover:border-[var(--color-ink-4)] text-[var(--color-ink)] shrink-0"
-              >
-                {res ? 'View resolution' : pending ? 'View' : managerView ? 'Resolve' : 'Propose'} <Icon.Arrow size={11} />
-              </button>
-            </div>
-            <div className={cn('text-[13px] font-semibold text-[var(--color-ink)]', res && 'line-through')}>
-              {linkifyRiderRefs(c.description)}
-              <ConflictExplain conflict={c} />
-            </div>
-            <ul className="mt-2 space-y-1">
-              {c.values.map((v, i) => (
-                <li key={i} className="text-[12px] flex gap-2">
-                  <span className="font-mono text-[var(--color-ink-3)] shrink-0">{linkifyRiderRefs(v.section)}:</span>
-                  <span className="text-[var(--color-ink-2)]">{v.value}</span>
-                </li>
-              ))}
-            </ul>
-            {res ? (
-              <div className="mt-2 pt-2 border-t border-[var(--color-rule-soft)] text-[12px]">
-                {res.proposedAt && (
-                  <div className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-ink-3)] mb-0.5">
-                    Proposed by {res.proposedAt.by} · {new Date(res.proposedAt.at).toLocaleString()}
-                  </div>
-                )}
-                <span className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-moss)] mr-1.5">
-                  ✓ Resolved
-                </span>
-                <span className="font-semibold text-[var(--color-ink)]">{res.chosenValue}</span>
-                <span className="text-[var(--color-ink-3)] ml-1.5 text-[11px]">
-                  · {res.resolvedBy} · {new Date(res.resolvedAt).toLocaleString()}
-                </span>
-                {res.note && (
-                  <div className="text-[11.5px] text-[var(--color-ink-3)] italic mt-0.5">"{res.note}"</div>
-                )}
-              </div>
-            ) : pending ? (
-              <div className="mt-2 pt-2 border-t border-[var(--color-rule-soft)] text-[12px]">
-                <span className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-accent)] mr-1.5">
-                  ⏳ Pending
-                </span>
-                <span className="font-semibold text-[var(--color-ink)]">{pending.chosenValue}</span>
-                <span className="text-[var(--color-ink-3)] ml-1.5 text-[11px]">
-                  · proposed by {pending.proposedAt.by} · {new Date(pending.proposedAt.at).toLocaleString()}
-                </span>
-              </div>
-            ) : (
-              c.suggestedResolution && (
-                <div className="mt-2 pt-2 border-t border-[var(--color-rule-soft)] text-[12px] text-[var(--color-ink-2)]">
-                  <span className="eyebrow mr-1.5">Suggested</span>
-                  {linkifyRiderRefs(c.suggestedResolution)}
-                </div>
-              )
-            )}
-          </div>
-        );
-      })}
-      <ConflictResolveModal conflict={active} onClose={() => setActive(null)} />
-    </div>
-  );
-}
-
 function FreeTextReview({
   es,
-  en,
+  pageTexts,
   onChangeEs,
-  onChangeEn,
   disabled,
 }: {
   es?: string;
-  en?: string;
+  pageTexts?: { page: number; text: string }[];
   onChangeEs: (v: string) => void;
-  onChangeEn: (v: string) => void;
   disabled: boolean;
 }) {
   const taClass = cn(
     'w-full text-[13px] leading-[1.55] bg-transparent border-l-2 border-[var(--color-rule)] pl-3 py-1 rounded-r-[2px] outline-none resize-y',
     !disabled && 'hover:bg-[var(--color-paper-2)]/40 focus:bg-[var(--color-card)] focus:border-[var(--color-ocean)]',
   );
+
+  const multiPage = (pageTexts?.length ?? 0) > 1;
   return (
-    <div className="grid md:grid-cols-2 gap-4">
-      <div>
-        <div className="eyebrow mb-1.5">Source · ES</div>
-        <textarea
-          value={es ?? ''}
-          disabled={disabled}
-          rows={5}
-          placeholder="Input Here"
-          onChange={(e) => onChangeEs(e.target.value)}
-          className={cn(taClass, 'text-[var(--color-ink-2)]')}
-        />
-      </div>
-      <div>
-        <div className="eyebrow mb-1.5">Translation · EN</div>
-        <textarea
-          value={en ?? ''}
-          disabled={disabled}
-          rows={5}
-          placeholder="Input Here"
-          onChange={(e) => onChangeEn(e.target.value)}
-          className={cn(taClass, 'text-[var(--color-ink-2)] italic')}
-        />
-      </div>
+    <div>
+      <div className="eyebrow mb-1.5">Extracted text{multiPage && ' (joined)'}</div>
+      <textarea
+        value={es ?? ''}
+        disabled={disabled}
+        rows={multiPage ? 12 : 6}
+        placeholder="Input Here"
+        onChange={(e) => onChangeEs(e.target.value)}
+        className={cn(taClass, 'text-[var(--color-ink-2)]')}
+      />
     </div>
   );
 }
@@ -1782,8 +1799,8 @@ function KV({ k, v }: { k: string; v: string }) {
   );
 }
 
-// Scratch-mode upload zone, shown when no rider has been imported yet.
-function ScratchRiderUpload() {
+// Scratch-mode upload zone, shown when no rider has been imported yet (or on re-upload).
+function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
   const { addRiderImportToScratch } = useApp();
   const [note, setNote] = useState<UploadNote | null>(null);
   const [isParsing, setIsParsing] = useState(false);
@@ -1797,11 +1814,14 @@ function ScratchRiderUpload() {
     try {
       const parsed = await parseRiderPdf(file);
       addRiderImportToScratch(parsed, buildScratchRiderPersonnel());
+      onDone?.();
     } catch {
       // Parsing failed — fall back to fixture if this looks like the right file.
       const fixture = matchFixture(file.name);
       if (fixture?.kind === 'rider') {
-        addRiderImportToScratch(buildScratchRiderImport(), buildScratchRiderPersonnel());
+        const hydrated = await hydrateRiderPlotImages(buildScratchRiderImport());
+        addRiderImportToScratch(hydrated, buildScratchRiderPersonnel());
+        onDone?.();
       } else {
         setNote(nonMatchNote(file, fixture, 'a rider PDF', riderFixture.filename));
       }

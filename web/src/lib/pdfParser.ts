@@ -14,16 +14,18 @@ import type {
   RiderImport, FlightImport, ParsedFlight, TourPerson, Hotel, Task,
   InputChannel, MonitorMix, FOHOutput, RiderSection, RiderSectionType,
   Conflict, LodgingSpec, BacklineSpec, CateringSpec, CateringMenu, CateringItem,
-  ExtractionFlag, StandType,
+  ExtractionFlag, StandType, PlotImage,
 } from '@/types';
 import { vis } from '@/lib/visibility';
 import {
-  type PItem, type PPage, type ColDef,
+  type PItem, type PPage, type ColDef, type TocEntry,
   MONTHS, SECTION_HINTS, COL_ALIAS, STAND_MAP, MONITOR_TYPE_MAP, ROOM_TYPE_MAP,
   groupRows, rowText, buildColMap, assignCols,
   multiPageItems, headingItems, pageText, pagesText,
   parseDateToISO, avgHeight, personnelNameMap, colAliasLookup,
   extractFlightTickets,
+  parseTocEntries, findHeadingPages, isPlotPage, classifyTocTitle,
+  extractPageText, findNextHeadingY, findHeadingY,
 } from './pdfCore.mjs';
 
 // Worker — set once at module load. Vite understands new URL(..., import.meta.url).
@@ -57,6 +59,69 @@ async function extractPages(buffer: ArrayBuffer): Promise<PPage[]> {
     pages.push({ num: n, items });
   }
   return pages;
+}
+
+// ─── Page → PNG renderer ──────────────────────────────────────────────────────
+// Browser-only. Used to surface stage-plot and lightplot pages as images so
+// the review UI doesn't embed the whole rider PDF for a single CAD drawing.
+
+interface RenderedPage {
+  page: number;
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
+async function renderPagesToPng(
+  buffer: ArrayBuffer,
+  pageNumbers: number[],
+  scale = 2,
+): Promise<Map<number, RenderedPage>> {
+  const out = new Map<number, RenderedPage>();
+  if (typeof document === 'undefined' || pageNumbers.length === 0) return out;
+  // Copy the buffer — pdfjs detaches the source Uint8Array, so we can't reuse
+  // a buffer that was passed to getDocument earlier (e.g. by extractPages).
+  const data = new Uint8Array(buffer.byteLength);
+  data.set(new Uint8Array(buffer));
+  const pdf = await getDocument({ data }).promise;
+  for (const n of pageNumbers) {
+    if (n < 1 || n > pdf.numPages) continue;
+    try {
+      const page = await pdf.getPage(n);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) continue;
+      await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      out.set(n, {
+        page: n,
+        dataUrl: canvas.toDataURL('image/png'),
+        width: canvas.width,
+        height: canvas.height,
+      });
+    } catch {
+      // Render failures are non-fatal — the plot just stays imageless.
+    }
+  }
+  return out;
+}
+
+/**
+ * Public helper for callers that have a PDF URL (e.g. the scratch rider
+ * fixture). Fetches and renders the requested pages — used to re-derive plot
+ * data URLs on app boot since they're stripped before persistence.
+ */
+export async function renderPlotImagesFromUrl(
+  url: string,
+  pageNumbers: number[],
+  scale = 2,
+): Promise<Map<number, RenderedPage>> {
+  const res = await fetch(url);
+  if (!res.ok) return new Map();
+  const buffer = await res.arrayBuffer();
+  return renderPagesToPng(buffer, pageNumbers, scale);
 }
 
 // ─── Section finder ───────────────────────────────────────────────────────────
@@ -124,11 +189,14 @@ function extractCover(pages: PPage[]): CoverData {
   , alphaRows[0] ?? []);
   let artistName = rowText(tallestRow);
 
-  if (!artistName || /\b(rider|tech|technical|specification|spec|full|band|input|list|sheet)\b/i.test(artistName)) {
+  if (!artistName || /\b(rider|tech|technical|specification|spec|full|band|input|list|sheet|updated|actualizado)\b/i.test(artistName)) {
     const bodyText = pagesText(pages, pages.slice(0, 3).map(p => p.num));
     const match =
       bodyText.match(/(?:de\s+|artista[:\s]+)([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*(?:\s+(?:[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*|&))*)/m)?.[1]?.trim() ??
-      bodyText.match(/producci[oó]n de ([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*(?:\s+(?:[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*|&))*)/im)?.[1]?.trim();
+      bodyText.match(/producci[oó]n de ([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*(?:\s+(?:[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*|&))*)/im)?.[1]?.trim() ??
+      bodyText.match(/production of ([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*(?:\s+(?:[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*|&))*)/im)?.[1]?.trim() ??
+      bodyText.match(/([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*(?:\s+(?:[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*|&))+)['’]s production/m)?.[1]?.trim() ??
+      bodyText.match(/(?:artist|performer)[:\s]+([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*(?:\s+(?:[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*|&))*)/im)?.[1]?.trim();
     if (match && match.length > 3 && !/\b(rider|tech|promotor|production|manager)\b/i.test(match)) {
       artistName = match;
     }
@@ -148,16 +216,20 @@ function extractCover(pages: PPage[]): CoverData {
     if (emailItem) {
       pmName = cover.items.find(i =>
         Math.abs(i.y - emailItem.y) <= 28 && !i.text.includes('@') &&
-        !/^\+?\d/.test(i.text) && /[A-ZÁ-Ú][a-záéíóú]/.test(i.text) &&
+        !/^\+?\d/.test(i.text) && /[A-ZÁ-Úa-zá-ú]/.test(i.text) &&
         i.text.split(/\s+/).length >= 2
       )?.text?.trim();
     }
   }
 
-  // Language: scan first 3 pages for unaccented Spanish function words.
-  // pdfjs-dist splits accented chars (ó arrives fragmented), so accent regex is unreliable.
-  const langText = pagesText(pages, pages.slice(0, 3).map(p => p.num));
-  const language = /\b(para|con|del|las|los|como|pero|favor|promotor|escenario|sonido|backline|camerino|hospedaje|transporte|cater)\b/i.test(langText) ? 'es' : 'en';
+  // Language: count Spanish-only vs English-only function words across the
+  // first 3 pages. Words shared between both languages (e.g. "backline",
+  // "catering") are excluded to keep the signal clean. pdfjs-dist fragments
+  // accents so we match unaccented forms.
+  const langText = pagesText(pages, pages.slice(0, 3).map(p => p.num)).toLowerCase();
+  const esHits = (langText.match(/\b(para|con|del|las|los|como|pero|favor|promotor|escenario|sonido|camerino|hospedaje|transporte|seran|debera|tendra|sera)\b/g) ?? []).length;
+  const enHits = (langText.match(/\b(the|and|with|please|shall|should|will|must|stage|venue|production|manager|dressing|lodging|previous|versions|control)\b/g) ?? []).length;
+  const language = esHits >= enHits ? 'es' : 'en';
 
   return { artistName, productionManager: { name: pmName, email, phone }, revisionInfo: { date: revDate, warning }, language };
 }
@@ -488,52 +560,150 @@ function detectConflicts(data: Partial<RiderImport>): Conflict[] {
 
 // ─── Public: Rider parser ─────────────────────────────────────────────────────
 
+interface SectionRange {
+  tocIndex: number;
+  title: string;        // TOC title, verbatim
+  type: RiderSectionType;
+  startPage: number;
+  endPage: number;      // inclusive
+}
+
+/**
+ * TOC-driven section ranges: read the table of contents, find each numbered
+ * heading in the body, compute (start, end) pages as [start, nextStart-1].
+ * Returns undefined when the TOC can't be parsed or yields fewer than 5
+ * resolvable headings — caller falls back to the legacy heading regex.
+ */
+function buildTocRanges(pages: PPage[]): SectionRange[] | undefined {
+  const toc = parseTocEntries(pages);
+  if (toc.length < 5) return undefined;
+
+  const headingPages = findHeadingPages(pages, toc);
+  const tocPage = (toc as { tocPage?: number }).tocPage;
+  // A resolvable TOC entry has a body heading we could locate.
+  const resolved = toc
+    .map((t): SectionRange | null => {
+      const startPage = headingPages.get(t.num);
+      if (!startPage) return null;
+      return { tocIndex: t.num, title: t.title, type: classifyTocTitle(t.title), startPage, endPage: pages.length };
+    })
+    .filter((r): r is SectionRange => r !== null)
+    .sort((a, b) => a.tocIndex - b.tocIndex);
+  if (resolved.length < 5) return undefined;
+
+  // Cover-page fallback for §1: many riders use the cover as the intro and
+  // never write a "1- INTRO" body heading. If §1 has no detected heading but
+  // the TOC lists it and §2 resolves to page > 1, infer §1 starts at page 1
+  // and ends at §2.startPage - 1. Skip the TOC page itself if it falls in range.
+  const hasSection1 = toc.some(t => t.num === 1);
+  const section1Resolved = resolved.some(r => r.tocIndex === 1);
+  if (hasSection1 && !section1Resolved) {
+    const intro1 = toc.find(t => t.num === 1)!;
+    resolved.unshift({
+      tocIndex: 1,
+      title: intro1.title,
+      type: classifyTocTitle(intro1.title),
+      startPage: 1,
+      endPage: pages.length,
+    });
+  }
+
+  // Compute end pages from the next section's start. Universally clamp out
+  // the TOC page when it falls inside a section's range — it's structural,
+  // not content.
+  for (let i = 0; i < resolved.length; i++) {
+    const next = resolved[i + 1];
+    let end = next ? Math.max(resolved[i].startPage, next.startPage - 1) : pages.length;
+    if (tocPage && resolved[i].startPage < tocPage && end >= tocPage) end = tocPage - 1;
+    resolved[i].endPage = end;
+  }
+  return resolved;
+}
+
+/** Build an array of page numbers for a [start, end] range. */
+function pageRange(start: number, end: number): number[] {
+  const out: number[] = [];
+  for (let p = start; p <= end; p++) out.push(p);
+  return out;
+}
+
+/**
+ * Bounded, chrome-stripped per-page text blocks for a section. On the
+ * section's last page, clips above the next section's heading so adjacent
+ * sections don't bleed into this one. Empty-text pages are dropped.
+ */
+function buildPageTexts(
+  pages: PPage[],
+  startPage: number,
+  endPage: number,
+  tocIndex: number | undefined,
+): { page: number; text: string }[] {
+  const out: { page: number; text: string }[] = [];
+  for (let n = startPage; n <= endPage; n++) {
+    const page = pages.find(p => p.num === n);
+    if (!page) continue;
+    const keepFromY = (n === startPage && tocIndex != null)
+      ? findHeadingY(page, tocIndex)
+      : undefined;
+    const clipAboveY = (n === endPage && tocIndex != null)
+      ? findNextHeadingY(page, tocIndex)
+      : undefined;
+    const text = extractPageText(page, { clipAboveY, keepFromY });
+    if (text) out.push({ page: n, text });
+  }
+  return out;
+}
+
+/** Image-page references for any plot pages inside a section's range. */
+function plotsInRange(pages: PPage[], r: SectionRange): PlotImage[] {
+  const kind: PlotImage['kind'] =
+    r.type === 'stage_plot' ? 'stage_plot' :
+    r.type === 'lighting_equipment' || r.type === 'lighting_plot' ? 'lighting_plot' :
+    'other';
+  return pages
+    .filter((p) => p.num >= r.startPage && p.num <= r.endPage && isPlotPage(p))
+    .map((p, idx) => ({
+      page: p.num,
+      caption: `${r.title} — page ${idx + 1}`,
+      kind,
+    }));
+}
+
 export async function parseRiderPdf(file: File): Promise<RiderImport> {
   const buffer = await file.arrayBuffer();
   const pages = await extractPages(buffer);
   const cover = extractCover(pages);
-  const sMap = findSections(pages);
-  const sp = (type: RiderSectionType): number[] => sMap.get(type) ?? [];
 
-  const transportData = { flightTickets: undefined as number | undefined };
-  const tpPages = sp('ground_transport');
-  if (tpPages.length) {
-    transportData.flightTickets = extractFlightTickets(pagesText(pages, tpPages));
-  }
-  const lodgingPages = sp('lodging');
-  const lodging = lodgingPages.length ? extractRooming(pages, lodgingPages) : undefined;
+  const ranges = buildTocRanges(pages);
+  const sections: RiderSection[] = ranges
+    ? buildTocSections(pages, ranges, cover.language)
+    : buildLegacySections(pages, cover.language);
 
-  const sections: RiderSection[] = [];
-
-  const addSection = (type: RiderSectionType, pageNums: number[], extra: Partial<RiderSection>) => {
-    if (!pageNums.length) return;
-    sections.push({ type, pages: pageNums, status: 'extracted', language: cover.language, ...extra });
-  };
-
-  // §6 Input / Monitor / FOH
-  const inputPages = sp('input_list');
-  if (inputPages.length) {
-    const { inputList, monitorMix, fohOutputs, confidence } = extractInputList(pages, inputPages);
-    addSection('input_list', inputPages, { confidence, inputList, monitorMix, fohOutputs });
+  // Render plot pages to PNG so the review UI can show the drawing inline
+  // instead of embedding the source PDF. Buffer is reused — a fresh
+  // getDocument() call is required because the first one consumed it.
+  const plotPages = new Set<number>();
+  for (const s of sections) for (const p of s.plots ?? []) plotPages.add(p.page);
+  if (plotPages.size > 0) {
+    const rendered = await renderPagesToPng(buffer, [...plotPages]);
+    for (const s of sections) {
+      if (!s.plots) continue;
+      s.plots = s.plots.map((p) => {
+        const r = rendered.get(p.page);
+        return r ? { ...p, dataUrl: r.dataUrl, width: r.width, height: r.height } : p;
+      });
+    }
   }
 
-  if (lodgingPages.length && lodging) {
-    addSection('lodging', lodgingPages, { confidence: (lodging.totalRooms ?? 0) >= 8 ? 0.88 : 0.6, lodging });
-  }
+  // Transport / lodging facts surface from whichever section claimed them.
+  const transportSec = sections.find((s) => s.type === 'ground_transport' || s.type === 'air_transport');
+  const flightTickets = transportSec
+    ? extractFlightTickets(pagesText(pages, transportSec.pages))
+    : undefined;
+  const lodgingSec = sections.find((s) => s.type === 'lodging');
+  const lodging = lodgingSec?.lodging;
 
-  addSection('backline',      sp('backline'),      { confidence: 0.67, backline: sp('backline').length ? extractBackline(pages, sp('backline')) : undefined });
-  addSection('soundcheck',    sp('soundcheck'),    { confidence: 0.92, freeText: pagesText(pages, sp('soundcheck')).trim() });
-  addSection('air_transport', tpPages,             { confidence: 0.88, freeText: pagesText(pages, tpPages).trim() });
-  addSection('catering',      sp('catering'),      { confidence: 0.63, catering: sp('catering').length ? extractCatering(pages, sp('catering')) : undefined });
-
-  for (const [type, conf] of [
-    ['stage_specs', 0.70], ['audio_pa', 0.70], ['stage_plot', 0.75],
-    ['lighting_equipment', 0.65], ['ground_transport', 0.72], ['dressing_rooms', 0.72],
-  ] as const) {
-    addSection(type as RiderSectionType, sp(type as RiderSectionType), { confidence: conf, freeText: pagesText(pages, sp(type as RiderSectionType)).trim() });
-  }
-
-  const partySize = { flightTickets: transportData.flightTickets, tourists: lodging?.totalOccupants, rooms: lodging?.totalRooms };
+  const partySize = { flightTickets, tourists: lodging?.totalOccupants, rooms: lodging?.totalRooms };
   const conflicts = detectConflicts({ sections, partySize });
   if (conflicts.length) sections.push({ type: 'other', pages: [], status: 'extracted', confidence: 0.95, conflicts });
 
@@ -552,6 +722,126 @@ export async function parseRiderPdf(file: File): Promise<RiderImport> {
     sections,
     revision: 1,
   };
+}
+
+function buildTocSections(pages: PPage[], ranges: SectionRange[], language: string): RiderSection[] {
+  const sections: RiderSection[] = [];
+  for (const r of ranges) {
+    const pageNums = pageRange(r.startPage, r.endPage);
+    const plots = plotsInRange(pages, r);
+    const base: RiderSection = {
+      type: r.type,
+      tocIndex: r.tocIndex,
+      title: r.title,
+      pages: pageNums,
+      endPage: r.endPage,
+      status: 'extracted',
+      language,
+      plots: plots.length ? plots : undefined,
+    };
+
+    // Run the typed extractor where one exists, otherwise free text.
+    if (r.type === 'input_list') {
+      const { inputList, monitorMix, fohOutputs, confidence } = extractInputList(pages, pageNums);
+      sections.push({ ...base, confidence, inputList, monitorMix, fohOutputs });
+      continue;
+    }
+    if (r.type === 'lodging') {
+      const lodging = extractRooming(pages, pageNums);
+      sections.push({ ...base, confidence: (lodging.totalRooms ?? 0) >= 8 ? 0.88 : 0.6, lodging });
+      continue;
+    }
+    if (r.type === 'backline') {
+      sections.push({ ...base, confidence: 0.67, backline: extractBackline(pages, pageNums) });
+      continue;
+    }
+    if (r.type === 'catering') {
+      sections.push({ ...base, confidence: 0.63, catering: extractCatering(pages, pageNums) });
+      continue;
+    }
+
+    // Free-text sections — confidence keyed off the type so the UI can sort.
+    const conf =
+      r.type === 'soundcheck' ? 0.92 :
+      r.type === 'cover_and_contacts' ? 0.95 :
+      r.type === 'production_control' ? 0.9 :
+      r.type === 'permits' ? 0.88 :
+      r.type === 'stage_plot' ? 0.78 :
+      r.type === 'lighting_equipment' ? 0.7 :
+      0.7;
+    const pageTexts = buildPageTexts(pages, r.startPage, r.endPage, r.tocIndex);
+    sections.push({
+      ...base,
+      confidence: conf,
+      pageTexts: pageTexts.length ? pageTexts : undefined,
+      freeText: pageTexts.map(p => p.text).join('\n\n'),
+    });
+  }
+  return sections;
+}
+
+// ─── Legacy fallback ──────────────────────────────────────────────────────────
+// When TOC parsing fails (non-canonical rider, scan-only PDF, sparse text),
+// fall back to the original heading-regex pass so we don't regress.
+
+function buildLegacySections(pages: PPage[], language: string): RiderSection[] {
+  const sMap = findSections(pages);
+  const sp = (type: RiderSectionType): number[] => sMap.get(type) ?? [];
+  const sections: RiderSection[] = [];
+
+  const addSection = (type: RiderSectionType, pageNums: number[], extra: Partial<RiderSection>) => {
+    if (!pageNums.length) return;
+    sections.push({ type, pages: pageNums, status: 'extracted', language, ...extra });
+  };
+
+  // Per-page chrome-stripped texts for a discontiguous page list. The legacy
+  // path doesn't know section ordering, so no cross-section clipping.
+  const pageTextsFor = (pageNums: number[]): { page: number; text: string }[] => {
+    const out: { page: number; text: string }[] = [];
+    for (const n of pageNums) {
+      const page = pages.find(p => p.num === n);
+      if (!page) continue;
+      const text = extractPageText(page);
+      if (text) out.push({ page: n, text });
+    }
+    return out;
+  };
+  const freeTextExtras = (pageNums: number[]) => {
+    const pageTexts = pageTextsFor(pageNums);
+    return {
+      pageTexts: pageTexts.length ? pageTexts : undefined,
+      freeText: pageTexts.map(p => p.text).join('\n\n'),
+    };
+  };
+
+  const inputPages = sp('input_list');
+  if (inputPages.length) {
+    const { inputList, monitorMix, fohOutputs, confidence } = extractInputList(pages, inputPages);
+    addSection('input_list', inputPages, { confidence, inputList, monitorMix, fohOutputs });
+  }
+
+  const lodgingPages = sp('lodging');
+  const lodging = lodgingPages.length ? extractRooming(pages, lodgingPages) : undefined;
+  if (lodgingPages.length && lodging) {
+    addSection('lodging', lodgingPages, { confidence: (lodging.totalRooms ?? 0) >= 8 ? 0.88 : 0.6, lodging });
+  }
+
+  addSection('backline',      sp('backline'),      { confidence: 0.67, backline: sp('backline').length ? extractBackline(pages, sp('backline')) : undefined });
+  addSection('soundcheck',    sp('soundcheck'),    { confidence: 0.92, ...freeTextExtras(sp('soundcheck')) });
+
+  const tpPages = sp('ground_transport');
+  const airPages = sp('air_transport').length ? sp('air_transport') : tpPages;
+  addSection('air_transport', airPages,            { confidence: 0.88, ...freeTextExtras(airPages) });
+  addSection('catering',      sp('catering'),      { confidence: 0.63, catering: sp('catering').length ? extractCatering(pages, sp('catering')) : undefined });
+
+  for (const [type, conf] of [
+    ['stage_specs', 0.70], ['audio_pa', 0.70], ['stage_plot', 0.75],
+    ['lighting_equipment', 0.65], ['ground_transport', 0.72], ['dressing_rooms', 0.72],
+  ] as const) {
+    addSection(type as RiderSectionType, sp(type as RiderSectionType), { confidence: conf, ...freeTextExtras(sp(type as RiderSectionType)) });
+  }
+
+  return sections;
 }
 
 // ─── Public: Flight PDF parser ────────────────────────────────────────────────

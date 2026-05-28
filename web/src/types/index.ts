@@ -515,6 +515,26 @@ export interface Conflict {
   suggestedResolution?: string;
 }
 
+// --- Plot image reference (rider §7 stage plot, §8 lightplot) ----------------
+// We render plot-type pages as raster images (pdfjs canvas → PNG data URL)
+// instead of embedding the source PDF — the page is a CAD drawing, not text,
+// and an inline iframe of the whole rider is slow + visually wrong.
+export interface PlotImage {
+  /** PDF page the plot lives on. */
+  page: number;
+  /** Verbatim caption from the TOC or section heading (source-language). */
+  caption: string;
+  /** Optional broad classification — drives sort order in the Plots tab. */
+  kind?: 'stage_plot' | 'lighting_plot' | 'other';
+  /** PNG data URL rendered from the source PDF page via pdfjs. Populated at
+   *  parse-time (browser) and re-derived from the rider PDF on app boot —
+   *  never persisted to localStorage (would blow the quota). */
+  dataUrl?: string;
+  /** Natural width/height of the rendered image (px). Used for aspect ratio. */
+  width?: number;
+  height?: number;
+}
+
 // --- Section payload (one of, by type) ---------------------
 export interface RiderSection {
   type: RiderSectionType;
@@ -522,6 +542,15 @@ export interface RiderSection {
   status: RiderSectionStatus;
   confidence?: number;
   language?: string;
+  /** Position in the rider's table of contents (1-based: §1, §2, …, §14).
+   *  Drives sort order in the section list and the "§N" affordance. */
+  tocIndex?: number;
+  /** TOC title verbatim (source-language). When undefined, the UI falls back
+   *  to the English category label derived from `type`. */
+  title?: string;
+  /** Last page of the section (inclusive). Pages[0] = start; pairing both
+   *  lets the embedded PDF viewer scope to "just this section". */
+  endPage?: number;
   // payloads — one of, depending on section type
   inputList?: InputChannel[];
   monitorMix?: MonitorMix[];
@@ -530,9 +559,15 @@ export interface RiderSection {
   lodging?: LodgingSpec;
   catering?: CateringSpec;
   conflicts?: Conflict[];
+  /** Page-image references for visual sections (stage plot, lightplot). */
+  plots?: PlotImage[];
   // free-text fallback for sections without dedicated structure
   freeText?: string;
   freeTextEn?: string;
+  /** Per-page free-text blocks — same content as `freeText` but split by source
+   *  page so the review surface can show each page as its own labeled block.
+   *  When present, `freeText` is the join of `pageTexts.map(p => p.text)`. */
+  pageTexts?: { page: number; text: string }[];
 }
 
 export interface RiderImport {

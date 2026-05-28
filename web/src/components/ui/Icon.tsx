@@ -190,4 +190,11 @@ export const Icon = {
       <path d="M5.5 7.2l5-2.7M5.5 8.8l5 2.7" />
     </S>
   ),
+  Image: (p: IconProps) => (
+    <S {...p}>
+      <rect x="2" y="3" width="12" height="10" rx="1.5" />
+      <circle cx="6" cy="6.5" r="1.2" />
+      <path d="M2.5 11.5l3-3 2.5 2.5 2.5-3 3 3.5" />
+    </S>
+  ),
 };

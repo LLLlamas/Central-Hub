@@ -14,6 +14,8 @@ import {
   groupRows, rowText, buildColMap, assignCols,
   multiPageItems, headingItems, pageText, pagesText,
   avgHeight, colAliasLookup, extractFlightTickets,
+  parseTocEntries, findHeadingPages, isPlotPage, classifyTocTitle,
+  extractPageText, findNextHeadingY, findHeadingY,
 } from '../src/lib/pdfCore.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -112,11 +114,14 @@ function extractCover(pages) {
   , alphaRows[0] ?? []);
   let artistName = rowText(tallestRow);
 
-  if (!artistName || /\b(rider|tech|technical|specification|spec|full|band|input|list|sheet)\b/i.test(artistName)) {
+  if (!artistName || /\b(rider|tech|technical|specification|spec|full|band|input|list|sheet|updated|actualizado)\b/i.test(artistName)) {
     const bodyText = pagesText(pages, pages.slice(0, 3).map(p => p.num));
     const match =
       bodyText.match(/(?:de\s+|artista[:\s]+)([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*(?:\s+(?:[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*|&))*)/m)?.[1]?.trim() ??
-      bodyText.match(/producci[oó]n de ([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*(?:\s+(?:[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*|&))*)/im)?.[1]?.trim();
+      bodyText.match(/producci[oó]n de ([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*(?:\s+(?:[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*|&))*)/im)?.[1]?.trim() ??
+      bodyText.match(/production of ([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*(?:\s+(?:[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*|&))*)/im)?.[1]?.trim() ??
+      bodyText.match(/([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*(?:\s+(?:[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*|&))+)['’]s production/m)?.[1]?.trim() ??
+      bodyText.match(/(?:artist|performer)[:\s]+([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*(?:\s+(?:[A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚa-záéíóú]*|&))*)/im)?.[1]?.trim();
     if (match && match.length > 3 && !/\b(rider|tech|promotor|production|manager)\b/i.test(match))
       artistName = match;
   }
@@ -135,14 +140,16 @@ function extractCover(pages) {
     if (emailItem) {
       pmName = cover.items.find(i =>
         Math.abs(i.y - emailItem.y) <= 28 && !i.text.includes('@') &&
-        !/^\+?\d/.test(i.text) && /[A-ZÁ-Ú][a-záéíóú]/.test(i.text) &&
+        !/^\+?\d/.test(i.text) && /[A-ZÁ-Úa-zá-ú]/.test(i.text) &&
         i.text.split(/\s+/).length >= 2
       )?.text?.trim();
     }
   }
 
-  const langText = pagesText(pages, pages.slice(0, 3).map(p => p.num));
-  const language = /\b(para|con|del|las|los|como|pero|favor|promotor|escenario|sonido|backline|camerino|hospedaje|transporte|cater)\b/i.test(langText) ? 'es' : 'en';
+  const langText = pagesText(pages, pages.slice(0, 3).map(p => p.num)).toLowerCase();
+  const esHits = (langText.match(/\b(para|con|del|las|los|como|pero|favor|promotor|escenario|sonido|camerino|hospedaje|transporte|seran|debera|tendra|sera)\b/g) ?? []).length;
+  const enHits = (langText.match(/\b(the|and|with|please|shall|should|will|must|stage|venue|production|manager|dressing|lodging|previous|versions|control)\b/g) ?? []).length;
+  const language = esHits >= enHits ? 'es' : 'en';
 
   return { artistName, productionManager: { name: pmName, email, phone }, revisionInfo: { date: revDate, warning }, language };
 }
@@ -262,34 +269,80 @@ async function main() {
   console.log(`  → ${pages.length} pages extracted`);
 
   const cover = extractCover(pages);
-  const sMap = findSections(pages);
-  const sp = type => sMap.get(type) ?? [];
 
-  console.log('  → Sections detected:');
-  for (const [type, nums] of sMap.entries()) console.log(`      ${type}: pages ${nums.join(', ')}`);
+  // TOC-driven section detection (matches the in-browser parser).
+  const toc = parseTocEntries(pages);
+  const headingPages = findHeadingPages(pages, toc);
+  console.log(`  → TOC entries: ${toc.length}`);
+  for (const t of toc) console.log(`      §${t.num} "${t.title}" → page ${headingPages.get(t.num) ?? '(missing heading)'}`);
+
+  const ranges = toc
+    .map((t) => {
+      const startPage = headingPages.get(t.num);
+      return startPage ? { tocIndex: t.num, title: t.title, type: classifyTocTitle(t.title), startPage, endPage: pages.length } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.tocIndex - b.tocIndex);
+
+  // §1 cover-page fallback: many riders use the cover as the intro with no
+  // "1- INTRO" body heading. Infer §1 = [1, §2.startPage - 1] when missing.
+  const intro1 = toc.find((t) => t.num === 1);
+  if (intro1 && !ranges.some((r) => r.tocIndex === 1)) {
+    ranges.unshift({
+      tocIndex: 1, title: intro1.title, type: classifyTocTitle(intro1.title),
+      startPage: 1, endPage: pages.length,
+    });
+  }
+
+  const tocP = toc.tocPage;
+
+  for (let i = 0; i < ranges.length; i++) {
+    const next = ranges[i + 1];
+    let end = next ? Math.max(ranges[i].startPage, next.startPage - 1) : pages.length;
+    if (tocP && ranges[i].startPage < tocP && end >= tocP) end = tocP - 1;
+    ranges[i].endPage = end;
+  }
 
   const sections = [];
+  for (const r of ranges) {
+    const pageNums = [];
+    for (let p = r.startPage; p <= r.endPage; p++) pageNums.push(p);
+    const plots = pages
+      .filter((p) => p.num >= r.startPage && p.num <= r.endPage && isPlotPage(p))
+      .map((p, idx) => ({ page: p.num, caption: `${r.title} — page ${idx + 1}`, kind: r.type === 'stage_plot' ? 'stage_plot' : (r.type === 'lighting_equipment' || r.type === 'lighting_plot') ? 'lighting_plot' : 'other' }));
+    const base = {
+      type: r.type, tocIndex: r.tocIndex, title: r.title,
+      pages: pageNums, endPage: r.endPage, status: 'extracted', language: cover.language,
+      plots: plots.length ? plots : undefined,
+    };
 
-  const inputPages = sp('input_list');
-  if (inputPages.length) {
-    const { inputList, monitorMix, fohOutputs, confidence } = extractInputList(pages, inputPages);
-    console.log(`  → Input list: ${inputList.length} channels, ${monitorMix.length} mixes, ${fohOutputs.length} FOH outputs (confidence: ${(confidence * 100).toFixed(0)}%)`);
-    sections.push({ type: 'input_list', pages: inputPages, status: 'extracted', confidence, language: cover.language, inputList, monitorMix, fohOutputs });
+    if (r.type === 'input_list') {
+      const { inputList, monitorMix, fohOutputs, confidence } = extractInputList(pages, pageNums);
+      console.log(`  → Input list (§${r.tocIndex} "${r.title}"): ${inputList.length} channels, ${monitorMix.length} mixes, ${fohOutputs.length} FOH outputs (conf ${(confidence * 100).toFixed(0)}%)`);
+      sections.push({ ...base, confidence, inputList, monitorMix, fohOutputs });
+      continue;
+    }
+    const pageTexts = [];
+    for (let pn = r.startPage; pn <= r.endPage; pn++) {
+      const page = pages.find(p => p.num === pn);
+      if (!page) continue;
+      const keepFromY = (pn === r.startPage) ? findHeadingY(page, r.tocIndex) : undefined;
+      const clipAboveY = (pn === r.endPage) ? findNextHeadingY(page, r.tocIndex) : undefined;
+      const text = extractPageText(page, { clipAboveY, keepFromY });
+      if (text) pageTexts.push({ page: pn, text });
+    }
+    sections.push({
+      ...base,
+      confidence: 0.7,
+      pageTexts: pageTexts.length ? pageTexts : undefined,
+      freeText: pageTexts.map(p => p.text).join('\n\n'),
+    });
   }
 
-  for (const [type, conf] of [
-    ['stage_specs', 0.70], ['audio_pa', 0.70], ['stage_plot', 0.75],
-    ['lighting_equipment', 0.65], ['soundcheck', 0.92], ['backline', 0.67],
-    ['ground_transport', 0.72], ['lodging', 0.80], ['catering', 0.63], ['dressing_rooms', 0.72],
-  ]) {
-    const nums = sp(type);
-    if (nums.length) sections.push({ type, pages: nums, status: 'extracted', confidence: conf, language: cover.language, freeText: pagesText(pages, nums).trim() });
-  }
-
-  const tpPages = sp('ground_transport');
-  const flightTickets = tpPages.length ? extractFlightTickets(pagesText(pages, tpPages)) : undefined;
+  const tp = sections.find((s) => s.type === 'ground_transport' || s.type === 'air_transport');
+  const flightTickets = tp ? extractFlightTickets(pagesText(pages, tp.pages)) : undefined;
   const partySize = flightTickets !== undefined ? { flightTickets } : undefined;
-  if (flightTickets !== undefined) console.log(`  → Flight tickets (§11): ${flightTickets}`);
+  if (flightTickets !== undefined) console.log(`  → Flight tickets: ${flightTickets}`);
 
   const result = {
     id: `ri_extracted_${Date.now()}`,
