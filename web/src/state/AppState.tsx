@@ -735,8 +735,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const getDay = useCallback((date: string) => tourQueries.getDay(tour, date), [tour]);
   const getDayById = useCallback((id: ID) => tourQueries.getDayById(tour, id), [tour]);
   const getScheduleItemsForDay = useCallback(
-    (dayId: ID) => tourQueries.getScheduleItemsForDay(tour, dayId),
-    [tour],
+    (dayId: ID) => {
+      const items = tourQueries.getScheduleItemsForDay(tour, dayId);
+      if (visibilityEdits.size === 0) return items;
+      // Layer the manager's saved visibility overlay onto each item so
+      // downstream filters (DayDetail / DaySheets / TodaySurface) resolve
+      // against the *current* visibility, not the seed.
+      return items.map((it) => {
+        const override = visibilityEdits.get(it.id);
+        return override ? { ...it, visibility: override } : it;
+      });
+    },
+    [tour, visibilityEdits],
   );
   const getTravelForDay = useCallback(
     (dayId: ID) => tourQueries.getTravelForDay(tour, dayId),

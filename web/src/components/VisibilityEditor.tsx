@@ -6,6 +6,15 @@ import { visibilityLabel, visibilityDescription } from '@/lib/visibility';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
+// Each picker button is min-w-[64px] so BLOCKED / SEES / OWNS render the
+// same width. The column-header circles use the same width so they line up
+// vertically with each column's row buttons.
+const COL_W = 'min-w-[64px]';
+
+// Groups pinned above the "Set all" row. The bulk action preserves their
+// overrides so the TM / Production never lose access by accident.
+const PINNED_GROUP_IDS = ['grp_mgmt', 'grp_production'] as const;
+
 const LEVELS: VisibilityLevel[] = ['blocked', 'sees', 'owns'];
 
 const LEVEL_COLOR: Record<VisibilityLevel, string> = {
@@ -45,6 +54,17 @@ export function VisibilityEditor({ value, groups, tags, persons, onChange, compa
     else p[pid] = lvl;
     onChange({ ...value, persons: p });
   };
+  // Column-header circles: bulk action. Sets the floor and wipes every
+  // explicit override — except the pinned Management + Production groups,
+  // whose overrides survive so they never accidentally lose access.
+  const setAllTo = (lvl: VisibilityLevel) => {
+    const keepGroups: Record<string, VisibilityLevel> = {};
+    for (const pid of PINNED_GROUP_IDS) {
+      const cur = value.groups?.[pid];
+      if (cur) keepGroups[pid] = cur;
+    }
+    onChange({ default: lvl, groups: keepGroups, tags: {}, persons: {} });
+  };
 
   const overrideCount =
     Object.keys(value.groups ?? {}).length +
@@ -53,110 +73,155 @@ export function VisibilityEditor({ value, groups, tags, persons, onChange, compa
 
   return (
     <div className="border border-[var(--color-rule)] rounded-[3px] bg-[var(--color-card)]">
-      {/* Default */}
-      <div className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <div className="eyebrow">Default for everyone</div>
-            <div className="text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
-              {visibilityDescription(value.default)}
-            </div>
-          </div>
-          {overrideCount > 0 && (
-            <Chip tone="neutral" variant="outline" size="sm">
-              {overrideCount} override{overrideCount === 1 ? '' : 's'}
-            </Chip>
-          )}
-        </div>
-        <LevelPicker value={value.default} onChange={setDefault} />
-      </div>
-
-      {/* Group overrides */}
-      {!compact && (
+      {/* Default — kept only for compact mode (used by TypeDefaultsEditor). */}
+      {compact && (
         <div className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
-          <div className="eyebrow mb-2">Group overrides</div>
-          <div className="space-y-1">
-            {groups.map((g) => {
-              const lvl = value.groups?.[g.id];
-              const isOpen = openGroup === g.id;
-              const groupTags = tags.filter((t) => t.groupId === g.id);
-              const groupPersons = persons.filter((p) => p.groupId === g.id);
-              const metaParts: string[] = [];
-              if (groupPersons.length > 0)
-                metaParts.push(`${groupPersons.length} ${groupPersons.length === 1 ? 'person' : 'people'}`);
-              if (groupTags.length > 0)
-                metaParts.push(`${groupTags.length} tag${groupTags.length === 1 ? '' : 's'}`);
-              const expandable = groupPersons.length > 0 || groupTags.length > 0;
-              return (
-                <div key={g.id} className="border-b border-[var(--color-rule-soft)] last:border-0 -mx-1">
-                  <div className="px-1 py-1.5 flex items-center gap-2">
-                    <button
-                      onClick={() => expandable && setOpenGroup(isOpen ? null : g.id)}
-                      disabled={!expandable}
-                      className="flex items-center gap-2 flex-1 text-left disabled:cursor-default"
-                    >
-                      <Icon.Chevron
-                        size={11}
-                        className={cn(
-                          'text-[var(--color-ink-4)] transition-transform',
-                          isOpen && 'rotate-90',
-                          !expandable && 'opacity-30',
-                        )}
-                      />
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: g.color }} />
-                      <span className="text-[12.5px] font-semibold">{g.name}</span>
-                      {metaParts.length > 0 && (
-                        <span className="text-[10.5px] font-mono text-[var(--color-ink-4)]">
-                          {metaParts.join(' · ')}
-                        </span>
-                      )}
-                    </button>
-                    <CompactPicker
-                      value={lvl ?? null}
-                      onChange={(l) => setGroup(g.id, l)}
-                    />
-                  </div>
-                  {isOpen && (
-                    <div className="pl-7 pb-2 space-y-1">
-                      {groupTags.map((t) => {
-                        const tlvl = value.tags?.[t.id];
-                        return (
-                          <div key={t.id} className="flex items-center gap-2">
-                            <span className="text-[11.5px] font-mono uppercase tracking-[0.08em] text-[var(--color-ink-3)] flex-1">
-                              ↳ {t.name}
-                            </span>
-                            <CompactPicker
-                              value={tlvl ?? null}
-                              onChange={(l) => setTag(t.id, l)}
-                            />
-                          </div>
-                        );
-                      })}
-                      {groupPersons.map((p) => {
-                        const plvl = value.persons?.[p.id];
-                        return (
-                          <div key={p.id} className="flex items-center gap-2">
-                            <span
-                              className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-mono font-bold text-[var(--color-paper)] bg-[var(--color-ink-2)] shrink-0"
-                            >
-                              {initials(p.person.name)}
-                            </span>
-                            <span className="text-[12px] flex-1 truncate">{p.person.name}</span>
-                            <CompactPicker
-                              value={plvl ?? null}
-                              onChange={(l) => setPerson(p.id, l)}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <div className="eyebrow">Default for everyone</div>
+              <div className="text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
+                {visibilityDescription(value.default)}
+              </div>
+            </div>
+            {overrideCount > 0 && (
+              <Chip tone="neutral" variant="outline" size="sm">
+                {overrideCount} override{overrideCount === 1 ? '' : 's'}
+              </Chip>
+            )}
           </div>
+          <LevelPicker value={value.default} onChange={setDefault} />
         </div>
       )}
+
+      {/* Group overrides — non-compact: pinned groups on top, then the
+          "Set all" circle row, then regular groups. */}
+      {!compact && (() => {
+        const pinned = PINNED_GROUP_IDS
+          .map((id) => groups.find((g) => g.id === id))
+          .filter((g): g is Group => !!g);
+        const regular = groups.filter((g) => !PINNED_GROUP_IDS.includes(g.id as typeof PINNED_GROUP_IDS[number]));
+
+        const renderGroupRow = (g: Group) => {
+          const lvl = value.groups?.[g.id];
+          const isOpen = openGroup === g.id;
+          const groupTags = tags.filter((t) => t.groupId === g.id);
+          const groupPersons = persons.filter((p) => p.groupId === g.id);
+          const metaParts: string[] = [];
+          if (groupPersons.length > 0)
+            metaParts.push(`${groupPersons.length} ${groupPersons.length === 1 ? 'person' : 'people'}`);
+          if (groupTags.length > 0)
+            metaParts.push(`${groupTags.length} tag${groupTags.length === 1 ? '' : 's'}`);
+          const expandable = groupPersons.length > 0 || groupTags.length > 0;
+          // Effective level cascading into the children when no group override.
+          const groupEffective = lvl ?? value.default;
+          return (
+            <div key={g.id} className="border-b border-[var(--color-rule-soft)] last:border-0 -mx-1">
+              <div className="px-1 py-1.5 flex items-center gap-2">
+                <button
+                  onClick={() => expandable && setOpenGroup(isOpen ? null : g.id)}
+                  disabled={!expandable}
+                  className="flex items-center gap-2 flex-1 min-w-0 text-left disabled:cursor-default"
+                >
+                  <Icon.Chevron
+                    size={11}
+                    className={cn(
+                      'text-[var(--color-ink-4)] transition-transform',
+                      isOpen && 'rotate-90',
+                      !expandable && 'opacity-30',
+                    )}
+                  />
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: g.color }} />
+                  <span className="text-[12.5px] font-semibold">{g.name}</span>
+                  {metaParts.length > 0 && (
+                    <span className="text-[10.5px] font-mono text-[var(--color-ink-4)]">
+                      {metaParts.join(' · ')}
+                    </span>
+                  )}
+                </button>
+                <CompactPicker
+                  value={lvl ?? null}
+                  effective={value.default}
+                  onChange={(l) => setGroup(g.id, l)}
+                />
+              </div>
+              {isOpen && (
+                <div className="pl-7 pb-2 space-y-1">
+                  {groupTags.map((t) => {
+                    const tlvl = value.tags?.[t.id];
+                    return (
+                      <div key={t.id} className="flex items-center gap-2">
+                        <span className="text-[11.5px] font-mono uppercase tracking-[0.08em] text-[var(--color-ink-3)] flex-1">
+                          ↳ {t.name}
+                        </span>
+                        <CompactPicker
+                          value={tlvl ?? null}
+                          effective={groupEffective}
+                          onChange={(l) => setTag(t.id, l)}
+                        />
+                      </div>
+                    );
+                  })}
+                  {groupPersons.map((p) => {
+                    const plvl = value.persons?.[p.id];
+                    return (
+                      <div key={p.id} className="flex items-center gap-2">
+                        <span
+                          className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-mono font-bold text-[var(--color-paper)] bg-[var(--color-ink-2)] shrink-0"
+                        >
+                          {initials(p.person.name)}
+                        </span>
+                        <span className="text-[12px] flex-1 truncate">{p.person.name}</span>
+                        <CompactPicker
+                          value={plvl ?? null}
+                          effective={groupEffective}
+                          onChange={(l) => setPerson(p.id, l)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        return (
+          <div className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
+            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+              <div className="eyebrow">Permissions</div>
+              {overrideCount > 0 && (
+                <Chip tone="neutral" variant="outline" size="sm">
+                  {overrideCount} override{overrideCount === 1 ? '' : 's'}
+                </Chip>
+              )}
+            </div>
+
+            {/* Pinned (Management + Production) — bulk action skips these. */}
+            {pinned.length > 0 && (
+              <div className="space-y-1 mb-2">
+                {pinned.map(renderGroupRow)}
+              </div>
+            )}
+
+            {/* Set-all row — circles right-aligned to sit directly above the
+                row pickers' columns. */}
+            <div className="-mx-1 px-1 py-1.5 flex items-center gap-2 border-t border-[var(--color-rule-soft)]">
+              <span
+                className="flex-1 min-w-0 text-[10.5px] font-mono uppercase tracking-[0.08em] text-[var(--color-ink-4)]"
+                title="Click a circle to set the floor and clear every override below (pinned groups untouched)."
+              >
+                Set all
+              </span>
+              <ColumnHeaderCircles defaultLevel={value.default} onSetAll={setAllTo} />
+            </div>
+
+            {/* Regular groups — these get wiped by Set all. */}
+            <div className="space-y-1">
+              {regular.map(renderGroupRow)}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Person overrides (preview only — full editor would search persons) */}
       {!compact && Object.keys(value.persons ?? {}).length > 0 && (
@@ -184,10 +249,6 @@ export function VisibilityEditor({ value, groups, tags, persons, onChange, compa
         </div>
       )}
 
-      {/* Hierarchy hint */}
-      <div className="px-4 py-2.5 bg-[var(--color-paper)]/60 border-t border-[var(--color-rule-soft)] text-[10.5px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-4)]">
-        Most specific wins · persons &gt; tags &gt; groups &gt; default
-      </div>
     </div>
   );
 }
@@ -222,28 +283,91 @@ function LevelPicker({
 
 function CompactPicker({
   value,
+  effective,
   onChange,
 }: {
   value: VisibilityLevel | null;
+  /** When `value` is null, the column matching this level gets a soft
+   *  highlight to show what the row resolves to via cascade (group / default). */
+  effective?: VisibilityLevel;
   onChange: (l: VisibilityLevel | null) => void;
 }) {
   return (
-    <div className="inline-flex rounded-[3px] border border-[var(--color-rule)] overflow-hidden text-[10.5px]">
+    <div className="inline-flex shrink-0 rounded-[3px] border border-[var(--color-rule)] overflow-hidden text-[10px]">
       {LEVELS.map((l, i) => {
         const active = value === l;
+        const isEffective = !active && value === null && effective === l;
         return (
           <button
             key={l}
             onClick={() => onChange(active ? null : l)}
             className={cn(
-              'px-2 h-6 font-mono font-semibold uppercase tracking-[0.06em]',
+              COL_W,
+              'px-2 h-7 font-mono font-semibold uppercase tracking-[0.06em] transition-colors text-center',
               i < LEVELS.length - 1 && 'border-r border-[var(--color-rule)]',
-              active ? 'text-[var(--color-paper)]' : 'text-[var(--color-ink-3)] hover:bg-[var(--color-paper-2)]',
+              active && 'text-[var(--color-paper)]',
+              !active && isEffective && 'text-[var(--color-ink-2)]',
+              !active && !isEffective && 'text-[var(--color-ink-3)] hover:bg-[var(--color-paper-2)]',
             )}
-            style={active ? { background: LEVEL_COLOR[l] } : undefined}
-            title={active ? `${visibilityLabel(l)} — click to clear` : visibilityLabel(l)}
+            style={
+              active
+                ? { background: LEVEL_COLOR[l] }
+                : isEffective
+                ? { background: `color-mix(in srgb, ${LEVEL_COLOR[l]} 22%, transparent)` }
+                : undefined
+            }
+            title={
+              active
+                ? `${visibilityLabel(l)} — click to clear`
+                : isEffective
+                ? `${visibilityLabel(l)} (inherited from floor)`
+                : visibilityLabel(l)
+            }
           >
-            {l[0]!.toUpperCase()}
+            {visibilityLabel(l)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Column-header circles — one per level. Clicking sets the floor to that
+// level and clears every per-group / per-tag / per-person override so the
+// editor "snaps" to the chosen column. The current floor is shown with a
+// thicker ring around its circle.
+function ColumnHeaderCircles({
+  defaultLevel,
+  onSetAll,
+}: {
+  defaultLevel: VisibilityLevel;
+  onSetAll: (l: VisibilityLevel) => void;
+}) {
+  return (
+    <div className="inline-flex shrink-0">
+      {LEVELS.map((l) => {
+        const isFloor = defaultLevel === l;
+        return (
+          <button
+            key={l}
+            type="button"
+            onClick={() => onSetAll(l)}
+            title={`Set everyone to ${visibilityLabel(l)} (clears existing overrides)`}
+            aria-label={`Set everyone to ${visibilityLabel(l)}`}
+            className={cn(
+              COL_W,
+              'h-6 flex items-center justify-center hover:bg-[var(--color-paper-2)] rounded-[2px] transition-colors',
+            )}
+          >
+            <span
+              className={cn(
+                'w-3.5 h-3.5 rounded-full transition-all',
+                isFloor
+                  ? 'ring-2 ring-[var(--color-ink)] ring-offset-1 ring-offset-[var(--color-card)]'
+                  : 'border border-[var(--color-rule)] opacity-70 hover:opacity-100',
+              )}
+              style={{ background: LEVEL_COLOR[l] }}
+            />
           </button>
         );
       })}

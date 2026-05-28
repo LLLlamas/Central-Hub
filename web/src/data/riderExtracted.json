@@ -1,7 +1,7 @@
 {
-  "id": "ri_extracted_1779639966222",
+  "id": "ri_extracted_1779982385066",
   "filename": "RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf",
-  "uploadedAt": "2026-05-24T16:26",
+  "uploadedAt": "2026-05-28T15:33",
   "uploadedBy": "CLI parse-rider.mjs",
   "sourceLanguage": "es",
   "pageCount": 27,
@@ -15,6 +15,9 @@
     "name": "Manuel Gonzalez",
     "email": "magcs81@gmail.com",
     "phone": "+52 55 54 74 70 48"
+  },
+  "partySize": {
+    "flightTickets": 8
   },
   "sections": [
     {

@@ -13,7 +13,7 @@ import {
   SECTION_HINTS, COL_ALIAS, STAND_MAP, MONITOR_TYPE_MAP,
   groupRows, rowText, buildColMap, assignCols,
   multiPageItems, headingItems, pageText, pagesText,
-  avgHeight, colAliasLookup,
+  avgHeight, colAliasLookup, extractFlightTickets,
 } from '../src/lib/pdfCore.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -286,6 +286,11 @@ async function main() {
     if (nums.length) sections.push({ type, pages: nums, status: 'extracted', confidence: conf, language: cover.language, freeText: pagesText(pages, nums).trim() });
   }
 
+  const tpPages = sp('ground_transport');
+  const flightTickets = tpPages.length ? extractFlightTickets(pagesText(pages, tpPages)) : undefined;
+  const partySize = flightTickets !== undefined ? { flightTickets } : undefined;
+  if (flightTickets !== undefined) console.log(`  → Flight tickets (§11): ${flightTickets}`);
+
   const result = {
     id: `ri_extracted_${Date.now()}`,
     filename: path.basename(pdfPath),
@@ -297,6 +302,7 @@ async function main() {
     artistName: cover.artistName || undefined,
     revisionInfo: cover.revisionInfo,
     productionManager: cover.productionManager,
+    partySize,
     sections,
     revision: 1,
   };

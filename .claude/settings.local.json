@@ -12,7 +12,9 @@
       "Bash(node --input-type=module)",
       "Bash(node -e ' *)",
       "Bash(npm test *)",
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "Bash(node web/scripts/parse-rider.mjs \"RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf\")",
+      "Bash(node -e \"const d = require\\('./web/src/data/riderExtracted.json'\\); const gt = d.sections.find\\(s => s.type === 'ground_transport'\\); console.log\\('GROUND TRANSPORT pages:', gt?.pages\\); console.log\\('---'\\); console.log\\(gt?.freeText?.slice\\(0, 3000\\)\\);\")"
     ]
   }
 }

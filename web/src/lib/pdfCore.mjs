@@ -157,6 +157,24 @@ export function personnelNameMap(personnel) {
 }
 
 /**
+ * Sum all "N boletos de avión" mentions in a §11 transport blob.
+ * Air tickets only — must be the phrase "boletos de avión" (accent-tolerant,
+ * pdfjs sometimes fragments "avión" → "avi ó n"). Bare "pasajes" / "boletos"
+ * collides with "20 pasajeros" (van capacity), so this is deliberately strict.
+ * Returns undefined when no matches.
+ */
+export function extractFlightTickets(text) {
+  const re = /(\d+)\s*boletos?\s+de\s+avi\s*[óo]?\s*n?\b/gi;
+  let total = 0;
+  let any = false;
+  for (const m of text.matchAll(re)) {
+    const n = parseInt(m[1], 10);
+    if (!isNaN(n)) { total += n; any = true; }
+  }
+  return any ? total : undefined;
+}
+
+/**
  * Resolve a column header text to a canonical column key via COL_ALIAS.
  * Falls back to prefix-match for fragments like "Descripci" from "Descripción".
  */

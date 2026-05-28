@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '@/state/AppState';
 import type { PendingVisibilityEdit, VisibilityEditRecord } from '@/state/AppState';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -51,17 +51,28 @@ export function ScheduleAndVisibility() {
 
   const selected = tour.scheduleItems.find((i) => i.id === selectedId);
   const pendingVis = selected ? getPendingVisibilityEdit(selected.id) : undefined;
-  const selectedVis = selected
+  const committedVis = selected
     ? pendingVis?.patch ?? getVisibilityEdit(selected.id) ?? selected.visibility
     : null;
 
-  // Route the editor's onChange to a direct edit (managers) or a proposal
-  // (everyone else). Captures the current effective visibility as `before`.
-  const editOrProposeVis = (itemId: string, patch: Visibility) => {
-    if (!selectedVis) return;
-    if (managerView) updateVisibilityEdit(itemId, patch, selectedVis);
-    else proposeVisibilityEdit(itemId, patch, selectedVis);
+  // Draft state — edits collect locally until the user clicks Save. Reset
+  // whenever the selected item changes so jumping between items doesn't
+  // carry stale drafts. `displayVis` is what the editor renders.
+  const [draftVis, setDraftVis] = useState<Visibility | null>(null);
+  useEffect(() => {
+    setDraftVis(null);
+  }, [selectedId]);
+  const displayVis = draftVis ?? committedVis;
+  const isDirty =
+    draftVis !== null && committedVis !== null && JSON.stringify(draftVis) !== JSON.stringify(committedVis);
+
+  const handleSaveVis = () => {
+    if (!selected || !draftVis || !committedVis) return;
+    if (managerView) updateVisibilityEdit(selected.id, draftVis, committedVis);
+    else proposeVisibilityEdit(selected.id, draftVis, committedVis);
+    setDraftVis(null);
   };
+  const handleDiscardVis = () => setDraftVis(null);
 
   if (!managerView) {
     return (
@@ -168,42 +179,59 @@ export function ScheduleAndVisibility() {
                 title={selected.title}
                 eyebrow={`${scheduleItemLabel(selected.type)} · ${selected.startTime}${selected.endTime ? `–${selected.endTime}` : ''}`}
                 action={
-                  <div className="flex items-center gap-1.5">
-                    {selected.sensitive && (
-                      <span className="inline-flex items-center">
-                        <Chip tone="critical">
-                          <Icon.Lock size={10} /> Sensitive
-                        </Chip>
-                        <SensitiveExplain />
-                      </span>
-                    )}
-                    <Button size="sm" variant="outline" leading={<Icon.Settings size={12} />}>
-                      Edit item
-                    </Button>
-                  </div>
+                  selected.sensitive ? (
+                    <span className="inline-flex items-center">
+                      <Chip tone="critical">
+                        <Icon.Lock size={10} /> Sensitive
+                      </Chip>
+                      <SensitiveExplain />
+                    </span>
+                  ) : undefined
                 }
               >
                 {selected.location && (
-                  <div className="text-[13px] text-[var(--color-ink-2)] mb-2">
+                  <div className="text-[13px] text-[var(--color-ink-2)]">
                     <span className="eyebrow mr-2">Location</span>
                     {selected.location}
                   </div>
                 )}
                 {selected.notes && (
-                  <div className="text-[12.5px] text-[var(--color-ink-3)] italic mb-2">{selected.notes}</div>
+                  <div className="text-[12.5px] text-[var(--color-ink-3)] italic mt-2">{selected.notes}</div>
                 )}
-                <div className="text-[11.5px] text-[var(--color-ink-4)] mt-2 font-mono tabular">
-                  ID {selected.id}
-                </div>
               </SectionCard>
 
               <SectionCard
                 title="Visibility"
                 eyebrow="Who can see it"
-                action={<MockBadge source="visibility" />}
+                action={
+                  <div className="flex items-center gap-2">
+                    {isDirty && (
+                      <span className="text-[10.5px] font-mono uppercase tracking-[0.08em] text-[var(--color-warn)]">
+                        Unsaved
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleDiscardVis}
+                      disabled={!isDirty}
+                    >
+                      Discard
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={handleSaveVis}
+                      disabled={!isDirty}
+                    >
+                      {managerView ? 'Save' : 'Propose changes'}
+                    </Button>
+                    <MockBadge source="visibility" />
+                  </div>
+                }
               >
                 <p className="text-[12.5px] text-[var(--color-ink-3)] mb-4 leading-relaxed">
-                  Visibility is per-item. Set a default and override for specific groups, tags, or persons. Most specific match wins. Owns implies Needs implies Sees.
+                  Visibility is per-item. Set a default and override for specific groups, tags, or persons.
                 </p>
                 {pendingVis && (
                   <PendingVisibilityBanner
@@ -214,11 +242,11 @@ export function ScheduleAndVisibility() {
                   />
                 )}
                 <VisibilityEditor
-                  value={selectedVis!}
+                  value={displayVis!}
                   groups={tour.groups}
                   tags={tour.groupTags}
                   persons={tour.personnel}
-                  onChange={(v) => editOrProposeVis(selected.id, v)}
+                  onChange={setDraftVis}
                 />
                 {getVisibilityHistory(selected.id).length > 0 && (
                   <VisibilityHistory records={getVisibilityHistory(selected.id)} />
@@ -231,12 +259,12 @@ export function ScheduleAndVisibility() {
         {/* Right — preview matrix */}
         <div className="space-y-5 min-w-0">
           <SectionCard title="Who sees this?" eyebrow="Live preview">
-            {!selected || !selectedVis ? (
+            {!selected || !displayVis ? (
               <p className="text-[12px] text-[var(--color-ink-3)]">Select an item to preview.</p>
             ) : (
               <ul className="space-y-2 -my-1">
                 {Object.values(allUsers).map((pseudo) => {
-                  const lvl = resolveVisibility(selectedVis, pseudo);
+                  const lvl = resolveVisibility(displayVis, pseudo);
                   return (
                     <li key={pseudo.tourPersonId} className="flex items-center justify-between gap-2">
                       <span className="text-[12.5px] text-[var(--color-ink)] min-w-0 truncate">

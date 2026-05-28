@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { getSource, realSourceLabels, phaseLabels, type SourceKey } from '@/data/sources';
 import { Chip } from '@/components/ui/Chip';
 import { cn } from '@/lib/cn';
+
+const POPOVER_WIDTH = 320;
+const VIEWPORT_PAD = 12;
 
 interface MockBadgeProps {
   source: SourceKey;
@@ -20,7 +23,17 @@ interface MockBadgeProps {
  */
 export function MockBadge({ source, label = 'Mock', variant = 'pill', className }: MockBadgeProps) {
   const [open, setOpen] = useState(false);
+  const [alignRight, setAlignRight] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const prov = getSource(source);
+
+  // Flip the popover anchor when the badge sits too close to the right edge
+  // of the viewport for a 320px popover to fit.
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setAlignRight(rect.left + POPOVER_WIDTH > window.innerWidth - VIEWPORT_PAD);
+  }, [open]);
 
   if (variant === 'strip') {
     return (
@@ -58,6 +71,7 @@ export function MockBadge({ source, label = 'Mock', variant = 'pill', className 
   return (
     <span className={cn('relative inline-flex', className)}>
       <button
+        ref={triggerRef}
         type="button"
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
@@ -74,7 +88,10 @@ export function MockBadge({ source, label = 'Mock', variant = 'pill', className 
       {open && (
         <span
           role="tooltip"
-          className="absolute z-50 top-full left-0 mt-1.5 w-[320px] rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] p-3 shadow-lg text-left"
+          className={cn(
+            'absolute z-50 top-full mt-1.5 w-[320px] rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] p-3 shadow-lg text-left',
+            alignRight ? 'right-0' : 'left-0',
+          )}
           style={{ boxShadow: '0 10px 30px rgba(21,19,15,0.10)' }}
         >
           <div className="text-[10.5px] font-mono font-semibold tracking-[0.14em] uppercase text-[#7a5a8a]">

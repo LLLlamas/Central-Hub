@@ -218,3 +218,41 @@ read-only rider summary.
 - Pro mode loses nothing that exists today; Simple mode is genuinely calm.
 - The provenance system stays intact and visible throughout the build
   phase.
+
+---
+
+## Cross-document conflicts (next)
+
+Parking-lot note. The current `detectConflicts()` in `lib/pdfParser.ts` only
+catches **intra-document** mistakes — values that disagree *inside the same
+rider* (§4 vs §8 generator count, §12 header-vs-rows occupant count, channel
+flags). That is the right scope for it. The next layer is **cross-document**
+contradictions, which is where most real-world surprises live.
+
+Pairs worth catching:
+
+- **Rider v1 vs rider v2** — when the PM sends an updated rider, what changed?
+  (channels added/dropped, monitor mix reassigned, soundcheck window moved.)
+- **Rider vs travel grid** — §11 says "06 economy + 02 AM Plus = 8 tickets";
+  the travel-agent grid lists 9 passengers on that leg. Real, common.
+- **Rider vs hotel block** — §12 rooming sheet says 11 rooms (king/double mix);
+  the hotel-block confirmation lists 9. Common when blocks get trimmed late.
+- **Rider vs booking-agent deal memo** — load-in time, curfew, doors, set
+  length, support slot. Riders and deal memos drift constantly.
+
+Data-model changes required:
+
+- `RiderImport` gets `version: number` + `replacesId?: string` so v1↔v2 diffs
+  have a stable target.
+- `Conflict` gets a `source: ConflictSource` discriminator —
+  `'intra_rider' | 'rider_vs_travel' | 'rider_vs_hotel' | 'rider_vs_deal_memo' | 'rider_v1_vs_v2'`.
+  Existing seed conflicts in `data/mockTour.ts` (`cf_room_count`, `cf_flight_count`)
+  get tagged `'intra_rider'` as part of this pass.
+- A separate diff-engine layer (probably `lib/conflictDetectors/*.ts`) that
+  takes two parsed imports and emits `Conflict[]`. The rider parser's
+  `detectConflicts()` stays narrow — one detector among many.
+
+UI: `ConflictFeed` should group by `source` so the TM understands which
+*pair* of documents is contradicting (today every conflict is implicitly "the
+rider vs itself"). Resolution flow already supports `chosenValue` + `source` —
+the source picker just needs more options.

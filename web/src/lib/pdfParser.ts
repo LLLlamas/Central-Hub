@@ -23,6 +23,7 @@ import {
   groupRows, rowText, buildColMap, assignCols,
   multiPageItems, headingItems, pageText, pagesText,
   parseDateToISO, avgHeight, personnelNameMap, colAliasLookup,
+  extractFlightTickets,
 } from './pdfCore.mjs';
 
 // Worker — set once at module load. Vite understands new URL(..., import.meta.url).
@@ -457,15 +458,10 @@ function detectConflicts(data: Partial<RiderImport>): Conflict[] {
     });
   }
 
-  const { flightTickets, tourists, rooms } = data.partySize ?? {};
-  if (flightTickets && tourists && flightTickets !== tourists) {
-    conflicts.push({
-      id: 'c_party_size', type: 'count_mismatch', severity: 'medium',
-      description: `§11 lists ${flightTickets} flight tickets but §12 lists ${tourists} touring party members.`,
-      sectionsInvolved: ['air_transport', 'lodging'],
-      values: [{ section: '§11', value: `${flightTickets} tickets` }, { section: '§12', value: `${tourists} people, ${rooms ?? '?'} rooms` }],
-    });
-  }
+  // §11 air tickets vs §12 touring-party size is intentionally NOT a conflict:
+  // a rider almost always has fewer flight tickets than touring-party members
+  // (local hires don't fly). Cross-document checks (rider vs travel grid, etc.)
+  // are the right place for this — see redesign-plan.md "Cross-document conflicts".
 
   const inputSec = sections.find(s => s.type === 'input_list');
   for (const ch of inputSec?.inputList ?? []) {
@@ -502,8 +498,7 @@ export async function parseRiderPdf(file: File): Promise<RiderImport> {
   const transportData = { flightTickets: undefined as number | undefined };
   const tpPages = sp('ground_transport');
   if (tpPages.length) {
-    const m = pagesText(pages, tpPages).match(/(\d+)\s*(?:boletos?|tickets?|pasajes?)/i);
-    if (m) transportData.flightTickets = parseInt(m[1]);
+    transportData.flightTickets = extractFlightTickets(pagesText(pages, tpPages));
   }
   const lodgingPages = sp('lodging');
   const lodging = lodgingPages.length ? extractRooming(pages, lodgingPages) : undefined;

@@ -25,3 +25,4 @@ export function parseDateToISO(text: string): string | undefined;
 export function avgHeight(row: PItem[]): number;
 export function personnelNameMap(personnel: TourPerson[]): Map<string, string>;
 export function colAliasLookup(t: string): string | null;
+export function extractFlightTickets(text: string): number | undefined;
