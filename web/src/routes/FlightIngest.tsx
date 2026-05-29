@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
+import { useTour } from '@/components/tour/TourProvider';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, EmptyState } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
@@ -36,7 +38,9 @@ type Note = UploadNote | null;
  */
 export function FlightIngest() {
   const { tour } = useApp();
+  const { step } = useTour();
   const routeLoaded = tour.days.length > 0;
+  const activeStepId = step?.id;
 
   return (
     // pb-[40vh] gives the walkthrough room to scroll a bottom-of-page target
@@ -52,41 +56,53 @@ export function FlightIngest() {
 
       <div className="space-y-4">
         <CollapsibleSection
-          eyebrow="Step 1"
           title="Tour route &amp; schedule"
-          defaultOpen={!routeLoaded}
+          defaultOpen={!routeLoaded || activeStepId === 'route'}
           badge={
-            <Chip tone={routeLoaded ? 'success' : 'neutral'} size="sm" variant="outline">
-              {routeLoaded ? `${tour.days.length} days` : 'Not imported'}
-            </Chip>
+            routeLoaded ? (
+              <Chip tone="success" size="sm" variant="outline">
+                ✓ {tour.days.length} days · calendar &amp; schedule
+              </Chip>
+            ) : (
+              <Chip tone="neutral" size="sm" variant="outline">Not imported</Chip>
+            )
           }
         >
           <RouteImportSection />
         </CollapsibleSection>
 
         <CollapsibleSection
-          eyebrow="Step 2"
           title="Flights &amp; travel"
-          defaultOpen={routeLoaded && tour.hotels.length === 0}
-          badge={
-            <Chip tone="neutral" size="sm" variant="outline">
-              {tour.flightImports.length} import{tour.flightImports.length === 1 ? '' : 's'}
-            </Chip>
+          defaultOpen={
+            (routeLoaded && tour.hotels.length === 0) ||
+            activeStepId === 'flight' ||
+            activeStepId === 'flight-approve'
           }
+          badge={(() => {
+            const pending = tour.flightImports.filter((fi) => fi.status === 'review').length;
+            const approved = tour.flightImports.filter((fi) => fi.status === 'imported').length;
+            if (pending > 0) return <Chip tone="rehearsal" size="sm" variant="outline">{pending} pending review</Chip>;
+            if (approved > 0) return <Chip tone="success" size="sm" variant="outline">✓ {approved} approved · travel records</Chip>;
+            return <Chip tone="neutral" size="sm" variant="outline">No imports yet</Chip>;
+          })()}
         >
           <FlightImportSection />
         </CollapsibleSection>
 
         <CollapsibleSection
-          eyebrow="Step 3"
           title="Hotels &amp; rooming"
-          defaultOpen={tour.hotels.length === 0 && tour.travel.length > 0}
+          defaultOpen={
+            (tour.hotels.length === 0 && tour.travel.length > 0) ||
+            activeStepId === 'hotel'
+          }
           badge={
-            <Chip tone={tour.hotels.length > 0 ? 'success' : 'neutral'} size="sm" variant="outline">
-              {tour.hotels.length > 0
-                ? `${tour.hotels.length} hotel${tour.hotels.length === 1 ? '' : 's'}`
-                : 'Not imported'}
-            </Chip>
+            tour.hotels.length > 0 ? (
+              <Chip tone="success" size="sm" variant="outline">
+                ✓ {tour.hotels.length} hotel{tour.hotels.length === 1 ? '' : 's'} · day sheets &amp; tasks
+              </Chip>
+            ) : (
+              <Chip tone="neutral" size="sm" variant="outline">Not imported</Chip>
+            )
           }
         >
           <HotelImportSection />
@@ -122,7 +138,7 @@ function RouteImportSection() {
         });
         return;
       }
-      applyRouteToScratch(parsed);
+      applyRouteToScratch(parsed, file.name);
       setNote({
         tone: 'success',
         title: `Imported ${parsed.days.length} days across ${parsed.legs.length} leg(s)`,
@@ -183,7 +199,7 @@ function RouteSummary() {
         setNote({ tone: 'warning', title: 'No rows found', detail: `Couldn't read any day rows from "${file.name}".` });
         return;
       }
-      applyRouteToScratch(parsed);
+      applyRouteToScratch(parsed, file.name);
       setReuploadOpen(false);
       setNote({
         tone: 'success',
@@ -198,7 +214,12 @@ function RouteSummary() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {tour.routeImport?.filename ? (
+            <Chip tone="travel" size="sm">
+              <Icon.Document size={10} /> {tour.routeImport.filename}
+            </Chip>
+          ) : null}
           <span className="text-[13px] font-semibold text-[var(--color-ink)]">
             {tour.days.length} days · {tour.legs.length} leg
             {tour.legs.length === 1 ? '' : 's'}
@@ -241,6 +262,31 @@ function RouteSummary() {
           </Chip>
         ))}
       </div>
+      <RouteHistory />
+    </div>
+  );
+}
+
+function RouteHistory() {
+  const { tour } = useApp();
+  const history = tour.routeImportHistory ?? [];
+  if (history.length === 0) return null;
+  return (
+    <div className="mt-3">
+      <CollapsibleSection
+        eyebrow="Upload history"
+        title={`Route history (${history.length} previous)`}
+        defaultOpen={false}
+      >
+        <ul className="space-y-1.5 text-[11.5px] text-[var(--color-ink-3)]">
+          {[...history].reverse().map((stamp, i) => (
+            <li key={i} className="flex items-center gap-2">
+              {stamp.filename && <span className="font-mono text-[var(--color-ink-2)]">{stamp.filename}</span>}
+              <span>{stamp.at.replace('T', ' ')} by {stamp.by}</span>
+            </li>
+          ))}
+        </ul>
+      </CollapsibleSection>
     </div>
   );
 }
@@ -347,6 +393,15 @@ function FlightImportSection() {
     }
   };
 
+  // Heads-up when the user lands on flights before importing the rider.
+  // Without a rider, the roster is just the Tour Manager — so every other
+  // passenger row lands as "unmatched" and the reviewer has to resolve each
+  // one by hand. Stays visible while the rider is still missing — that's
+  // exactly when a freshly imported batch of unmatched rows is most fixable
+  // by going to import the rider first.
+  const needsRiderHint =
+    tour.riderImports.length === 0 && tour.personnel.length <= 1;
+
   return (
     <div>
       <p className="mb-3 text-[12px] text-[var(--color-ink-3)] leading-relaxed">
@@ -354,6 +409,19 @@ function FlightImportSection() {
         in one file) or per-flight <strong>boarding pass / e-ticket</strong> PDFs. Both feed the
         same review queue.
       </p>
+      {needsRiderHint && (
+        <div className="mb-3 rounded-[3px] border border-[var(--color-rule)] bg-[var(--color-paper-2)]/70 px-3 py-2 text-[12px] text-[var(--color-ink-2)] flex items-start gap-2">
+          <Icon.Info size={12} className="text-[var(--color-ink-3)] shrink-0 mt-[3px]" />
+          <span>
+            <strong>Tip — import the rider first.</strong> Passenger names are matched against
+            your tour roster; right now the roster only has you. Drop the rider on{' '}
+            <Link to="/ingest/riders" className="underline font-semibold text-[var(--color-ink)]">
+              Rider ingest
+            </Link>{' '}
+            so the band &amp; crew land on the roster before you import flights.
+          </span>
+        </div>
+      )}
       <div className="grid md:grid-cols-2 gap-3 mb-4">
         <FileDropZone
           accept=".csv"
@@ -485,12 +553,36 @@ function StatusChip({ status, inverted }: { status: FlightImport['status']; inve
 
 function FlightReview({ imp, duplicateOf }: { imp: FlightImport; duplicateOf?: FlightImport }) {
   const { openPdf } = usePdfViewer();
-  const { commitFlightImportToScratch, discardFlightImport, replaceFlightImport, mergeFlightImport } = useApp();
+  const {
+    commitFlightImportToScratch,
+    discardFlightImport,
+    replaceFlightImport,
+    mergeFlightImport,
+    editFlightImportPassenger,
+    removeFlightImportPassenger,
+  } = useApp();
   const [resolveOpen, setResolveOpen] = useState(false);
+  // Focus a specific unmatched name when the modal opens — null = show all.
+  const [resolveFocusName, setResolveFocusName] = useState<string | null>(null);
+  // Per-row inline edit state. Key = passenger index; value = draft name.
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<string>('');
+  const openResolveFor = (name: string | null) => {
+    setResolveFocusName(name);
+    setResolveOpen(true);
+  };
   const f = imp.parsedFlights[0];
   if (!f) return <EmptyState title="No flights parsed" />;
 
   const diff = duplicateOf ? diffFlightImports(duplicateOf, imp) : null;
+  // Purely additive: new passengers only, no seat/metadata changes, existing already committed.
+  const isAdditiveOnly =
+    diff !== null &&
+    duplicateOf?.status === 'imported' &&
+    diff.added.length > 0 &&
+    diff.changed.length === 0 &&
+    diff.removed.length === 0 &&
+    !diff.metadataChanged;
 
   return (
     <div className="space-y-5">
@@ -530,6 +622,11 @@ function FlightReview({ imp, duplicateOf }: { imp: FlightImport; duplicateOf?: F
                 ))}
                 {diff.metadataChanged && <li>Flight metadata (time / PNR / airports) differs.</li>}
               </ul>
+              {isAdditiveOnly && (
+                <p className="mt-2 text-[11.5px] text-[#3a6b3a] font-medium">
+                  Only new passengers — merging will update the approved Travel record directly. No re-approval needed.
+                </p>
+              )}
             </div>
           ) : (
             <div className="mt-2 text-[11.5px] text-[var(--color-ink-3)] italic">
@@ -549,9 +646,12 @@ function FlightReview({ imp, duplicateOf }: { imp: FlightImport; duplicateOf?: F
               <Button
                 size="sm"
                 variant="outline"
+                leading={isAdditiveOnly ? <Icon.Plus size={12} /> : undefined}
                 onClick={() => mergeFlightImport(duplicateOf.id, imp.id)}
               >
-                Merge into existing
+                {isAdditiveOnly
+                  ? `Add ${diff.added.length} passenger${diff.added.length === 1 ? '' : 's'} to Travel`
+                  : 'Merge into existing'}
               </Button>
             )}
           </div>
@@ -579,7 +679,7 @@ function FlightReview({ imp, duplicateOf }: { imp: FlightImport; duplicateOf?: F
                 size="sm"
                 variant="outline"
                 leading={<Icon.Alert size={12} />}
-                onClick={() => setResolveOpen(true)}
+                onClick={() => openResolveFor(null)}
               >
                 Resolve {imp.unmatchedNames.length} unmatched
               </Button>
@@ -606,7 +706,12 @@ function FlightReview({ imp, duplicateOf }: { imp: FlightImport; duplicateOf?: F
             )}
           </div>
         </div>
-        <ResolveUnmatchedModal open={resolveOpen} onClose={() => setResolveOpen(false)} imp={imp} />
+        <ResolveUnmatchedModal
+          open={resolveOpen}
+          onClose={() => { setResolveOpen(false); setResolveFocusName(null); }}
+          imp={imp}
+          focusName={resolveFocusName ?? undefined}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-2">
           <div className="border-r border-[var(--color-rule-soft)] p-5 min-h-[400px] bg-[var(--color-paper-2)]/30">
@@ -689,21 +794,53 @@ function FlightReview({ imp, duplicateOf }: { imp: FlightImport; duplicateOf?: F
               <ul className="border border-[var(--color-rule-soft)] rounded-[3px] overflow-hidden divide-y divide-[var(--color-rule-soft)]">
                 {f.passengers.map((p, i) => {
                   const matched = !!p.matchedTourPersonId;
+                  const editing = editingIndex === i;
+                  const canEdit = imp.status === 'review';
+                  const commitEdit = () => {
+                    const next = editDraft.trim();
+                    if (next && next !== p.name) {
+                      // TODO: parsedFlights[0] is the only leg today (grid CSV
+                      // produces one import per leg; PDF parser produces one
+                      // ParsedFlight per file). When a multi-leg PDF lands,
+                      // thread the actual legIndex through.
+                      editFlightImportPassenger(imp.id, 0, i, { name: next });
+                    }
+                    setEditingIndex(null);
+                  };
                   return (
                     <li
-                      key={i}
+                      // Name keys survive remove (no stale-index edit state)
+                      // and a rename flips the key, remounting the input cleanly.
+                      key={`${p.name}-${i}`}
                       className={cn(
-                        'flex items-center justify-between gap-2 px-3 py-1.5 text-[12.5px]',
-                        !matched && 'bg-[rgba(160,122,46,0.06)]',
+                        'flex items-center justify-between gap-2 px-3 py-1.5 text-[12.5px] group',
+                        !matched && !editing && 'bg-[rgba(160,122,46,0.06)]',
                       )}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         {matched ? (
-                          <Icon.Check size={12} className="text-[var(--color-day-promo)]" />
+                          <Icon.Check size={12} className="text-[var(--color-day-promo)] shrink-0" />
                         ) : (
-                          <Icon.Alert size={12} className="text-[var(--color-day-rehearsal)]" />
+                          <Icon.Alert
+                            size={12}
+                            className="text-[var(--color-day-rehearsal)] shrink-0"
+                          />
                         )}
-                        <span className="truncate">{p.name}</span>
+                        {editing ? (
+                          <input
+                            autoFocus
+                            value={editDraft}
+                            onChange={(e) => setEditDraft(e.target.value)}
+                            onBlur={commitEdit}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') commitEdit();
+                              if (e.key === 'Escape') setEditingIndex(null);
+                            }}
+                            className="flex-1 min-w-0 text-[12.5px] border border-[var(--color-ink-3)] rounded-[3px] px-2 py-0.5 bg-[var(--color-card)] focus:outline-none"
+                          />
+                        ) : (
+                          <span className="truncate">{p.name}</span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-[11px] tabular text-[var(--color-ink-3)]">
@@ -714,9 +851,44 @@ function FlightReview({ imp, duplicateOf }: { imp: FlightImport; duplicateOf?: F
                             Matched
                           </Chip>
                         ) : (
-                          <span className="text-[11px] font-semibold text-[var(--color-ink-4)]">
-                            Unmatched
-                          </span>
+                          <button
+                            type="button"
+                            disabled={!canEdit}
+                            onClick={() => openResolveFor(p.name)}
+                            className={cn(
+                              'text-[11px] font-semibold',
+                              canEdit
+                                ? 'text-[var(--color-accent)] underline cursor-pointer hover:opacity-80'
+                                : 'text-[var(--color-ink-4)]',
+                            )}
+                          >
+                            {canEdit ? 'Resolve' : 'Unmatched'}
+                          </button>
+                        )}
+                        {canEdit && !editing && (
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              title="Edit name"
+                              onClick={() => { setEditingIndex(i); setEditDraft(p.name); }}
+                              className="p-1 rounded-[3px] hover:bg-[var(--color-paper)] cursor-pointer text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+                            >
+                              <Icon.Edit size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              title="Remove passenger from this import"
+                              onClick={() => {
+                                if (confirm(`Remove "${p.name}" from this flight import?\n\nUse this for parser junk (footer text picked up as a passenger). The Travel record won't include them.`)) {
+                                  // legIndex 0 — see editFlightImportPassenger TODO above.
+                                  removeFlightImportPassenger(imp.id, 0, i);
+                                }
+                              }}
+                              className="p-1 rounded-[3px] hover:bg-[var(--color-accent)]/10 cursor-pointer text-[var(--color-ink-3)] hover:text-[var(--color-accent)]"
+                            >
+                              <Icon.X size={11} />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </li>
@@ -725,8 +897,10 @@ function FlightReview({ imp, duplicateOf }: { imp: FlightImport; duplicateOf?: F
               </ul>
               {imp.unmatchedNames.length > 0 && (
                 <p className="mt-2 text-[11px] text-[var(--color-ink-3)] leading-snug">
-                  Unmatched passengers aren't on the roster yet — they're skipped
-                  when this import is approved into Travel.
+                  Unmatched passengers aren't on the roster yet — fix a typo in
+                  the name (✏️), remove a parser-junk row (✕), or click{' '}
+                  <strong>Resolve</strong> to assign / add / skip. Unresolved rows
+                  are skipped when this import is approved into Travel.
                 </p>
               )}
             </div>
@@ -750,61 +924,83 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
 
 // ---- Hotel section ---------------------------------------------------------
 
+// Import one hotel PDF — parser-first, with fixture fallback by filename.
+// Returns true if the import succeeded so the caller can aggregate counts
+// across a multi-file drop.
+async function importHotelFile(
+  file: File,
+  tour: ReturnType<typeof useApp>['tour'],
+  addHotelImportToScratch: ReturnType<typeof useApp>['addHotelImportToScratch'],
+): Promise<{ ok: true; hotels: number } | { ok: false; reason: 'unknown' | 'error' }> {
+  try {
+    const { hotels, tasks } = await parseHotelPdf(file, tour.personnel, tour.days);
+    if (hotels.length > 0) {
+      addHotelImportToScratch(hotels, tasks, file.name);
+      return { ok: true, hotels: hotels.length };
+    }
+  } catch { /* fall through to fixture */ }
+  const fixture = matchFixture(file.name);
+  if (fixture?.kind === 'hotel') {
+    const built = buildScratchHotelImport(fixture.id, tour.personnel);
+    if (built) {
+      addHotelImportToScratch(built.hotels, built.tasks, file.name);
+      return { ok: true, hotels: built.hotels.length };
+    }
+  }
+  return { ok: false, reason: fixture ? 'unknown' : 'unknown' };
+}
+
 function HotelImportSection() {
   const { tour, addHotelImportToScratch } = useApp();
   const [note, setNote] = useState<Note>(null);
-  const hotelFixture = fixturesOfKind('hotel')[0];
+  const hotelFixtures = fixturesOfKind('hotel');
 
   const handleFiles = async (files: File[]) => {
-    const file = files[0];
-    if (!file) return;
-    try {
-      const { hotels, tasks } = await parseHotelPdf(file, tour.personnel, tour.days);
-      if (hotels.length > 0) {
-        addHotelImportToScratch(hotels, tasks);
-        setNote({
-          tone: 'success',
-          title: `Imported ${hotels.length} hotel block${hotels.length === 1 ? '' : 's'}`,
-          detail: 'Rooming lists matched to your roster; hotel-advance tasks added to the calendar.',
-        });
-        return;
-      }
-    } catch { /* fall through to fixture */ }
-    // Fallback: fixture match for the known demo hotel PDF.
-    const fixture = matchFixture(file.name);
-    if (fixture?.kind === 'hotel') {
-      const { hotels, tasks } = buildScratchHotelImport(tour.personnel);
-      addHotelImportToScratch(hotels, tasks);
-      setNote({
-        tone: 'success',
-        title: `Imported ${hotels.length} hotel block${hotels.length === 1 ? '' : 's'}`,
-        detail: 'Rooming lists matched to your roster; hotel-advance tasks added to the calendar.',
-      });
-    } else {
-      setNote(nonMatchNote(file, fixture, 'a hotel confirmation PDF', hotelFixture?.filename ?? ''));
+    if (!files.length) return;
+    let imported = 0;
+    let totalHotels = 0;
+    const failed: string[] = [];
+    for (const file of files) {
+      const res = await importHotelFile(file, tour, addHotelImportToScratch);
+      if (res.ok) { imported += 1; totalHotels += res.hotels; }
+      else { failed.push(file.name); }
     }
+    if (imported === 0) {
+      const first = files[0];
+      const fixture = matchFixture(first.name);
+      setNote(nonMatchNote(first, fixture, 'a hotel confirmation PDF', hotelFixtures[0]?.filename ?? ''));
+      return;
+    }
+    setNote({
+      tone: failed.length ? 'warning' : 'success',
+      title: `Imported ${totalHotels} hotel block${totalHotels === 1 ? '' : 's'}`,
+      detail: failed.length
+        ? `${imported} of ${files.length} confirmations imported. Couldn't read: ${failed.join(', ')}.`
+        : 'Rooming lists matched to your roster; hotel-advance tasks added to the calendar.',
+    });
   };
 
   if (tour.hotels.length > 0) {
     return <HotelSummary />;
   }
 
+  const hint = hotelFixtures.length > 0
+    ? `One PDF per hotel — drop all of them at once. Samples: ${hotelFixtures.map((f) => `"${f.filename}"`).join(' and ')}.`
+    : 'One PDF per hotel — drop all of them at once.';
+
   return (
     <div className="max-w-2xl">
       <p className="text-[12.5px] text-[var(--color-ink-3)] mb-3 leading-relaxed">
-        Upload the hotel-block confirmation. It adds each hotel to its check-in
-        day, matches the rooming list to your roster, and creates the
-        hotel-advance tasks.
+        Upload one booking confirmation per hotel. Each one adds its hotel to
+        the check-in day, matches the rooming list to your roster, and creates
+        the hotel-advance tasks. Drop multiple confirmations together.
       </p>
       <FileDropZone
         accept=".pdf"
+        multiple
         onFiles={handleFiles}
-        title="Drop the hotel-block confirmation PDF"
-        hint={
-          hotelFixture
-            ? `Upload "${hotelFixture.filename}" — ${hotelFixture.extracts}`
-            : 'Upload a hotel confirmation PDF.'
-        }
+        title="Drop hotel booking confirmation PDFs"
+        hint={hint}
         icon={<Icon.Home size={22} />}
         tourAnchor="hotel-dropzone"
       />
@@ -816,41 +1012,55 @@ function HotelImportSection() {
 function HotelSummary() {
   const { tour, getDayById, addHotelImportToScratch } = useApp();
   const { openPdf } = usePdfViewer();
-  const hotelFixture = fixturesOfKind('hotel')[0];
+  const hotelFixtures = fixturesOfKind('hotel');
   const [reuploadOpen, setReuploadOpen] = useState(false);
   const [note, setNote] = useState<Note>(null);
   const wasUpdated = (tour.hotelImport?.updates ?? 0) > 0;
 
-  const handleReupload = (files: File[]) => {
-    const file = files[0];
-    if (!file) return;
-    const fixture = matchFixture(file.name);
-    if (fixture?.kind === 'hotel') {
-      const { hotels, tasks } = buildScratchHotelImport(tour.personnel);
-      addHotelImportToScratch(hotels, tasks);
-      setReuploadOpen(false);
-      setNote({
-        tone: 'success',
-        title: 'Hotel block updated',
-        detail: `${hotels.length} hotel${hotels.length === 1 ? '' : 's'} re-imported from "${file.name}".`,
-      });
-    } else {
-      setNote(nonMatchNote(file, fixture, 'a hotel confirmation PDF', hotelFixture?.filename ?? ''));
+  const handleReupload = async (files: File[]) => {
+    if (!files.length) return;
+    let imported = 0;
+    let totalHotels = 0;
+    const failed: string[] = [];
+    for (const file of files) {
+      const res = await importHotelFile(file, tour, addHotelImportToScratch);
+      if (res.ok) { imported += 1; totalHotels += res.hotels; }
+      else { failed.push(file.name); }
     }
+    if (imported === 0) {
+      const first = files[0];
+      const fixture = matchFixture(first.name);
+      setNote(nonMatchNote(first, fixture, 'a hotel confirmation PDF', hotelFixtures[0]?.filename ?? ''));
+      return;
+    }
+    setReuploadOpen(false);
+    setNote({
+      tone: failed.length ? 'warning' : 'success',
+      title: 'Hotel blocks updated',
+      detail: failed.length
+        ? `${imported} of ${files.length} confirmations re-imported. Couldn't read: ${failed.join(', ')}.`
+        : `${totalHotels} hotel${totalHotels === 1 ? '' : 's'} re-imported from ${imported} file${imported === 1 ? '' : 's'}.`,
+    });
   };
+
+  // The summary chip / preview uses the last uploaded filename — fall back to
+  // the CDMX sample so existing tours that pre-date per-hotel splitting still
+  // show a sensible label.
+  const displayFilename = tour.hotelImport?.filename ?? hotelFixtures[0]?.filename;
+  const previewFixture = hotelFixtures.find((f) => f.filename === displayFilename) ?? hotelFixtures[0];
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {hotelFixture && (
+        {displayFilename && (
           <button
             type="button"
-            onClick={() => openPdf({ url: '/' + hotelFixture.filename, title: hotelFixture.filename })}
-            title="View the hotel confirmation PDF"
-            className="cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => previewFixture && openPdf({ url: '/' + previewFixture.filename, title: displayFilename })}
+            title={previewFixture ? 'View the hotel confirmation PDF' : undefined}
+            className={cn('hover:opacity-80 transition-opacity', previewFixture ? 'cursor-pointer' : 'cursor-default')}
           >
             <Chip tone="travel">
-              <Icon.Document size={10} /> {hotelFixture.filename}
+              <Icon.Document size={10} /> {displayFilename}
             </Chip>
           </button>
         )}
@@ -870,9 +1080,10 @@ function HotelSummary() {
         <div>
           <FileDropZone
             accept=".pdf"
+            multiple
             onFiles={handleReupload}
-            title="Drop a corrected hotel-block confirmation"
-            hint="The new file replaces the current hotel block + advance tasks."
+            title="Drop corrected hotel booking confirmations"
+            hint="Each new PDF replaces (or adds) its hotel block + advance tasks. Drop multiple at once."
             icon={<Icon.Home size={22} />}
           />
           {note && <UploadResultNote {...note} onDismiss={() => setNote(null)} />}
@@ -904,6 +1115,29 @@ function HotelSummary() {
         Hotels show on each day's Day Sheet and Day Detail. Hotel-advance tasks
         were added to the calendar.
       </p>
+      <HotelHistory />
     </div>
+  );
+}
+
+function HotelHistory() {
+  const { tour } = useApp();
+  const history = tour.hotelImportHistory ?? [];
+  if (history.length === 0) return null;
+  return (
+    <CollapsibleSection
+      eyebrow="Upload history"
+      title={`Hotel history (${history.length} previous)`}
+      defaultOpen={false}
+    >
+      <ul className="space-y-1.5 text-[11.5px] text-[var(--color-ink-3)]">
+        {[...history].reverse().map((stamp, i) => (
+          <li key={i} className="flex items-center gap-2">
+            {stamp.filename && <span className="font-mono text-[var(--color-ink-2)]">{stamp.filename}</span>}
+            <span>{stamp.at.replace('T', ' ')} by {stamp.by}</span>
+          </li>
+        ))}
+      </ul>
+    </CollapsibleSection>
   );
 }

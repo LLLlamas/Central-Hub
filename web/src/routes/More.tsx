@@ -7,6 +7,7 @@ import { fmtDate } from '@/lib/format';
 
 const tools = [
   { to: '/daysheet', label: 'Day sheets', hint: 'Edit, personalize, print, and publish daily sheets.', icon: Icon.Document },
+  { to: '/gear', label: 'Supplies & Costs', hint: 'Rider supplies, flight costs, and hotel costs — status, cost estimates, and links to source documents.', icon: Icon.Package },
   { to: '/plots', label: 'Plots', hint: 'Stage plot and lightplot pages pulled out of the rider.', icon: Icon.Image },
   { to: '/schedule', label: 'Schedule Permissions', hint: 'Control who sees or owns each call time. TM and PM only.', icon: Icon.Layers },
   { to: '/ingest/riders', label: 'Import rider', hint: 'Review the extracted rider sections and conflicts.', icon: Icon.Sparkle },

@@ -7,6 +7,7 @@ import type { PendingEdit } from '@/state/AppState';
 import { MOCK_NOW } from '@/lib/today';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, SectionCard } from '@/components/ui/Card';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
@@ -102,9 +103,55 @@ export function collectPlotsBySection(
   return out;
 }
 
+// Rider version history — prior + active rider revisions. Only renders when more
+// than one rider has been imported. Lets the user re-open any version's PDF and
+// promote a prior revision back to active (riderImports[0]).
+function RiderVersionHistory() {
+  const { tour, setActiveRider } = useApp();
+  const { openPdf } = usePdfViewer();
+  if (tour.riderImports.length <= 1) return null;
+
+  return (
+    <div className="mb-5">
+      <CollapsibleSection
+        eyebrow="Document versions"
+        title="Rider version history"
+        defaultOpen={false}
+        badge={<Chip tone="neutral" size="sm">{tour.riderImports.length} versions</Chip>}
+      >
+        <ul className="divide-y divide-[var(--color-rule-soft)]">
+          {tour.riderImports.map((ri, i) => (
+            <li key={ri.id} className="flex items-center justify-between gap-3 py-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {i === 0 && <Chip tone="success" size="sm">Active</Chip>}
+                <span className="text-[12.5px] font-mono truncate text-[var(--color-ink-2)]">{ri.filename}</span>
+                <span className="text-[11.5px] text-[var(--color-ink-4)]">v{ri.revision} · {ri.uploadedAt.replace('T', ' ')}</span>
+                {ri.uploadedBy && <span className="text-[11.5px] text-[var(--color-ink-4)]">by {ri.uploadedBy}</span>}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {ri.pdfObjectUrl && (
+                  <Button size="sm" variant="outline" onClick={() => openPdf({ url: ri.pdfObjectUrl!, title: ri.filename })}>
+                    View PDF
+                  </Button>
+                )}
+                {i > 0 && (
+                  <Button size="sm" variant="outline" onClick={() => setActiveRider(ri.id)}>
+                    Make active
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </CollapsibleSection>
+    </div>
+  );
+}
+
 // Hook-context guard: this is a React component, so useActiveRiderPdfUrl() is valid.
 export function RiderIngest() {
-  const { tour, isSectionApproved, getPendingEdit } = useApp();
+  const { tour, user, isSectionApproved, getPendingEdit } = useApp();
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const { openPdf } = usePdfViewer();
   const pdfUrl = useActiveRiderPdfUrl();
   const imp = tour.riderImports[0];
@@ -208,6 +255,10 @@ export function RiderIngest() {
 
       {/* Cover & revision banner */}
       <CoverBanner imp={imp} />
+
+      <RiderVersionHistory />
+
+      {managerView && <RosterSuggestions imp={imp} />}
 
       <div className="grid lg:grid-cols-[240px_1fr] gap-5 mt-6">
         {/* Left rail — TOC-ordered section list + Plots entry */}
@@ -582,44 +633,42 @@ function PlotSectionReview({
       {plots.length === 0 ? (
         <p className="text-[12.5px] text-[var(--color-ink-3)] italic">No plot images detected for this section.</p>
       ) : (
-        <div className="space-y-4">
-          {plots.map((plot, i) => {
-            const imgBlock = plot.dataUrl ? (
-              <img src={plot.dataUrl} alt={plot.caption} className="block w-full h-auto" />
-            ) : (
-              <div className="py-16 flex flex-col items-center justify-center gap-2 text-[var(--color-ink-3)]">
-                <Icon.Document size={22} />
-                <span className="text-[12px] font-semibold">Rendering page {plot.page}…</span>
-              </div>
-            );
-            return (
-              <figure
-                key={`${plot.page}-${i}`}
-                className="rounded-[4px] border border-[var(--color-rule-soft)] overflow-hidden bg-[var(--color-paper-2)]"
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {plots.map((plot, i) => (
+            <figure
+              key={`${plot.page}-${i}`}
+              className="rounded-[4px] border border-[var(--color-rule-soft)] overflow-hidden bg-[var(--color-paper-2)] group"
+            >
+              <button
+                type="button"
+                onClick={() => setLightboxIdx(i)}
+                className="block w-full aspect-[4/3] relative overflow-hidden"
+                title={`View page ${plot.page} fullscreen`}
               >
-                <button
-                  type="button"
-                  onClick={() => setLightboxIdx(i)}
-                  className="block w-full text-left"
-                  title={`View page ${plot.page} fullscreen`}
-                >
-                  {imgBlock}
-                </button>
-                <figcaption className="px-3 py-2 flex items-center justify-between gap-2 text-[11px] border-t border-[var(--color-rule-soft)] bg-[var(--color-card)]">
-                  <span className="font-mono uppercase tracking-[0.10em] text-[var(--color-ink-3)]">
-                    {plot.caption} · page {plot.page}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setLightboxIdx(i)}
-                    className="inline-flex items-center gap-1 font-semibold text-[var(--color-ocean)] hover:underline"
-                  >
-                    View fullscreen <Icon.Arrow size={11} />
-                  </button>
-                </figcaption>
-              </figure>
-            );
-          })}
+                {plot.dataUrl ? (
+                  <img
+                    src={plot.dataUrl}
+                    alt={plot.caption}
+                    className="absolute inset-0 w-full h-full object-contain bg-white"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[var(--color-ink-3)]">
+                    <Icon.Document size={18} />
+                    <span className="text-[11px] font-semibold">p.{plot.page}</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                  <span className="text-white text-[11px] font-semibold bg-black/50 px-2 py-1 rounded">Enlarge</span>
+                </div>
+              </button>
+              <figcaption className="px-2 py-1.5 flex items-center justify-between gap-1 text-[10.5px] border-t border-[var(--color-rule-soft)] bg-[var(--color-card)]">
+                <span className="font-mono uppercase tracking-[0.08em] text-[var(--color-ink-3)] truncate">
+                  {plot.caption}
+                </span>
+                <span className="text-[var(--color-ink-4)] shrink-0">p.{plot.page}</span>
+              </figcaption>
+            </figure>
+          ))}
         </div>
       )}
       <PlotImageLightbox
@@ -695,6 +744,170 @@ function CoverBanner({ imp }: { imp: RiderImport }) {
         </div>
       </div>
     </Card>
+  );
+}
+
+// --- Roster suggestions from the rider ------------------------------------
+// Keyword → group inference for a monitor-mix role. Most specific first.
+const ROLE_GROUP_RULES: { match: RegExp; groupId: string }[] = [
+  { match: /\b(FOH|MONITOR|MON\b|SOUND)/i, groupId: 'grp_audio' },
+  { match: /\b(VOCAL|VOX|GUITAR|GTR|BASS|DRUM|KEYS?|PIANO|PERC|SYNTH|SAX|HORN|TRACKS?)/i, groupId: 'grp_artist' },
+];
+
+interface RosterSuggestion {
+  name: string;
+  role: string;
+  groupId: string;
+  inRoster: boolean;
+}
+
+/** Strip the leading mix number ("1- ") then split off the person's name to
+ *  leave the role/instrument label. Handles both "ROLE — NAME" and
+ *  "NAME — ROLE" by removing the known personName from either side. */
+function deriveRole(mixName: string, personName?: string): string {
+  let label = mixName.replace(/^\s*\d+\s*[-.)]\s*/, '').trim();
+  if (personName) {
+    const escaped = personName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    label = label.replace(new RegExp(escaped, 'i'), '').trim();
+  }
+  // Drop a leftover separator (em-dash / hyphen) on either end.
+  label = label.replace(/^[—–-]\s*/, '').replace(/\s*[—–-]$/, '').trim();
+  return label;
+}
+
+function inferGroup(role: string): string {
+  for (const rule of ROLE_GROUP_RULES) if (rule.match.test(role)) return rule.groupId;
+  return 'grp_artist';
+}
+
+/** Pull suggested roster members from the rider — monitor-mix rows that name a
+ *  person, plus the cover-page production manager. */
+const normalizeForMatch = (s: string) =>
+  s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+function extractRosterSuggestions(imp: RiderImport, rosterNames: Set<string>): RosterSuggestion[] {
+  const out: RosterSuggestion[] = [];
+  const seen = new Set<string>();
+  const push = (name: string, role: string, groupId: string) => {
+    const key = normalizeForMatch(name);
+    if (!name.trim() || seen.has(key)) return;
+    seen.add(key);
+    out.push({ name: name.trim(), role, groupId, inRoster: rosterNames.has(key) });
+  };
+
+  const inputSec = imp.sections.find((s) => s.type === 'input_list');
+  for (const mix of inputSec?.monitorMix ?? []) {
+    if (!mix.personName?.trim()) continue;
+    const role = deriveRole(mix.mixName, mix.personName);
+    push(mix.personName, role, inferGroup(role));
+  }
+
+  // Cover-page PM. Prefer the structured field; fall back to a "Production
+  // Manager:" line in the cover/contacts free text.
+  let pmName = imp.productionManager?.name?.trim();
+  if (!pmName) {
+    const cover = imp.sections.find((s) => s.type === 'cover_and_contacts');
+    const m = cover?.freeText?.match(/Production Manager\s*[:\-]\s*([^\n,]+)/i);
+    pmName = m?.[1]?.trim();
+  }
+  if (pmName) push(pmName, 'Production Manager', 'grp_production');
+
+  return out;
+}
+
+function RosterSuggestions({ imp }: { imp: RiderImport }) {
+  const { tour, addTourPerson, removeTourPerson, getGroupById } = useApp();
+  const rosterNames = new Set(tour.personnel.map((p) => normalizeForMatch(p.person.name)));
+  const suggestions = extractRosterSuggestions(imp, rosterNames);
+  if (suggestions.length === 0) return null;
+
+  const missing = suggestions.filter((s) => !s.inRoster);
+
+  const add = (s: RosterSuggestion) =>
+    addTourPerson({ name: s.name, role: s.role, groupId: s.groupId });
+
+  const remove = (s: RosterSuggestion) => {
+    const tp = tour.personnel.find(
+      (p) => normalizeForMatch(p.person.name) === normalizeForMatch(s.name),
+    );
+    if (tp) removeTourPerson(tp.id);
+  };
+
+  return (
+    <div className="mb-5">
+      <CollapsibleSection
+        eyebrow="From the rider"
+        title="Roster suggestions from rider"
+        defaultOpen={missing.length > 0}
+        badge={
+          <Chip tone={missing.length > 0 ? 'critical' : 'success'}>
+            {missing.length > 0 ? `${missing.length} not in roster` : 'All added'}
+          </Chip>
+        }
+      >
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <p className="text-[12.5px] text-[var(--color-ink-3)]">
+            People named in the rider's monitor mixes and cover page. Add the ones missing from your roster.
+          </p>
+          {missing.length > 1 && (
+            <Button
+              variant="outline"
+              size="sm"
+              leading={<Icon.Plus size={13} />}
+              onClick={() => missing.forEach(add)}
+            >
+              Add all missing ({missing.length})
+            </Button>
+          )}
+        </div>
+        <ul className="divide-y divide-[var(--color-rule-soft)] border-t border-[var(--color-rule-soft)]">
+          {suggestions.map((s) => {
+            const group = getGroupById(s.groupId);
+            return (
+              <li key={s.name} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-[13px] font-semibold text-[var(--color-ink)] truncate">{s.name}</span>
+                  {s.role && (
+                    <span className="text-[12px] text-[var(--color-ink-3)] truncate">{s.role}</span>
+                  )}
+                  {group && (
+                    <Chip size="sm" tone="neutral">
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: group.color }} />
+                      {group.name}
+                    </Chip>
+                  )}
+                </div>
+                {s.inRoster ? (
+                  <div className="shrink-0 flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#3a6b3a]">
+                      <Icon.Check size={12} /> In roster
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => remove(s)}
+                      className="shrink-0 text-[var(--color-ink-3)] hover:text-[var(--color-critical)]"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leading={<Icon.Plus size={12} />}
+                    onClick={() => add(s)}
+                    className="shrink-0"
+                  >
+                    Add to roster
+                  </Button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </CollapsibleSection>
+    </div>
   );
 }
 

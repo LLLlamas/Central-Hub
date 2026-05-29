@@ -37,6 +37,7 @@ export function TopBar() {
           <div className="relative">
             <button
               type="button"
+              data-tour="viewer-switcher"
               onClick={() => setOpen((v) => !v)}
               className="flex items-center gap-2.5 h-11 md:h-9 pl-1.5 pr-2.5 rounded-[4px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] transition-colors bg-[var(--color-card)]"
               title="Switch viewer"

@@ -20,6 +20,7 @@ import type {
   VisibilityEditRecord,
   ScheduleItemEditRecord,
   FlightPassengerResolution,
+  GearItem,
 } from '@/types';
 import type {
   ConflictResolution,
@@ -44,6 +45,7 @@ export interface OverlayBundle {
   visibilityEditHistory: [ID, VisibilityEditRecord[]][];
   scheduleItemEditHistory: [ID, ScheduleItemEditRecord[]][];
   flightPassengerResolutions: [string, FlightPassengerResolution][];
+  gearItems?: GearItem[];
   userKey?: string;
 }
 

@@ -24,6 +24,8 @@ export interface UpdateStamp {
   /** How many times this record has been updated since first creation.
    *  Used by import audit lines to switch the label from "Imported" → "Updated". */
   updates?: number;
+  /** Original filename the user uploaded (stored so summaries can show it). */
+  filename?: string;
 }
 
 // One entry in a day's lock/unlock history — captures the reason and who/when.
@@ -90,6 +92,10 @@ export interface Tour {
   /** Audit stamps for the lightweight imports that don't have their own record. */
   routeImport?: UpdateStamp;
   hotelImport?: UpdateStamp;
+  /** Previous route/hotel upload stamps, oldest first — the active stamp above
+   *  is the current upload; each re-upload pushes the prior stamp here. */
+  routeImportHistory?: UpdateStamp[];
+  hotelImportHistory?: UpdateStamp[];
   /** Tour-level visibility template — every new ScheduleItem inherits the
    *  blob for its type unless explicitly overridden on the item. See
    *  `lib/visibilityDefaults.ts`. Partial so the user can clear a type back
@@ -222,6 +228,13 @@ export interface Travel {
   recordLocator?: string;
   passengers: { tourPersonId: ID; seat?: string }[];
   visibility: Visibility;
+  /** Estimated cost per passenger, in `currency`. Seeded from the travel-agent
+   *  source where available; editable on the Supplies & Costs page. */
+  costPerPassenger?: number;
+  currency?: string;       // ISO 4217 — defaults to USD when undefined.
+  /** Filename of the source flight confirmation (PDF / CSV) — used by the
+   *  Supplies & Costs page to open the original document in the PDF viewer. */
+  sourceFilename?: string;
 }
 
 export interface Hotel {
@@ -236,6 +249,16 @@ export interface Hotel {
   occupants: { tourPersonId: ID; roomNumber?: string; roomType?: string }[];
   visibility: Visibility;
   sensitive: boolean;
+  /** Nightly rate per room, in `currency`. Seeded from the booking confirmation
+   *  where available; editable on the Supplies & Costs page. */
+  nightlyRate?: number;
+  currency?: string;       // ISO 4217 — defaults to USD when undefined.
+  /** Tax rate as a fraction (e.g. 0.16 for 16% IVA). Applied on top of the
+   *  room subtotal in the cost summary. */
+  taxRate?: number;
+  /** Filename of the source hotel confirmation PDF — used by the Supplies &
+   *  Costs page to open the original document in the PDF viewer. */
+  sourceFilename?: string;
 }
 
 export interface Task {
@@ -641,6 +664,50 @@ export interface ScheduleItemEditRecord {
   changes: FieldChange[];
   status: 'direct' | 'created' | 'deleted';
   resolvedAt: UpdateStamp;
+}
+
+// ============================================================
+// Gear & Supplies — rider-sourced + manually added items
+// ============================================================
+
+export type GearCategory =
+  | 'audio_mics'       // Microphones, DI boxes, stands
+  | 'audio_monitors'   // IEM systems, wedges
+  | 'backline_drums'   // Drum kit, hardware
+  | 'backline_bass'    // Bass amp, cab
+  | 'backline_guitar'  // Guitar amp, cab
+  | 'backline_keys'    // Keyboards, stands
+  | 'backline_other'   // Misc backline (racks, cables, tables)
+  | 'lighting'         // Lighting fixtures, console
+  | 'video'            // LED screen, VJ gear
+  | 'dressing_room'    // Dressing room supplies
+  | 'catering'         // Food and drink
+  | 'production'       // General production / staging
+  | 'other';
+
+export type GearStatus =
+  | 'needed'        // Rider requirement, not yet arranged
+  | 'sourced'       // Confirmed / arranged — rental or venue
+  | 'confirmed'     // Physically on site, verified
+  | 'not_required'; // Marked as not needed for this run
+
+export type GearProvidedBy = 'venue' | 'touring' | 'rental' | 'purchase';
+
+export interface GearItem {
+  id: ID;
+  name: string;
+  quantity: number;
+  unit?: string;           // 'each', 'pair', 'box', 'bottle', etc.
+  category: GearCategory;
+  status: GearStatus;
+  providedBy?: GearProvidedBy;
+  estimatedCost?: number;  // per unit, in tour currency
+  notes?: string;
+  /** True when extracted from a rider section; false when manually added. */
+  fromRider: boolean;
+  /** Rider section type this came from, for the source badge. */
+  riderSection?: RiderSectionType;
+  riderPage?: number;
 }
 
 // ============================================================

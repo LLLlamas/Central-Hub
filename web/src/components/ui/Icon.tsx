@@ -125,6 +125,12 @@ export const Icon = {
       <path d="M3 3l10 10M13 3L3 13" />
     </S>
   ),
+  Edit: (p: IconProps) => (
+    <S {...p}>
+      <path d="M11.5 2.5l2 2-8 8L3 13l.5-2.5z" />
+      <path d="M10 4l2 2" />
+    </S>
+  ),
   Chevron: (p: IconProps) => (
     <S {...p}>
       <path d="M5 4l4 4-4 4" />
@@ -195,6 +201,13 @@ export const Icon = {
       <rect x="2" y="3" width="12" height="10" rx="1.5" />
       <circle cx="6" cy="6.5" r="1.2" />
       <path d="M2.5 11.5l3-3 2.5 2.5 2.5-3 3 3.5" />
+    </S>
+  ),
+  Package: (p: IconProps) => (
+    <S {...p}>
+      <path d="M2 5.5l6-3 6 3v7l-6 3-6-3z" />
+      <path d="M8 2.5v10M2 5.5l6 3 6-3" />
+      <path d="M5 4l6 3" />
     </S>
   ),
 };

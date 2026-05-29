@@ -64,11 +64,18 @@ export const FIXTURES: Fixture[] = [
     extracts: 'A CDMX→MTY flight (Sep 27) with 8 passengers, for review.',
   },
   {
-    id: 'hotel_block_mexico',
+    id: 'hotel_cdmx_nh_reforma',
     kind: 'hotel',
-    filename: 'Hotel_Block_Mexico_2025-09.pdf',
-    label: 'Hotel block — Mexico leg (2 hotels)',
-    extracts: 'The CDMX + Monterrey hotel blocks, rooming lists, and hotel-advance tasks.',
+    filename: 'Hotel_CDMX_NH_Reforma_2025-09-22.pdf',
+    label: 'Hotel — NH Collection Reforma (CDMX)',
+    extracts: 'The CDMX hotel block, its rooming list, and CDMX hotel-advance tasks.',
+  },
+  {
+    id: 'hotel_mty_fiesta_americana',
+    kind: 'hotel',
+    filename: 'Hotel_MTY_Fiesta_Americana_2025-09-27.pdf',
+    label: 'Hotel — Fiesta Americana Monterrey',
+    extracts: 'The Monterrey hotel block, its rooming list, and MTY hotel-advance tasks.',
   },
 ];
 

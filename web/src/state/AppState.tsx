@@ -4,10 +4,12 @@ import { createScratchTour, scratchUsers, scratchDefaultUserKey } from '@/data/s
 import { loadScratchTour, saveScratchTour } from '@/lib/scratchStorage';
 import { loadOverlays, saveOverlays, clearOverlays } from '@/lib/overlayStorage';
 import { clearAllRiderPdfs, deleteRiderPdf, loadRiderPdf } from '@/lib/riderPdfStore';
+import { clearAllDocuments } from '@/lib/documentStore';
 import * as tourQueries from '@/lib/tourQueries';
 import type { ParsedRoute } from '@/lib/routeCsv';
 import { vis } from '@/lib/visibility';
 import { MOCK_NOW } from '@/lib/today';
+import { FLIGHT_COST_BY_LEG } from '@/data/flightFixture';
 import type {
   Tour,
   CurrentUser,
@@ -35,6 +37,7 @@ import type {
   FlightPassengerResolution,
   ScheduleItemType,
   Conflict,
+  GearItem,
 } from '@/types';
 import { defaultVisibilityForType } from '@/lib/visibilityDefaults';
 import { scheduleItemLabel } from '@/lib/format';
@@ -80,11 +83,15 @@ interface AppState {
   // The tour starts as an empty shell the user builds up by uploading fixture
   // files. Reset wipes it back to the shell. See CLAUDE.md "Data modes".
   resetScratchTour: () => void;
-  applyRouteToScratch: (parsed: ParsedRoute) => void;
+  applyRouteToScratch: (parsed: ParsedRoute, filename?: string) => void;
   addRiderImportToScratch: (ri: RiderImport, personnel: TourPerson[]) => void;
+  /** Promote a stored rider revision to the active slot (riderImports[0]).
+   *  Existing section approvals/edits are kept — they're keyed by section, not
+   *  by import, so the user doesn't lose review work. */
+  setActiveRider: (id: ID) => void;
   addFlightImportToScratch: (fi: FlightImport) => void;
   commitFlightImportToScratch: (importId: ID) => void;
-  addHotelImportToScratch: (hotels: Hotel[], tasks: Task[]) => void;
+  addHotelImportToScratch: (hotels: Hotel[], tasks: Task[], filename?: string) => void;
 
   // Cancel / re-import — each step on /ingest/flights and /ingest/riders has
   // a "Remove" affordance that wipes the data the import laid down. Reason is
@@ -101,6 +108,19 @@ interface AppState {
    *             for matched names, adds new names), then discards `incoming`. */
   replaceFlightImport: (existingId: ID, incomingId: ID) => void;
   mergeFlightImport: (existingId: ID, incomingId: ID) => void;
+
+  /** Edit one parsed passenger on a flight import (pre-approval clean-up).
+   *  Name edits re-run the personnel match — fixes typos that block matching.
+   *  Seat edits are passthrough. `unmatchedNames` is re-derived after the patch. */
+  editFlightImportPassenger: (
+    importId: ID,
+    legIndex: number,
+    passengerIndex: number,
+    patch: { name?: string; seat?: string },
+  ) => void;
+  /** Remove a parsed passenger from a flight import (junk-row clean-up).
+   *  Use when the parser picked up a footer line or non-passenger row. */
+  removeFlightImportPassenger: (importId: ID, legIndex: number, passengerIndex: number) => void;
 
   // Per-passenger resolution for unmatched flight rows. Keyed by
   // `${importId}::${name.toLowerCase()}`. Applied at commit-time.
@@ -195,6 +215,44 @@ interface AppState {
   addScheduleItem: (dayId: ID, init?: Partial<ScheduleItem>) => ID;
   deleteScheduleItem: (itemId: ID) => void;
   getScheduleItemHistory: (itemId: ID) => ScheduleItemEditRecord[];
+
+  // Personnel + groups — direct tour mutation (no propose/approve), mirroring
+  // the schedule-item content edits. `addTourPerson` returns the new id.
+  addTourPerson: (init: TourPersonInit) => ID;
+  removeTourPerson: (id: ID) => void;
+  updateTourPerson: (id: ID, patch: TourPersonPatch) => void;
+  addGroup: (name: string, color: string) => ID;
+
+  // Gear & supplies — a flat list of rider-sourced and manually-added items.
+  // Status and cost are tracked here; the rider section is the source of truth
+  // for item names/quantities. Persisted in the overlay bundle.
+  gearItems: GearItem[];
+  updateGearItem: (id: ID, patch: Partial<Omit<GearItem, 'id'>>) => void;
+  addGearItem: (init: Omit<GearItem, 'id'>) => ID;
+  deleteGearItem: (id: ID) => void;
+
+  // Inline cost edits for Travel + Hotel records — surfaced on the
+  // Supplies & Costs page. Mutate the tour directly.
+  updateHotelCost: (id: ID, patch: Partial<Pick<Hotel, 'nightlyRate' | 'currency' | 'taxRate'>>) => void;
+  updateTravelCost: (id: ID, patch: Partial<Pick<Travel, 'costPerPassenger' | 'currency'>>) => void;
+}
+
+export interface TourPersonInit {
+  name: string;
+  role: string;
+  groupId: ID;
+  tagIds?: ID[];
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface TourPersonPatch {
+  name?: string;
+  role?: string;
+  groupId?: ID;
+  tagIds?: ID[];
+  startDate?: string;
+  endDate?: string;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -356,43 +414,54 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [flightPassengerResolutions, setFlightPassengerResolutionsMap] = useState<
     ReadonlyMap<string, FlightPassengerResolution>
   >(() => new Map(initialOverlays?.flightPassengerResolutions ?? []));
+  const [gearItems, setGearItems] = useState<GearItem[]>(
+    () => initialOverlays?.gearItems ?? [],
+  );
 
   // Persist the tour so a reload resumes where the user left off.
   useEffect(() => {
     saveScratchTour(tour);
   }, [tour]);
 
-  // Rehydrate the rider PDF's Blob URL after a reload. `scratchStorage` strips
+  // Rehydrate every rider PDF's Blob URL after a reload. `scratchStorage` strips
   // `pdfObjectUrl` on save; the raw bytes live in IndexedDB keyed by import id.
-  // Load them, mint a fresh Blob URL, and patch it back onto the import so the
-  // embedded viewer + every "view the rider PDF" affordance keeps working
-  // without a re-upload.
+  // Each rider (active + prior revisions) gets its bytes loaded, a fresh Blob
+  // URL minted, and the URL patched back so the version-history "View PDF" links
+  // and the embedded viewer keep working without a re-upload. Re-runs only when
+  // the set of riders-missing-a-url changes (stable id:hasUrl fingerprint).
+  const riderUrlState = tour.riderImports.map((r) => `${r.id}:${r.pdfObjectUrl ? '1' : '0'}`).join(',');
   useEffect(() => {
-    const ri = tour.riderImports[0];
-    if (!ri || ri.pdfObjectUrl) return;
+    const needsUrl = tour.riderImports.filter((r) => !r.pdfObjectUrl);
+    if (needsUrl.length === 0) return;
     let cancelled = false;
-    let mintedUrl: string | undefined;
-    (async () => {
-      const bytes = await loadRiderPdf(ri.id);
-      if (cancelled || !bytes) return;
-      mintedUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-      setTour((t) => {
-        if (t.riderImports[0]?.id !== ri.id) return t;
-        return {
+    Promise.all(
+      needsUrl.map(async (ri) => {
+        const bytes = await loadRiderPdf(ri.id);
+        if (cancelled || !bytes) return null;
+        const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        return { id: ri.id, url };
+      }),
+    )
+      .then((results) => {
+        if (cancelled) return;
+        const updates = results.filter((r): r is { id: string; url: string } => r !== null);
+        if (updates.length === 0) return;
+        setTour((t) => ({
           ...t,
-          riderImports: [{ ...t.riderImports[0], pdfObjectUrl: mintedUrl }, ...t.riderImports.slice(1)],
-        };
+          riderImports: t.riderImports.map((ri) => {
+            const match = updates.find((u) => u.id === ri.id);
+            return match ? { ...ri, pdfObjectUrl: match.url } : ri;
+          }),
+        }));
+      })
+      .catch(() => {
+        /* rehydrate failure is non-fatal — UI degrades to "no PDF" affordances */
       });
-    })().catch(() => {
-      /* rehydrate failure is non-fatal — UI degrades to "no PDF" affordances */
-    });
     return () => {
       cancelled = true;
-      // Don't revoke `mintedUrl` here: it's now held by `tour.riderImports[0]`
-      // and the next effect run (only when the import id changes) will be a
-      // no-op because `pdfObjectUrl` is set. A full reset clears it.
     };
-  }, [tour.riderImports[0]?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [riderUrlState]);
 
   // Re-derive plot data URLs after a reload. `scratchStorage` strips them on
   // save (base64 PNGs blow the localStorage quota), so a restored tour has
@@ -421,6 +490,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     // Re-run only when the rider import id changes (a fresh upload or reset).
   }, [tour.riderImports[0]?.id]);
 
+  // Seed or smart-merge gear items whenever the active rider changes. On first
+  // import the list is empty — seed directly. On re-import (new rider version),
+  // merge: keep user edits on existing items, update quantities, append new items.
+  useEffect(() => {
+    const ri = tour.riderImports[0];
+    if (!ri) return;
+    let cancelled = false;
+    import('@/data/gearFixture').then(({ buildRiderGearItems, mergeGearItems }) => {
+      if (cancelled) return;
+      const fresh = buildRiderGearItems();
+      setGearItems((cur) => (cur.length === 0 ? fresh : mergeGearItems(cur, fresh)));
+    }).catch(() => { /* non-fatal */ });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tour.riderImports[0]?.id]);
+
   // Persist the overlay bundle — every Map/Set above. Each write replaces the
   // whole bundle (small payload — entry arrays of typed records).
   useEffect(() => {
@@ -439,6 +524,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       visibilityEditHistory: [...visibilityEditHistory.entries()],
       scheduleItemEditHistory: [...scheduleItemEditHistory.entries()],
       flightPassengerResolutions: [...flightPassengerResolutions.entries()],
+      gearItems,
       userKey,
     });
   }, [
@@ -456,6 +542,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     visibilityEditHistory,
     scheduleItemEditHistory,
     flightPassengerResolutions,
+    gearItems,
     userKey,
   ]);
 
@@ -486,8 +573,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setVisibilityEditHistory(new Map());
     setScheduleItemEditHistory(new Map());
     setFlightPassengerResolutionsMap(new Map());
+    setGearItems([]);
     clearOverlays();
     void clearAllRiderPdfs();
+    void clearAllDocuments();
   }, []);
 
   // ---- Tour mutators -------------------------------------------------------
@@ -495,7 +584,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setTour((prev) => updater(prev));
   }, []);
   const applyRouteToScratch = useCallback(
-    (parsed: ParsedRoute) => {
+    (parsed: ParsedRoute, filename?: string) => {
       updateScratchTour((t) => ({
         ...t,
         legs: parsed.legs,
@@ -504,10 +593,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         startDate: parsed.startDate,
         endDate: parsed.endDate,
         status: 'in_progress',
+        routeImportHistory: [
+          ...(t.routeImportHistory ?? []),
+          ...(t.routeImport ? [t.routeImport] : []),
+        ],
         routeImport: {
           at: MOCK_NOW,
           by: currentName,
           updates: (t.routeImport?.updates ?? 0) + (t.routeImport ? 1 : 0),
+          filename: filename ?? t.routeImport?.filename,
         },
       }));
     },
@@ -515,12 +609,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   );
   const addRiderImportToScratch = useCallback(
     (ri: RiderImport, newPersonnel: TourPerson[]) => {
-      const stamped: RiderImport = { ...ri, uploadedBy: ri.uploadedBy ?? currentName };
       updateScratchTour((t) => {
+        const prevActive = t.riderImports[0];
+        const stamped: RiderImport = {
+          ...ri,
+          uploadedBy: ri.uploadedBy ?? currentName,
+          revision: (prevActive?.revision ?? 0) + 1,
+          revisionOf: prevActive?.id,
+        };
         const existing = new Set(t.personnel.map((p) => p.id));
         return {
           ...t,
-          riderImports: [stamped],
+          riderImports: [stamped, ...t.riderImports],
           artistName: stamped.artistName ?? t.artistName,
           personnel: [...t.personnel, ...newPersonnel.filter((p) => !existing.has(p.id))],
         };
@@ -534,8 +634,23 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         });
         return next;
       });
+      // Gear seeding is handled by the useEffect below that watches
+      // `tour.riderImports[0]?.id` — same pattern as plot image hydration.
     },
     [updateScratchTour, currentName],
+  );
+  const setActiveRider = useCallback(
+    (id: ID) => {
+      updateScratchTour((t) => {
+        const idx = t.riderImports.findIndex((r) => r.id === id);
+        if (idx <= 0) return t; // already active or not found
+        const reordered = [...t.riderImports];
+        const [moved] = reordered.splice(idx, 1);
+        reordered.unshift(moved);
+        return { ...t, riderImports: reordered };
+      });
+    },
+    [updateScratchTour],
   );
   const addFlightImportToScratch = useCallback(
     (fi: FlightImport) => {
@@ -629,6 +744,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             }
             return [];
           });
+          const costKey = `${pf.airline}::${pf.flightNumber}::${departDate}`;
+          const cost = FLIGHT_COST_BY_LEG[costKey];
           return {
             id: `tr_${imp.id}_${i}`,
             dayId: day?.id ?? '',
@@ -642,6 +759,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             recordLocator: pf.recordLocator,
             passengers,
             visibility: vis.everyone('sees'),
+            costPerPassenger: cost?.costPerPassenger,
+            currency: cost?.currency,
+            sourceFilename: imp.filename,
           };
         });
         return {
@@ -661,7 +781,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   );
 
   const addHotelImportToScratch = useCallback(
-    (hotels: Hotel[], tasks: Task[]) => {
+    (hotels: Hotel[], tasks: Task[], filename?: string) => {
       updateScratchTour((t) => {
         const hotelIds = new Set(hotels.map((h) => h.id));
         const taskIds = new Set(tasks.map((tk) => tk.id));
@@ -669,10 +789,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           ...t,
           hotels: [...t.hotels.filter((h) => !hotelIds.has(h.id)), ...hotels],
           tasks: [...t.tasks.filter((tk) => !taskIds.has(tk.id)), ...tasks],
+          hotelImportHistory: [
+            ...(t.hotelImportHistory ?? []),
+            ...(t.hotelImport ? [t.hotelImport] : []),
+          ],
           hotelImport: {
             at: MOCK_NOW,
             by: currentName,
             updates: (t.hotelImport?.updates ?? 0) + (t.hotelImport ? 1 : 0),
+            filename: filename ?? t.hotelImport?.filename,
           },
         };
       });
@@ -707,6 +832,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         riderImports: t.riderImports.filter((r) => r.id !== id),
       }));
       void deleteRiderPdf(id);
+      // Clear gear items seeded from this rider so re-import gets a fresh list.
+      setGearItems([]);
     },
     [updateScratchTour],
   );
@@ -787,6 +914,23 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           };
         });
         const wasImported = existing.status === 'imported';
+
+        // Detect purely additive merge: all existing passengers survive with
+        // the same seat. If so, patch Travel records directly — no re-approval.
+        const isAdditiveOnly =
+          wasImported &&
+          existing.parsedFlights.every((pfExisting, idx) => {
+            const pfMerged = merged[idx];
+            if (!pfMerged) return false;
+            return pfExisting.passengers.every((ep) =>
+              pfMerged.passengers.some(
+                (mp) =>
+                  mp.name.trim().toLowerCase() === ep.name.trim().toLowerCase() &&
+                  mp.seat === ep.seat,
+              ),
+            );
+          });
+
         const mergedImport: FlightImport = {
           ...existing,
           parsedFlights: merged,
@@ -796,18 +940,46 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           uploadedAt: MOCK_NOW,
           uploadedBy: currentName,
           updates: (existing.updates ?? 0) + 1,
-          // If the existing import was already committed, the merged data
-          // makes its Travel stale — back to review so the user re-approves.
-          status: wasImported ? 'review' : existing.status,
+          status: isAdditiveOnly ? 'imported' : wasImported ? 'review' : existing.status,
         };
+
+        // Additive-only: patch existing Travel records with newly matched passengers.
+        // Non-additive: drop Travel so the user re-approves the updated data.
+        let updatedTravel = t.travel;
+        if (isAdditiveOnly) {
+          updatedTravel = t.travel.map((tr) => {
+            if (!tr.id.startsWith(`tr_${existing.id}_`)) return tr;
+            const legIdx = parseInt(tr.id.split('_').slice(-1)[0] ?? '0', 10);
+            const pfExisting = existing.parsedFlights[legIdx];
+            const pfMerged = merged[legIdx];
+            if (!pfExisting || !pfMerged) return tr;
+            const newlyMatched = pfMerged.passengers.filter(
+              (mp) =>
+                mp.matchedTourPersonId &&
+                !pfExisting.passengers.some(
+                  (ep) => ep.matchedTourPersonId === mp.matchedTourPersonId,
+                ),
+            );
+            if (newlyMatched.length === 0) return tr;
+            return {
+              ...tr,
+              passengers: [
+                ...tr.passengers,
+                ...newlyMatched.map((p) => ({ tourPersonId: p.matchedTourPersonId!, seat: p.seat })),
+              ],
+            };
+          });
+        }
+
         return {
           ...t,
           flightImports: t.flightImports
             .filter((f) => f.id !== incomingId)
             .map((f) => (f.id === existingId ? mergedImport : f)),
-          travel: wasImported
-            ? t.travel.filter((tr) => !tr.id.startsWith(`tr_${existing.id}_`))
-            : t.travel,
+          travel:
+            wasImported && !isAdditiveOnly
+              ? t.travel.filter((tr) => !tr.id.startsWith(`tr_${existing.id}_`))
+              : updatedTravel,
         };
       });
       setFlightPassengerResolutionsMap((prev) => {
@@ -817,6 +989,92 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       });
     },
     [updateScratchTour, currentName],
+  );
+
+  // Rewrite one leg's passengers and re-derive unmatchedNames against the
+  // current roster. The transform runs inside the tour updater so it sees the
+  // freshest state; any dropped names get their stored resolutions purged.
+  const patchFlightImportLeg = useCallback(
+    (
+      importId: ID,
+      legIndex: number,
+      transform: (passengers: FlightImport['parsedFlights'][number]['passengers']) =>
+        FlightImport['parsedFlights'][number]['passengers'],
+    ) => {
+      // Assigned (not pushed) inside the updater so a StrictMode double-invoke
+      // produces the same final array instead of a duplicated one. The updater
+      // must stay pure of its own externally-visible side effects.
+      let droppedNames: string[] = [];
+      updateScratchTour((t) => {
+        const imp = t.flightImports.find((f) => f.id === importId);
+        if (!imp) return t;
+        const byName = new Map(
+          t.personnel.map((p) => [p.person.name.trim().toLowerCase(), p.id]),
+        );
+        const localDropped: string[] = [];
+        const nextFlights = imp.parsedFlights.map((pf, i) => {
+          if (i !== legIndex) return pf;
+          const transformed = transform(pf.passengers);
+          // Re-run matching so a name fix flips the row from Unmatched → Matched.
+          const rematched = transformed.map((p) => ({
+            ...p,
+            matchedTourPersonId: byName.get(p.name.trim().toLowerCase()),
+          }));
+          // Any prior name no longer in the leg has its resolution purged. The
+          // *new* name in a rename also has its resolution cleared so an old
+          // resolution from a different person doesn't haunt the renamed row.
+          const newNames = new Set(rematched.map((p) => p.name.trim().toLowerCase()));
+          const oldNames = new Set(pf.passengers.map((p) => p.name.trim().toLowerCase()));
+          for (const prev of pf.passengers) {
+            if (!newNames.has(prev.name.trim().toLowerCase())) localDropped.push(prev.name);
+          }
+          for (const next of rematched) {
+            if (!oldNames.has(next.name.trim().toLowerCase())) localDropped.push(next.name);
+          }
+          return { ...pf, passengers: rematched };
+        });
+        droppedNames = localDropped;
+        const unmatched = nextFlights.flatMap((pf) =>
+          pf.passengers.filter((p) => !p.matchedTourPersonId).map((p) => p.name),
+        );
+        return {
+          ...t,
+          flightImports: t.flightImports.map((f) =>
+            f.id === importId ? { ...f, parsedFlights: nextFlights, unmatchedNames: unmatched } : f,
+          ),
+        };
+      });
+      if (droppedNames.length) {
+        setFlightPassengerResolutionsMap((prev) => {
+          const next = new Map(prev);
+          for (const n of droppedNames) next.delete(`${importId}::${n.trim().toLowerCase()}`);
+          return next;
+        });
+      }
+    },
+    [updateScratchTour],
+  );
+
+  const editFlightImportPassenger = useCallback(
+    (importId: ID, legIndex: number, passengerIndex: number, patch: { name?: string; seat?: string }) => {
+      patchFlightImportLeg(importId, legIndex, (passengers) =>
+        passengers.map((p, i) =>
+          i === passengerIndex
+            ? { ...p, name: patch.name ?? p.name, seat: patch.seat !== undefined ? patch.seat : p.seat }
+            : p,
+        ),
+      );
+    },
+    [patchFlightImportLeg],
+  );
+
+  const removeFlightImportPassenger = useCallback(
+    (importId: ID, legIndex: number, passengerIndex: number) => {
+      patchFlightImportLeg(importId, legIndex, (passengers) =>
+        passengers.filter((_, i) => i !== passengerIndex),
+      );
+    },
+    [patchFlightImportLeg],
   );
 
   // ---- Schedule-type visibility defaults ----------------------------------
@@ -1385,6 +1643,131 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [scheduleItemEditHistory],
   );
 
+  // ---- Personnel + groups (direct tour mutation) --------------------------
+  const addTourPerson = useCallback(
+    (init: TourPersonInit): ID => {
+      const used = new Set(tour.personnel.flatMap((p) => [p.id, p.personId]));
+      const base = `manual_${init.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
+      let slug = base;
+      let n = 2;
+      while (used.has(`tp_${slug}`) || used.has(`p_${slug}`)) slug = `${base}_${n++}`;
+      const tpId = `tp_${slug}`;
+      const pId = `p_${slug}`;
+      const newPerson: TourPerson = {
+        id: tpId,
+        personId: pId,
+        person: { id: pId, name: init.name },
+        role: init.role,
+        groupId: init.groupId,
+        tagIds: init.tagIds ?? [],
+        startDate: init.startDate ?? tour.startDate,
+        endDate: init.endDate ?? tour.endDate,
+        isPlaceholder: false,
+      };
+      updateScratchTour((t) => ({ ...t, personnel: [...t.personnel, newPerson] }));
+      return tpId;
+    },
+    [tour.personnel, tour.startDate, tour.endDate, updateScratchTour],
+  );
+
+  const removeTourPerson = useCallback(
+    (id: ID) => {
+      updateScratchTour((t) => ({ ...t, personnel: t.personnel.filter((tp) => tp.id !== id) }));
+    },
+    [updateScratchTour],
+  );
+
+  const updateTourPerson = useCallback(
+    (id: ID, patch: TourPersonPatch) => {
+      updateScratchTour((t) => ({
+        ...t,
+        personnel: t.personnel.map((tp) =>
+          tp.id === id
+            ? {
+                ...tp,
+                role: patch.role ?? tp.role,
+                groupId: patch.groupId ?? tp.groupId,
+                tagIds: patch.tagIds ?? tp.tagIds,
+                startDate: patch.startDate ?? tp.startDate,
+                endDate: patch.endDate ?? tp.endDate,
+                person:
+                  patch.name !== undefined
+                    ? { ...tp.person, name: patch.name }
+                    : tp.person,
+              }
+            : tp,
+        ),
+      }));
+    },
+    [updateScratchTour],
+  );
+
+  // ---- Gear & supplies mutations ------------------------------------------
+  const updateGearItem = useCallback(
+    (itemId: ID, patch: Partial<Omit<GearItem, 'id'>>) => {
+      setGearItems((prev) => prev.map((g) => (g.id === itemId ? { ...g, ...patch } : g)));
+    },
+    [],
+  );
+
+  const addGearItem = useCallback(
+    (init: Omit<GearItem, 'id'>): ID => {
+      let id!: ID;
+      setGearItems((prev) => {
+        // Use the current list length as a monotonic offset — unique within session.
+        id = `gear_manual_${prev.length + 1}`;
+        return [...prev, { ...init, id }];
+      });
+      return id;
+    },
+    [],
+  );
+
+  const deleteGearItem = useCallback(
+    (itemId: ID) => {
+      setGearItems((prev) => prev.filter((g) => g.id !== itemId));
+    },
+    [],
+  );
+
+  // ---- Travel / Hotel cost edits ------------------------------------------
+  // Inline edits from the Supplies & Costs page. Mutate the tour directly
+  // (rebuild + persist), the same shape as updateScheduleItem — every read
+  // site sees the change without an overlay layer.
+  const updateHotelCost = useCallback(
+    (hotelId: ID, patch: Partial<Pick<Hotel, 'nightlyRate' | 'currency' | 'taxRate'>>) => {
+      updateScratchTour((t) => ({
+        ...t,
+        hotels: t.hotels.map((h) => (h.id === hotelId ? { ...h, ...patch } : h)),
+      }));
+    },
+    [updateScratchTour],
+  );
+
+  const updateTravelCost = useCallback(
+    (travelId: ID, patch: Partial<Pick<Travel, 'costPerPassenger' | 'currency'>>) => {
+      updateScratchTour((t) => ({
+        ...t,
+        travel: t.travel.map((tr) => (tr.id === travelId ? { ...tr, ...patch } : tr)),
+      }));
+    },
+    [updateScratchTour],
+  );
+
+  const addGroup = useCallback(
+    (name: string, color: string): ID => {
+      const used = new Set(tour.groups.map((g) => g.id));
+      const base = `grp_manual_${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
+      let id = base;
+      let n = 2;
+      while (used.has(id)) id = `${base}_${n++}`;
+      const newGroup: Group = { id, name: name.trim(), color };
+      updateScratchTour((t) => ({ ...t, groups: [...t.groups, newGroup] }));
+      return id;
+    },
+    [tour.groups, updateScratchTour],
+  );
+
   const getPendingConflictResolution = useCallback(
     (id: ID) => pendingConflictResolutions.get(id),
     [pendingConflictResolutions],
@@ -1440,6 +1823,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       resetScratchTour,
       applyRouteToScratch,
       addRiderImportToScratch,
+      setActiveRider,
       addFlightImportToScratch,
       commitFlightImportToScratch,
       addHotelImportToScratch,
@@ -1449,6 +1833,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       cancelHotelImport,
       replaceFlightImport,
       mergeFlightImport,
+      editFlightImportPassenger,
+      removeFlightImportPassenger,
       flightPassengerResolutions,
       setFlightPassengerResolution,
       getFlightPassengerResolution,
@@ -1505,8 +1891,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       addScheduleItem,
       deleteScheduleItem,
       getScheduleItemHistory,
+      addTourPerson,
+      removeTourPerson,
+      updateTourPerson,
+      addGroup,
+      gearItems,
+      updateGearItem,
+      addGearItem,
+      deleteGearItem,
+      updateHotelCost,
+      updateTravelCost,
     }),
-    [tour, user, userKey, allUsers, resetScratchTour, applyRouteToScratch, addRiderImportToScratch, addFlightImportToScratch, commitFlightImportToScratch, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory],
+    [tour, user, userKey, allUsers, resetScratchTour, applyRouteToScratch, addRiderImportToScratch, setActiveRider, addFlightImportToScratch, commitFlightImportToScratch, editFlightImportPassenger, removeFlightImportPassenger, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory, addTourPerson, updateTourPerson, addGroup, gearItems, updateGearItem, addGearItem, deleteGearItem, updateHotelCost, updateTravelCost],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

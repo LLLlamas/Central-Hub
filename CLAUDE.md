@@ -26,7 +26,7 @@ Source-of-truth docs in repo root:
 - `pdf-highlighter.md` — the in-app PDF viewer's design + the (unbuilt) text-highlighting plan
 - `PDF-Parser-In-House.md` — design notes for the in-house pdfjs-based parser (`lib/pdfParser.ts`)
 - `RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf` — canonical rider test fixture
-- `web/public/` holds the uploadable scratch fixtures: the rider PDF, the route CSV, the travel-agent grid CSV, two flight-confirmation PDFs, and a hotel-block confirmation PDF
+- `web/public/` holds the uploadable scratch fixtures: the rider PDF, the route CSV, the travel-agent grid CSV, two flight-confirmation PDFs, and **two per-hotel booking-confirmation PDFs (one per hotel)** — see "Flights & hotels: many docs in, one queue" below
 - `outdated/` (gitignored) — prototype-era artifacts moved out of the build: the old 32-day route CSV, the booking-agent deal memo, and the orphan AV flight PDF
 
 ## Run
@@ -57,7 +57,8 @@ web/src/
 │   ├── scratchTour.ts             # createScratchTour() — empty shell the app boots into
 │   ├── riderFixture.ts            # Rider clone + named personnel for the scratch rider import
 │   ├── flightFixture.ts           # Raw flight data + buildScratchFlightImport (name-matched)
-│   ├── hotelFixture.ts            # Raw hotel-block data + buildScratchHotelImport (hotels + tasks)
+│   ├── hotelFixture.ts            # Per-hotel raw data + buildScratchHotelImport(fixtureId, personnel) — one hotel + tasks per call
+│   ├── gearFixture.ts             # buildRiderGearItems() + mergeGearItems() — ~80 GearItems seeded from rider (§6/§9/§13/§14)
 │   ├── mockVenues.ts              # Per-venueId mock address/promoter/house-PM info
 │   ├── sources.ts                 # MOCK provenance registry (where data should come from)
 │   └── realSources.ts             # REAL provenance registry (rider page refs + user entries)
@@ -69,6 +70,8 @@ web/src/
 │   ├── fixtureMatcher.ts          # FIXTURES registry + matchFixture (filename → known fixture)
 │   ├── scratchStorage.ts          # localStorage load/save for the scratch tour
 │   ├── overlayStorage.ts          # localStorage load/save for AppState overlays (visibility edits, locks, history, …)
+│   ├── riderPdfStore.ts           # IndexedDB `rider-pdfs` store (DB v2) — rider PDF bytes keyed by RiderImport.id
+│   ├── documentStore.ts           # IndexedDB `documents` store (DB v2) — general doc bytes (hotel PDFs, future route CSVs)
 │   ├── format.ts                  # Date/dayType/scheduleItem formatters
 │   ├── riderSections.ts           # §N → page-number map + RiderSectionType → §N
 │   ├── today.ts                   # Pinned demo clock — MOCK_TODAY / MOCK_NOW
@@ -99,6 +102,7 @@ web/src/
     ├── DayDetail.tsx              # /calendar/:date
     ├── Personnel.tsx              # /personnel
     ├── Plots.tsx                  # /plots (top-level rider plots grid)
+    ├── Gear.tsx                   # /gear — Gear & Supplies tracker (status + cost estimates)
     ├── ScheduleAndVisibility.tsx  # /schedule
     ├── DaySheets.tsx              # /daysheet, /daysheet/:date (in-app sheet)
     ├── DaySheetPrint.tsx          # /print/daysheet/:date (printable, no chrome)
@@ -143,9 +147,11 @@ How the scratch tour works:
   side-by-side rider PDFs to the canonical rider fixture so the fallback still resolves.
 - Tour mutators live in `AppState`: `applyRouteToScratch`, `addRiderImportToScratch`,
   `addFlightImportToScratch`, `commitFlightImportToScratch`; `resetScratchTour()` wipes
-  back to the empty shell.
-- **Persistence:** two localStorage keys, both per-browser. (1) `tour-hub:scratch-tour`
-  via `scratchStorage.ts` holds the `Tour`. (2) `tour-hub:scratch-overlays` via
+  back to the empty shell. `setActiveRider(id)` promotes any stored rider revision to
+  position `[0]` without clearing section approvals/edits.
+- **Persistence:** two localStorage keys + IndexedDB, all per-browser. (1) `tour-hub:scratch-tour`
+  via `scratchStorage.ts` holds the `Tour` (including the full `riderImports[]` version
+  history, `routeImportHistory[]`, and `hotelImportHistory[]`). (2) `tour-hub:scratch-overlays` via
   `overlayStorage.ts` holds every AppState overlay — `lockedDays`, `visibilityEdits`,
   `pendingVisibilityEdits`, `visibilityEditHistory`, `scheduleItemEditHistory`,
   `sectionEdits`, `pendingEdits`,
@@ -154,9 +160,13 @@ How the scratch tour works:
   `flightPassengerResolutions`, plus `userKey`. Maps serialise as entry arrays,
   Sets as plain arrays — both JSON-safe. One `useEffect` watches every overlay
   and writes the whole bundle on any change; `resetScratchTour` clears both keys
-  and resets every Map/Set in-memory. The uploaded PDF/CSV is never stored — only
-  parsed metadata. **Multi-user note:** still per-browser; for a real demo, both
-  payloads need server-side, per-user storage.
+  and resets every Map/Set in-memory. (3) IndexedDB `tour-hub` DB (v2, two stores):
+  `rider-pdfs` keyed by `RiderImport.id` holds raw PDF bytes for **every** imported
+  rider version (not just the active one); on boot AppStateProvider rehydrates Blob
+  URLs for all riders missing a `pdfObjectUrl`. `documents` (DB v2 addition) is
+  reserved for hotel PDFs and other binary attachments via `lib/documentStore.ts`.
+  **Multi-user note:** still per-browser; for a real demo, all three payloads need
+  server-side, per-user storage.
 - The viewer switcher (`allUsers`) is derived from the tour's own personnel — starts as
   just the TM, grows when the rider import adds the band + crew (`scratchUsers`).
 
@@ -164,19 +174,53 @@ The uploadable scratch fixtures in `web/public/`: the rider PDF,
 `mock-tour-route-mexico-7day.csv` (a 7-day Mexico-leg route — Sep 22–28),
 `mock-travel-grid-mexico.csv` (the travel-agent grid — every passenger × leg
 in one file, the bulk path for flights), `AM19_…` + `VB1014_…` per-flight
-confirmation PDFs (the boarding-pass path), and `Hotel_Block_Mexico_2025-09.pdf`
-(the CDMX + Monterrey hotel blocks). The PDFs are generated by
-`scripts/gen-flight-pdfs.mjs`. The sample data is deliberately the "follow
-along exactly" set the walkthrough references — keep filenames, the `FIXTURES`
-registry, and the `*Fixture.ts` / `travelGridCsv.ts` files in sync if it changes.
+confirmation PDFs (the per-flight e-ticket path), and **two per-hotel booking
+confirmations** — `Hotel_CDMX_NH_Reforma_2025-09-22.pdf` (NH Collection Reforma)
+and `Hotel_MTY_Fiesta_Americana_2025-09-27.pdf` (Fiesta Americana Monterrey).
+The PDFs are generated by `scripts/gen-flight-pdfs.mjs` (Delta-boarding-pass-
+inspired layout for flights; hotel-booking-invoice layout for hotels — keep the
+parser anchor labels `BOOKING REFERENCE / FLIGHT / DEPART / ARRIVE / NAME /
+SEAT` and `HOTEL / CHECK-IN / CHECK-OUT / NIGHTS / ROOMING LIST / GUEST / ROOM`
+in any redesign so `parseFlightPdf` / `parseHotelPdf` keep working). The
+flight passenger table is **NAME + SEAT only** — boarding time is a flight-
+level value (already shown in the BOARDING strip above the table) and is the
+same for every passenger on the leg, so it's not duplicated per-row. The
+parser pulls `name` from x < 250 and `seat` from the 250–400 px band (the
+SEAT column anchored at x ≈ 326), preferring tokens that match the seat
+pattern `^\d{1,3}[A-K]$` and falling back to the raw band text otherwise.
+If you reposition columns in `gen-flight-pdfs.mjs`, update the x-band
+constants in `parseFlightPages` (`lib/pdfParser.ts`) to match.
+The sample data is deliberately the "follow along exactly" set the walkthrough
+references — keep filenames, the `FIXTURES` registry, and the `*Fixture.ts` /
+`travelGridCsv.ts` files in sync if it changes.
+
+**Flights & hotels: many docs in, one queue.** A TM doesn't always receive a
+single bundled grid — more often it's a pile of individual PDFs / images
+forwarded one at a time. Both ingest surfaces support multi-file drops:
+- **Flights:** the travel-agent grid CSV (bulk path) and per-flight PDF
+  confirmations (boarding-pass / e-ticket path) sit side-by-side on
+  `/ingest/flights` Step 2; both feed the same review queue, both accept
+  `multiple` files in one drop. A per-flight PDF can be the group e-ticket
+  (all passengers in one doc, what the AM19/VB1014 fixtures model) or a
+  single-passenger boarding pass — the parser uses the same anchor labels
+  either way.
+- **Hotels:** **one PDF per hotel**, drop them all at once. Each upload runs
+  through `parseHotelPdf` (or the fixture fallback by filename), produces one
+  `Hotel` record, and bumps `Tour.hotelImport`. The hotel dropzone uses
+  `multiple` and iterates `importHotelFile` per file; counts roll up into a
+  single success/warning note. There is no longer a single bundled "hotel
+  block confirmation" — `Hotel_Block_Mexico_2025-09.pdf` was retired.
 
 **Re-upload + "Updated" audit semantics.** Route and hotel steps don't have a
 "Cancel import" button — in practice the user doesn't cancel, they *update*
 (re-upload a corrected file). Each summary has a **Re-upload** toggle that
-re-opens the dropzone in place; dropping a new file replaces the data and
+re-opens the dropzone in place; dropping a new file replaces the live data and
 bumps `UpdateStamp.updates` on the relevant stamp (`Tour.routeImport` /
 `Tour.hotelImport`). The audit line then flips from "Imported by X" → "Updated
-by X" once `updates > 0`. `cancelRouteImport` / `cancelHotelImport` mutators
+by X" once `updates > 0`. Each re-upload also pushes the previous stamp into
+`Tour.routeImportHistory[]` / `Tour.hotelImportHistory[]` so the full upload
+timeline is preserved — surfaced as collapsible "Route history" / "Hotel history"
+panels in `FlightIngest`. `cancelRouteImport` / `cancelHotelImport` mutators
 still exist on `AppState` (for the rare wipe case) but are not surfaced in the
 UI — for "start over from empty," use the global Reset in the ScratchBanner.
 Audit stamps are sourced from `Tour.routeImport` / `Tour.hotelImport`
@@ -192,8 +236,15 @@ review-before-approve surface on `/ingest/flights`. Duplicate detection
 incoming imports that describe the same leg; the review banner diffs the two
 and offers **Replace** (`replaceFlightImport`) or **Merge**
 (`mergeFlightImport`) — both bump `FlightImport.updates` and flip the
-audit line from "imported" → "updated". Unmatched passenger names get
-per-row Assign / Add new / Skip resolution at commit time, stored in
+audit line from "imported" → "updated". **Additive-only merge fast-path:** when
+`mergeFlightImport` detects that all existing passengers survive unchanged (only
+new passengers added, no seat/metadata changes) AND the existing import was
+already committed (`status: 'imported'`), it patches the live Travel records
+directly and keeps `status: 'imported'` — no re-approval needed. The UI labels
+the button "Add N passenger(s) to Travel" and shows a green note. Any merge that
+changes seats, removes passengers, or alters flight metadata still reverts to
+`review` and drops Travel as before. Unmatched passenger names get per-row Assign
+/ Add new / Skip resolution at commit time, stored in
 `AppState.flightPassengerResolutions` keyed `${importId}::${name.toLowerCase()}`.
 The review surface also has a **Discard** button (real cancellation, pre-approve) —
 `discardFlightImport(id)` removes the import + any Travel in its namespace
@@ -226,12 +277,24 @@ hotel-advance `Task`s, so the Day Sheet's Hotel and Tasks panels have content.
   centered feature steps that tour the post-ingest surfaces (Calendar, Day Sheet, **day-sheet
   Edit mode**, day locking, conflicts, schedule permissions); then a closing step.
 - Targets are `data-tour="…"` attributes (`FileDropZone` has a `tourAnchor` prop; plus
-  `flight-approve`, `rider-sections`, `hotel-dropzone`). Feature steps omit `target` and
-  use a centered bubble. The `/` intro screen (`ScratchGetStarted` in `TourOverview`)
-  and the `ScratchBanner` both expose a "Start the walkthrough" button.
+  `flight-approve`, `rider-sections`). Feature steps omit `target` and use a centered
+  bubble. The `/` intro screen (`ScratchGetStarted` in `TourOverview`) and the
+  `ScratchBanner` both expose a "Start the walkthrough" button.
+- **Anchor on the actual element the user should interact with, then drive surrounding
+  state so it's visible.** Earlier we anchored `hotel-dropzone` on the outer wrapper of
+  the Hotels `CollapsibleSection` so the spotlight wouldn't collapse when the section
+  was closed — but that pointed the spotlight at the *header* instead of the dropzone.
+  The right pattern: anchor on the inner `FileDropZone` (via `tourAnchor`) and force
+  the section open while the step is active. `FlightIngest` does this by reading
+  `useTour().step?.id` and OR-ing it into each section's `defaultOpen` (route → `route`,
+  flights → `flight` / `flight-approve`, hotels → `hotel`). `CollapsibleSection` re-runs
+  an effect on `defaultOpen` flips, so the section auto-expands as the walkthrough
+  advances. If the user back-navigates after the import completed (dropzone replaced by
+  a summary card), the spotlight falls back to centered — acceptable trade-off.
 
-When adding a tour step, add its `data-tour` anchor on the real element and a step to
-`scratchTourSteps.ts`. Keep step copy short and warm.
+When adding a tour step, add its `data-tour` anchor on the element to spotlight, make
+sure any surrounding collapsible/conditional state is opened while the step is active,
+and add a step to `scratchTourSteps.ts`. Keep step copy short and warm.
 
 ## The fixture data at a glance
 
@@ -295,6 +358,7 @@ Lives in React Context (`state/AppState.tsx`). The single provider is mounted **
 Currently exposes:
 - `tour`, `user`, `userKey`, `setUserKey`, `allUsers` — `tour` is the build-from-scratch tour (restored from localStorage, or a fresh shell); `allUsers` is derived from the tour's personnel. `userKey` is a plain `string` (scratch keys aren't compile-time known)
 - `resetScratchTour()` and the tour mutators `applyRouteToScratch` / `addRiderImportToScratch` / `addFlightImportToScratch` / `commitFlightImportToScratch` / `addHotelImportToScratch` — see "Data modes" above
+- `gearItems`, `updateGearItem(id, patch)`, `addGearItem(init)`, `deleteGearItem(id)` — gear & supplies list; persisted in `overlayStorage`; seeded from rider on first import
 - The tour query helpers `getDay` / `getDayById` / `getScheduleItemsForDay` / `getTravelForDay` / `getHotelsForDay` / `getTasksForDay` / `getTourPersonById` / `getGroupById` / `getGroupTagById` / `getAllConflicts` — pure functions in `lib/tourQueries.ts`, re-exposed here **bound to the active tour**. Always call them via `useApp()`, never import from `mockTour.ts`. **`getScheduleItemsForDay` layers the in-memory `visibilityEdits` overlay onto each item before returning** so `it.visibility` resolves against the manager's saved edits — never the seed. Every read site (`DayDetail`, `DaySheets`, `TodaySurface`) gets this transparently; do not bypass the helper by reading `tour.scheduleItems` directly when filtering by visibility.
 - `updateScheduleItem(itemId, patch)` / `addScheduleItem(dayId, init?)` / `deleteScheduleItem(itemId)` / `getScheduleItemHistory(itemId)` — manager edits to schedule-item content (times / title / location / notes / type) plus add + delete. **These mutate the tour directly** (rebuild `tour.scheduleItems` + persist), not an overlay, so every read site reflects them — including the two that read `tour.scheduleItems` directly (`CommandPalette`, `ScheduleAndVisibility`). Each call live-stamps the day (`stampDay`) and appends a `ScheduleItemEditRecord` to the `scheduleItemEditHistory` overlay (`status: 'direct' | 'created' | 'deleted'`), mirroring `VisibilityEditRecord`. Manager-only surface today — no propose/approve yet. `addScheduleItem` seeds visibility from `getScheduleTypeDefault(type)` and returns the new id.
 - `lockedDays`, `isDayLocked(id)`, `toggleDayLocked(id)`, `setDayLocked(id, locked)`
@@ -313,6 +377,7 @@ When backend lands, replace with TanStack Query + Zustand or similar; the contex
 /calendar/:date            Day Detail
 /personnel                 Crew + groups
 /plots                     Top-level rider plots grid (stage plot + lightplot thumbnails)
+/gear                      Gear & Supplies tracker — all rider items, status + cost estimates
 /schedule                  Visibility editor
 /daysheet                  In-app day sheet (defaults to first show)
 /daysheet/:date            In-app day sheet for a date
@@ -368,7 +433,7 @@ If you add a route that should be printable / shareable / chrome-free, put it un
 ## Recent additions (most likely to need extension)
 
 - **Shareable day sheet link** — "Share" button on `/daysheet/:date` and the print-preview action bar copies a tokenized URL (`/print/daysheet/:date?token=…`) to the clipboard. `lib/shareToken.ts` generates + verifies mock base64 tokens. When the token is present and valid, the print view shows "Shared day sheet" in place of "← Back to day sheet" and hides the day jumper — signals to the recipient this is a shared read-only view. Note: since tours live in localStorage, recipients need the tour loaded in their browser; real auth-gated sharing needs a server-issued token and server-side verification.
-- **In-house PDF parser — TOC-driven** (`lib/pdfParser.ts` + `lib/pdfCore.mjs`) — no LLM, no backend. pdfjs-dist text extraction + positional reconstruction. Handles Spanish and English riders. Exports: `parseRiderPdf(file) → RiderImport`, `parseFlightPdf(file, personnel) → FlightImport | null`, `parseHotelPdf(file, personnel, days) → { hotels, tasks }`, plus `renderPlotImagesFromUrl` and `extractPageText`. Wired into `RiderIngest`, `FlightIngest`, and `HotelImportSection` — each tries the real parser first, falls back to the fixture if parsing fails or returns empty. **Shared module:** `lib/pdfCore.mjs` holds the pure algorithmic helpers (`groupRows`, `buildColMap`, `parseTocEntries`, `findHeadingPages`, `isPlotPage`, `classifyTocTitle`, etc.) imported by both `pdfParser.ts` (Vite/browser) and `scripts/parse-rider.mjs` (Node CLI). TypeScript resolves `.mjs` imports via `pdfCore.d.mts` (`moduleResolution: "bundler"` maps `.mjs` → `.d.mts`). **TOC drives sectioning.** Rider parsing reads the rider's own table of contents and produces one `RiderSection` per TOC entry (tagged `tocIndex` + verbatim `title` + `endPage`). `parseTocEntries` scores each early page by `^N. Title$` row count + monotonic numeric sequences, returning the best with a non-enumerable `tocPage` hint. `findHeadingPages` then locates each entry's body heading via a two-pass match: strict `^N- ALLCAPS$` first (canonical "1- INTRO"), then loose `^N. Title-Case$` excluding the TOC page. End pages = `Math.max(start, nextStart-1)`. Titles are routed via `classifyTocTitle` into typed extractors (`extractInputList`, `extractRooming`, `extractBackline`, `extractCatering`) or a free-text section. **§1 cover-page fallback:** when §1 has no body heading and §2 resolves to page > 1, `buildTocRanges` defaults §1 to `[1, §2.start - 1]`. **Universal TOC-page clamp:** any section whose range would include the TOC page has its `endPage` clamped to `tocPage - 1` so structural pages don't leak into extracted content. Mirrored in `scripts/parse-rider.mjs` — keep both in sync. **Fallback:** when TOC parsing fails or yields <5 resolvable headings, `buildLegacySections` runs the old heading-regex pass (`SECTION_HINTS`) so non-canonical riders don't regress. **Plot pages:** `isPlotPage(page)` flags pages with <8 text items — attached to the owning section as `RiderSection.plots[]` (`{ page, caption, kind }`) instead of fed through text extraction. **Per-page free text + chrome strip + cross-section clip.** Free-text sections expose `RiderSection.pageTexts: { page, text }[]` with `freeText` set to the join — `extractPageText(page, { clipAboveY?, keepFromY?, headerBandPt?, footerBandPt? })` strips repeating page chrome (`CHROME_PATTERNS`) and clips bounds when adjacent sections share a page (`findHeadingY` for the top, `findNextHeadingY` for the bottom). `FreeTextReview` (in `SectionView`) renders a single editable textarea labeled "Extracted text" (suffixed "(joined)" when the section spans multiple pages). The bilingual `freeText`/`freeTextEn` data fields still exist on `RiderSection`; the EN editing surface was intentionally removed in favor of a future per-locale UI. **Known quirks:** pdfjs-dist fragments Spanish accented chars (`producción` → `producci ó n`) and ligatures — language detection uses unaccented function words; column alias lookup uses prefix matching for fragmented headers; TOC titles are preserved verbatim. Multi-page sections use the y-offset trick (`(nPages-1-pi)*10000`) so items don't collide in `groupRows`. The `input_list` regex includes `\bCH\s+SOURCE\b` so continuation pages are included. **CLI:** `node scripts/parse-rider.mjs [path/to/rider.pdf]` writes `src/data/riderExtracted.json`. **Uploaded PDF persistence** lives in `lib/riderPdfStore.ts` — see "PDF references" in Conventions for the IndexedDB rehydrate flow.
+- **In-house PDF parser — TOC-driven** (`lib/pdfParser.ts` + `lib/pdfCore.mjs`) — no LLM, no backend. pdfjs-dist text extraction + positional reconstruction. Handles Spanish and English riders. Exports: `parseRiderPdf(file) → RiderImport`, `parseFlightPdf(file, personnel) → FlightImport | null`, `parseHotelPdf(file, personnel, days) → { hotels, tasks }`, plus `renderPlotImagesFromUrl` and `extractPageText`. Wired into `RiderIngest`, `FlightIngest`, and `HotelImportSection` — each tries the real parser first, falls back to the fixture if parsing fails or returns empty. **Shared module:** `lib/pdfCore.mjs` holds the pure algorithmic helpers (`groupRows`, `buildColMap`, `parseTocEntries`, `findHeadingPages`, `isPlotPage`, `classifyTocTitle`, etc.) imported by both `pdfParser.ts` (Vite/browser) and `scripts/parse-rider.mjs` (Node CLI). TypeScript resolves `.mjs` imports via `pdfCore.d.mts` (`moduleResolution: "bundler"` maps `.mjs` → `.d.mts`). **TOC drives sectioning.** Rider parsing reads the rider's own table of contents and produces one `RiderSection` per TOC entry (tagged `tocIndex` + verbatim `title` + `endPage`). `parseTocEntries` scores each early page by `^N. Title$` row count + monotonic numeric sequences, returning the best with a non-enumerable `tocPage` hint. `findHeadingPages` then locates each entry's body heading via a two-pass match: strict `^N- ALLCAPS$` first (canonical "1- INTRO"), then loose `^N. Title-Case$` excluding the TOC page. End pages = `Math.max(start, nextStart-1)`. Titles are routed via `classifyTocTitle` into typed extractors (`extractInputList`, `extractRooming`, `extractBackline`, `extractCatering`) or a free-text section. **§1 cover-page fallback:** when §1 has no body heading and §2 resolves to page > 1, `buildTocRanges` defaults §1 to `[1, §2.start - 1]`. **Universal TOC-page clamp:** any section whose range would include the TOC page has its `endPage` clamped to `tocPage - 1` so structural pages don't leak into extracted content. Mirrored in `scripts/parse-rider.mjs` — keep both in sync. **Fallback:** when TOC parsing fails or yields <5 resolvable headings, `buildLegacySections` runs the old heading-regex pass (`SECTION_HINTS`) so non-canonical riders don't regress. **Plot pages:** `isPlotPage(page)` flags pages with <8 text items — attached to the owning section as `RiderSection.plots[]` (`{ page, caption, kind }`) instead of fed through text extraction. **Per-page free text + chrome strip + cross-section clip.** Free-text sections expose `RiderSection.pageTexts: { page, text }[]` with `freeText` set to the join — `extractPageText(page, { clipAboveY?, keepFromY?, headerBandPt?, footerBandPt? })` strips repeating page chrome (`CHROME_PATTERNS`) and clips bounds when adjacent sections share a page (`findHeadingY` for the top, `findNextHeadingY` for the bottom). `FreeTextReview` (in `SectionView`) renders a single editable textarea labeled "Extracted text" (suffixed "(joined)" when the section spans multiple pages). The bilingual `freeText`/`freeTextEn` data fields still exist on `RiderSection`; the EN editing surface was intentionally removed in favor of a future per-locale UI. **Known quirks:** pdfjs-dist fragments Spanish accented chars (`producción` → `producci ó n`) and ligatures — language detection uses unaccented function words; column alias lookup uses prefix matching for fragmented headers; TOC titles are preserved verbatim. Multi-page sections use the y-offset trick (`(nPages-1-pi)*10000`) so items don't collide in `groupRows`. The `input_list` regex includes `\bCH\s+SOURCE\b` so continuation pages are included. **CLI:** `node scripts/parse-rider.mjs [path/to/rider.pdf]` writes `src/data/riderExtracted.json`. **Uploaded PDF persistence** lives in `lib/riderPdfStore.ts` (`rider-pdfs` store, keyed by `RiderImport.id`). All rider revisions in `riderImports[]` have their bytes stored — not just the active one. On boot, a single effect loops over every rider missing a `pdfObjectUrl`, loads bytes from IndexedDB, mints Blob URLs, and patches them back. A companion general store (`lib/documentStore.ts`, `documents` object store, same `tour-hub` DB at v2) holds other binary attachments. Both modules declare DB_VERSION 2 and both create both stores in `onupgradeneeded` — whichever opens first runs the migration without conflict.
 - **Clarity + mobile redesign** (`redesign-plan.md`, landed) — `TodaySurface` is a role-aware "Today" surface used as both the desktop Tour Overview hero and the mobile home screen; `BottomNav` is the mobile tab bar (Today / Calendar / People / More) replacing the sidebar on small screens; `/more` is the mobile overflow menu. The pinned demo clock (`lib/today.ts`) makes "today" deterministic.
 - **Day-sheet Edit mode — real editing.** The `/daysheet/:date` Edit/Personal toggle is manager-only. **Edit** now actually edits: the "Show clock" list becomes inline `EditableText`/`EditableSelect` fields (start/end time, title, type, location, notes) via the `ScheduleEditor` component (in `DaySheets.tsx`, used by both the desktop and mobile sheets). Field edits collect in local draft state and commit in **one batch** via the Save / Discard bar (`updateScheduleItem` per dirty item → one history record each, day live-stamped); invalid `HH:MM` or empty title blocks Save. **Add item** (`addScheduleItem`) and per-row **Delete** (`deleteScheduleItem`, confirm) mutate the tour immediately. A "N edit events on this day" disclosure renders the aggregated `getScheduleItemHistory`. **Personal** is unchanged — filtered preview-as-a-person. Time helpers live in `lib/time.ts` (`parseHHMM` / `fmtHHMM` / `isValidHHMM`, also used by `LobbyCallLadder`). `EditableText` / `EditableSelect` were promoted out of `RiderIngest` into `components/ui/EditableText.tsx`.
 - **Schedule Permissions add/delete** — on `/schedule`, the "New schedule item" header button opens `NewScheduleItemModal` (day + type + start time + title → `addScheduleItem` → selects the new item); the item-header card (the one linking to the day sheet) has a **Delete** button (`stopPropagation` since it sits inside a `<Link>`) that removes the item and reselects a neighbor.
@@ -383,13 +448,15 @@ If you add a route that should be printable / shareable / chrome-free, put it un
 - **Warning explainers** — `<ExplainTag>` (`components/ExplainTag.tsx`) adds a clickable amber "(?)" to every red/alert element (rider version warning, extraction flags, conflicts, "Sensitive" markers, excluded-brand flags); each opens a plain-English explanation.
 - **Start From Scratch** — the only experience (see "Data modes"). Touches `AppState` (the tour, mutators, personnel-derived `allUsers`, bound query helpers), the combined `/ingest/flights` "Import route & travel" page, `RiderIngest` upload, `TopBar`, `ScratchBanner`, and the `lib/`/`data/`/`components/ingest/` files. Unit tests live in `web/tests/` (mirroring `web/src/` structure — e.g. `tests/lib/visibility.test.ts` tests `src/lib/visibility.ts`) and run with `npm test` (vitest). Tests import the code under test via the `@/` alias (`@/lib/foo`), not relative paths — keeps imports stable if a test ever moves. The vitest config lives in `web/vitest.config.ts`; `tsconfig.app.json` includes both `src` and `tests` so the typechecker sees both. When extending an ingest surface, route through the AppState mutators.
 - **Guided walkthrough** — `components/tour/` coach-mark tour over the scratch onboarding (see "Walkthrough"). The `/` intro screen frames the scenario; the overlay spotlights each step and auto-advances as the user imports each file. 15 steps: 4 hands-on imports then 6 centered feature steps touring the post-ingest surfaces (including the day-sheet Edit mode).
-- **Hotel import** — the 4th uploadable fixture. A hotel-block confirmation PDF (`Hotel_Block_Mexico_2025-09.pdf`) → `hotelFixture.ts` `buildScratchHotelImport` builds `Hotel` records (keyed to check-in days, occupants name-matched to the roster) plus a few hotel-advance `Task`s. Imported via `addHotelImportToScratch` from the "Hotels & rooming" section on `/ingest/flights`. Direct import — no review/approve step, unlike flights.
-- **Generated fixture PDFs** — `web/public/` holds two flight-confirmation PDFs (AM19, VB1014) and one hotel-block confirmation (`Hotel_Block_Mexico_2025-09.pdf`). They're produced by `web/scripts/gen-flight-pdfs.mjs` (one-off Node script; `pdf-lib` is a devDependency). Re-run it if `flightFixture.ts` / `hotelFixture.ts` data changes.
+- **Gear & Supplies tracker** (`/gear`, sidebar "Tour" group) — a flat inventory list seeded from the rider on first import. `GearItem` type (`types/index.ts`) carries name, quantity, unit, category, status (`needed / sourced / confirmed / not_required`), `providedBy`, `estimatedCost`, and `fromRider` flag. `buildRiderGearItems()` in `data/gearFixture.ts` produces ~80 items from §6 (mics/DI), §6 monitors, §9 backline, §8 video screen, §13 dressing rooms, §14 catering. State lives in `AppState` as `gearItems: GearItem[]` persisted in `overlayStorage` (key `gearItems`). Three mutations: `updateGearItem`, `addGearItem`, `deleteGearItem`. **Re-import smart merge:** when a new rider is uploaded (active rider id changes), `mergeGearItems()` runs instead of a blind replace — existing items with matching names keep their user edits (status/cost/notes) but get their quantity updated from the new rider; new rider items not yet in the list are appended as `needed`; items that disappeared from the new rider are kept (user may have notes/sourcing). Manual items (`fromRider: false`) are always untouched. UI: left category sidebar + status filter chips + search; items table grouped by category (collapsible); click a status badge to cycle `needed → sourced → confirmed → not_required`; add/edit/delete via modals; running cost summary bar. `Package` icon added to `components/ui/Icon.tsx`. `gear_costs` mock source added to `data/sources.ts`. Cmd+K indexed. Mobile: `/more` overflow entry.
+- **Hotel import** — the 4th uploadable fixture. **One PDF per hotel** — `Hotel_CDMX_NH_Reforma_2025-09-22.pdf` and `Hotel_MTY_Fiesta_Americana_2025-09-27.pdf` — each routed through `hotelFixture.ts` `buildScratchHotelImport(fixtureId, personnel)` (fixture fallback) or `parseHotelPdf` (live parser), producing one `Hotel` record + that hotel's advance `Task`s. Imported via `addHotelImportToScratch` from the "Hotels & rooming" section on `/ingest/flights`, which uses a multi-file dropzone and iterates `importHotelFile` per file. Direct import — no review/approve step, unlike flights.
+- **Generated fixture PDFs** — `web/public/` holds two flight-confirmation PDFs (AM19, VB1014, Delta-boarding-pass-inspired layout) and two per-hotel booking-confirmation PDFs (NH Collection Reforma, Fiesta Americana Monterrey — hotel-invoice layout with booking ref, check-in/out, rooming table, rate summary). They're produced by `web/scripts/gen-flight-pdfs.mjs` (one-off Node script; `pdf-lib` is a devDependency). Re-run it if `flightFixture.ts` / `hotelFixture.ts` data changes. **WinAnsi caveat:** Standard Helvetica can't encode arrows like `→` — use `›` (or embed a Unicode font with `fontkit`).
 - **Travel-agent grid (CSV)** — bulk flight import. `mock-travel-grid-mexico.csv` (one row per passenger × leg) is parsed by `lib/travelGridCsv.ts` and produces one `FlightImport` per leg. Sits next to the per-flight PDF dropzone on `/ingest/flights` Step 2 — same review surface, two upload paths. The walkthrough's "Step 3 — Import the flights" now spotlights the grid dropzone as the recommended fast path.
 - **Cmd+K palette** — provider in `Layout`. Search index built from tour days + personnel + schedule items + venues + pages.
 - **Route map** — static SVG with hard-coded city lat/lngs in `RouteMap.tsx`. New cities need their lat/lng added there.
 - **Calendar List/Grid toggle** — `Calendar.tsx` defaults to Grid on desktop, List on mobile, switchable on both. List view groups days by month with headers; the month grid uses compact cells on mobile.
 - **Lobby-call ladder** — only renders for show days. Anchor is the `doors` schedule item; if missing, ladder shows a "set a doors time" empty state.
+- **Multi-rider version history + document history.** `addRiderImportToScratch` now **prepends** to `riderImports[]` instead of replacing — every rider upload is preserved. The newest rider is always `riderImports[0]` (the active rider); older revisions stay in the array with their `revision` counter and `revisionOf` pointer. `setActiveRider(id)` promotes any revision back to `[0]` without clearing section approvals/edits. `RiderVersionHistory` component (in `RiderIngest.tsx`) renders a collapsible version list when >1 rider exists — shows filename, timestamp, revision number, "View PDF" button (uses the stored Blob URL), and "Make active" for older entries. Route and hotel uploads push their previous `UpdateStamp` into `Tour.routeImportHistory[]` / `Tour.hotelImportHistory[]` respectively; `FlightIngest.tsx` surfaces these as collapsible "Route history" / "Hotel history" timelines in `RouteSummary` and `HotelSummary`.
 - **Conflict model: cross-document, not intra-document** — Conflicts are NOT meant to represent contradictions within the same rider PDF (the rider doesn't contradict itself is what we advertise). Conflicts arise when a user uploads an *updated* rider or a *partial* supplemental document that disagrees with what's already on file — e.g., a new rider version changes a stage spec, or someone sends a document with only some sections that overrides an approved value. `ConflictFeed` title is "Document conflicts" with an empty state that says "No conflicts yet — upload a new version or supplemental document to compare." The existing conflicts in `mockTour` are legacy data from the initial AI analysis and are shown purely as a demo of the resolution UI. For future work: cross-document diff (new rider vs old, rider vs travel grid) belongs in the ingest pipeline — detect on re-upload, surface in the same `ConflictFeed`/`ConflictResolveModal` flow. **PP. N links in section headers**: the `pp. N` eyebrow in `SectionView` renders page numbers as clickable buttons (via `SectionPageLinks` component) that open the rider PDF at that page in the in-app viewer. Use this pattern for any other surface that shows page references.
 
 ## Pending user-blocked items
@@ -416,6 +483,7 @@ Tier 2:
 - Flight passenger matching + Personnel edits: when these surfaces are wired, apply the pending/approval + history pattern (`PendingEdit` + `SectionEditRecord`-style log). TODOs are in the source files (`FlightIngest.tsx`, `Personnel.tsx`).
 
 Shipped (recent):
+- Multi-rider version history, route/hotel upload history, general `documentStore.ts`, gear smart-merge on re-import, flight additive-only merge fast-path — see "Recent additions" above.
 - `DayLockRecord` pattern — day lock records a reason + full per-day history via `getDayLockHistory(dayId)`. `toggleDayLocked`/`setDayLocked` take an optional `reason?` and push a record on every change. Surfaced in `DaySheets` as a reason prompt + a "N lock events" accordion.
 - Visibility edit workflow — `/schedule` visibility edits persist to AppState with the pending/approval workflow and `VisibilityEditRecord` history (same shape as `SectionEditRecord`). `computeVisibilityChanges` diffs the Default / Group / Tag / Person levels. Managers edit directly via `updateVisibilityEdit`; non-managers `proposeVisibilityEdit` and a manager approves/rejects. Keyed by schedule-item id.
 

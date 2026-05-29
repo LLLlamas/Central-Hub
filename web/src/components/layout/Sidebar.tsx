@@ -20,6 +20,7 @@ const nav: NavEntry[] = [
   { to: '/calendar', label: 'Calendar', icon: 'Calendar', group: 'tour' },
   { to: '/personnel', label: 'People', icon: 'Users', group: 'tour' },
   { to: '/plots', label: 'Plots', icon: 'Image', group: 'tour' },
+  { to: '/gear', label: 'Supplies & Costs', icon: 'Package', group: 'tour' },
   { to: '/schedule', label: 'Schedule Permissions', icon: 'Layers', group: 'ops' },
   { to: '/daysheet', label: 'Day Sheets', icon: 'Document', group: 'ops' },
   { to: '/ingest/flights', label: 'Import route & travel', icon: 'Plane', group: 'ingest' },
@@ -32,8 +33,33 @@ const groupLabels: Record<NavEntry['group'], string> = {
   ingest: 'Power tools',
 };
 
+function useIngestStatus(tour: ReturnType<typeof useApp>['tour'], isSectionApproved: ReturnType<typeof useApp>['isSectionApproved']) {
+  const routeDone = tour.days.length > 0;
+  const flightsPending = tour.flightImports.filter((fi) => fi.status === 'review').length;
+  const flightsApproved = tour.flightImports.filter((fi) => fi.status === 'imported').length;
+  const hotelsDone = tour.hotels.length > 0;
+  const travelStarted = routeDone || tour.flightImports.length > 0 || hotelsDone;
+  const travelDone = routeDone && flightsPending === 0 && flightsApproved > 0 && hotelsDone;
+
+  const riderImport = tour.riderImports[0];
+  const riderStarted = !!riderImport;
+  // Mirror RiderIngest's sectionRows filter: exclude 'other'-type pseudo-sections
+  // (the old conflicts rail entry — dropped from the review surface but still present
+  // in imp.sections, causing an off-by-one vs the "N/M approved" header chip).
+  const reviewableSections = riderImport?.sections?.filter((s) => s.type !== 'other') ?? [];
+  const riderTotal = reviewableSections.length;
+  const riderApproved = reviewableSections.filter((s, i) => {
+    const globalIdx = riderImport!.sections.indexOf(s);
+    return isSectionApproved(`${s.type}-${globalIdx}`);
+  }).length;
+  const riderDone = riderStarted && riderTotal > 0 && riderApproved === riderTotal;
+
+  return { travelDone, travelStarted, travelPending: travelStarted && !travelDone, riderDone, riderStarted, riderPending: riderStarted && !riderDone };
+}
+
 export function Sidebar() {
-  const { tour, user, lockedDays } = useApp();
+  const { tour, user, lockedDays, isSectionApproved } = useApp();
+  const ingest = useIngestStatus(tour, isSectionApproved);
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const today = MOCK_TODAY;
   const dToStart = daysBetween(today, tour.startDate);
@@ -97,6 +123,12 @@ export function Sidebar() {
             <ul className="space-y-0.5">
               {nav.filter((n) => n.group === groupKey && (n.to !== '/schedule' || managerView)).map((entry) => {
                 const I = Icon[entry.icon];
+                const dot =
+                  entry.to === '/ingest/flights'
+                    ? ingest.travelDone ? 'green' : ingest.travelPending ? 'red' : 'grey'
+                    : entry.to === '/ingest/riders'
+                    ? ingest.riderDone ? 'green' : ingest.riderPending ? 'red' : 'grey'
+                    : null;
                 return (
                   <li key={entry.to}>
                     <NavLink
@@ -112,7 +144,20 @@ export function Sidebar() {
                       }
                     >
                       <I size={15} />
-                      <span>{entry.label}</span>
+                      <span className="flex-1">{entry.label}</span>
+                      {dot && (
+                        <span
+                          className="shrink-0 w-2 h-2 rounded-full"
+                          style={
+                            dot === 'green'
+                              ? { background: '#5a8a55' }
+                              : dot === 'red'
+                              ? { background: '#c0392b' }
+                              : { background: 'transparent', border: '1.5px solid currentColor', opacity: 0.3 }
+                          }
+                          title={dot === 'green' ? 'All done' : dot === 'red' ? 'Needs attention' : 'Not started'}
+                        />
+                      )}
                     </NavLink>
                   </li>
                 );

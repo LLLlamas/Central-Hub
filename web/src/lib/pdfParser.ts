@@ -857,6 +857,27 @@ function buildLegacySections(pages: PPage[], language: string): RiderSection[] {
 // ─── Public: Flight PDF parser ────────────────────────────────────────────────
 // Our generated PDFs have a known fixed layout — parse by pattern detection.
 
+/**
+ * Reject rows the layout walker would otherwise pick up as passengers.
+ * Flight PDFs frequently put footer chrome ("Issued by … · Confirmation X")
+ * right after the passenger table; without these guards every such row lands
+ * as an "unmatched passenger" the user then has to clean up.
+ */
+function isLikelyPassengerName(name: string): boolean {
+  if (!name) return false;
+  if (!/[A-Za-zÀ-ÿ]{2}/.test(name)) return false;
+  // Table-header cells masquerading as a row.
+  if (/^(NAME|SEAT|PASSENGER)$/i.test(name)) return false;
+  // Footer/separator characters never appear in a real passenger name.
+  if (/[·•|—:]/.test(name)) return false;
+  // Common chrome line prefixes on confirmation PDFs.
+  if (/^(Issued\s+by|Confirmation|PNR|Ticket|Total|Subtotal|Fare|Tax|Cabin|Class|Notes?|Remarks?|Page\s+\d|©|Powered\s+by|Generated)/i.test(name)) return false;
+  // Personal names tend to be ≤5 whitespace-separated tokens. Longer = prose.
+  const wordCount = name.trim().split(/\s+/).length;
+  if (wordCount > 5) return false;
+  return true;
+}
+
 function parseFlightPages(pages: PPage[]): ParsedFlight | null {
   const rows = groupRows(multiPageItems(pages), 6);
 
@@ -895,8 +916,13 @@ function parseFlightPages(pages: PPage[]): ParsedFlight | null {
         if (!pt || /mock|prototype|not a real/i.test(pt)) continue;
         if (/^(FLIGHT|DEPART|ARRIVE|DATE|BOOKING|HOTEL|CHECK)/i.test(pt)) break;
         const name = pRow.filter(r => r.x < 250).map(r => r.text).join(' ').trim();
-        const seat = pRow.filter(r => r.x >= 400).map(r => r.text).join(' ').trim();
-        if (name && /[A-Za-z]{2}/.test(name) && !/^(NAME|SEAT|PASSENGER)$/i.test(name))
+        // SEAT column is anchored at x≈326 (M + 270 in gen-flight-pdfs.mjs).
+        // Prefer a token in the seat band that matches a real seat pattern,
+        // fall back to whatever's in the band so a non-standard format still
+        // lands somewhere the reviewer can correct it.
+        const seatBand = pRow.filter(r => r.x >= 250 && r.x < 400).map(r => r.text.trim());
+        const seat = (seatBand.find(s => /^\d{1,3}[A-K]$/i.test(s)) ?? seatBand.join(' ')).trim();
+        if (isLikelyPassengerName(name))
           passengers.push({ name, seat: seat || undefined });
       }
       break;

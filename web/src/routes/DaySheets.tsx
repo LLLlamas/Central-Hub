@@ -19,7 +19,7 @@ import { LastUpdated } from '@/components/LastUpdated';
 import { getMockVenue } from '@/data/mockVenues';
 import type { SourceKey } from '@/data/sources';
 import type { RealSourceKey } from '@/data/realSources';
-import type { Day, ScheduleItem, ScheduleItemType, ScheduleItemPatch, ScheduleItemEditRecord, UpdateStamp, DayLockRecord } from '@/types';
+import type { Day, ScheduleItem, ScheduleItemType, ScheduleItemPatch, ScheduleItemEditRecord, UpdateStamp, DayLockRecord, CurrentUser } from '@/types';
 import { isValidHHMM } from '@/lib/time';
 import {
   fmtFullDate,
@@ -39,9 +39,8 @@ export function DaySheets() {
   const {
     tour,
     user,
-    allUsers,
     userKey,
-    setUserKey,
+    allUsers,
     isDayLocked,
     toggleDayLocked,
     getDayLockHistory,
@@ -52,6 +51,8 @@ export function DaySheets() {
     getHotelsForDay,
   } = useApp();
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
+
+  const [previewUserKey, setPreviewUserKey] = useState(userKey);
 
   const { date } = useParams();
   const navigate = useNavigate();
@@ -218,7 +219,12 @@ export function DaySheets() {
       )}
 
       <div className="lg:hidden mt-5">
-        <MobileDaySheet day={day} mode={effectiveMode} nextDay={nextDay} />
+        <MobileDaySheet
+          day={day}
+          mode={effectiveMode}
+          nextDay={nextDay}
+          viewAsUser={managerView && effectiveMode === 'personal' ? allUsers[previewUserKey] ?? user : undefined}
+        />
       </div>
 
       <div className="hidden lg:grid gap-5 mt-5 lg:grid-cols-[260px_1fr]">
@@ -226,12 +232,16 @@ export function DaySheets() {
           day={day}
           mode={effectiveMode}
           managerView={managerView}
-          userKey={userKey}
+          previewUserKey={previewUserKey}
           allUsers={allUsers}
-          setUserKey={setUserKey}
+          setPreviewUserKey={setPreviewUserKey}
           lastUpdated={getDayLastUpdated(day)}
         />
-        <DaySheet day={day} mode={effectiveMode} />
+        <DaySheet
+          day={day}
+          mode={effectiveMode}
+          viewAsUser={managerView && effectiveMode === 'personal' ? allUsers[previewUserKey] ?? user : undefined}
+        />
       </div>
 
       <DataSourcesPanel
@@ -370,30 +380,30 @@ function ToolsRail({
   day,
   mode,
   managerView,
-  userKey,
+  previewUserKey,
   allUsers,
-  setUserKey,
+  setPreviewUserKey,
   lastUpdated,
 }: {
   day: Day;
   mode: Mode;
   managerView: boolean;
-  userKey: string;
+  previewUserKey: string;
   allUsers: ReturnType<typeof useApp>['allUsers'];
-  setUserKey: ReturnType<typeof useApp>['setUserKey'];
+  setPreviewUserKey: (k: string) => void;
   lastUpdated?: UpdateStamp;
 }) {
   return (
     <aside className="space-y-4">
       {mode === 'personal' && managerView && (
         <Card>
-          <div className="eyebrow mb-2">Viewer</div>
+          <div className="eyebrow mb-2">Preview as</div>
           <p className="text-[11.5px] text-[var(--color-ink-3)] mb-3 leading-relaxed">
-            Personalized view filters by visibility for this person.
+            See the sheet as any crew member would — you stay signed in as manager.
           </p>
           <select
-            value={userKey}
-            onChange={(e) => setUserKey(e.target.value as keyof typeof allUsers)}
+            value={previewUserKey}
+            onChange={(e) => setPreviewUserKey(e.target.value)}
             className="w-full h-9 px-2 text-[12.5px] font-semibold rounded-[3px] border border-[var(--color-rule)] bg-[var(--color-card)]"
           >
             {Object.entries(allUsers).map(([k, u]) => (
@@ -446,7 +456,7 @@ function ModeToggle({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void 
   );
 }
 
-function MobileDaySheet({ day, mode, nextDay }: { day: Day; mode: Mode; nextDay?: Day }) {
+function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mode; nextDay?: Day; viewAsUser?: CurrentUser }) {
   const {
     tour,
     user,
@@ -455,13 +465,16 @@ function MobileDaySheet({ day, mode, nextDay }: { day: Day; mode: Mode; nextDay?
     getTravelForDay,
     getHotelsForDay,
   } = useApp();
+  const effectiveUser = viewAsUser ?? user;
   const allItems = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
   const allTravel = getTravelForDay(day.id);
   const allHotels = getHotelsForDay(day.id);
-  const items = mode === 'edit' ? allItems : allItems.filter((it) => resolveVisibility(it.visibility, user) !== 'blocked');
-  const travel = mode === 'edit' ? allTravel : allTravel.filter((t) => resolveVisibility(t.visibility, user) !== 'blocked');
-  const hotels = mode === 'edit' ? allHotels : allHotels.filter((h) => resolveVisibility(h.visibility, user) !== 'blocked');
+  const items = mode === 'edit' ? allItems : allItems.filter((it) => resolveVisibility(it.visibility, effectiveUser) !== 'blocked');
+  const travel = mode === 'edit' ? allTravel : allTravel.filter((t) => resolveVisibility(t.visibility, effectiveUser) !== 'blocked');
+  const hotels = mode === 'edit' ? allHotels : allHotels.filter((h) => resolveVisibility(h.visibility, effectiveUser) !== 'blocked');
   const venue = getMockVenue(day.venueId);
+  const flightsImported = tour.flightImports.some((f) => f.status === 'imported');
+  const hotelsImported = tour.hotelImport != null;
 
   return (
     <article className="card overflow-hidden bg-[var(--color-card)]">
@@ -540,7 +553,7 @@ function MobileDaySheet({ day, mode, nextDay }: { day: Day; mode: Mode; nextDay?
         </SheetSection>
 
         {travel.length > 0 && (
-          <SheetSection title="Travel" eyebrow={`${travel.length} segment${travel.length === 1 ? '' : 's'}`} mockSource="travel">
+          <SheetSection title="Travel" eyebrow={`${travel.length} segment${travel.length === 1 ? '' : 's'}`} mockSource={flightsImported ? undefined : 'travel'} realSource={flightsImported ? 'flight_confirmation' : undefined}>
             <ul className="space-y-3">
               {travel.map((t) => (
                 <li key={t.id} className="text-[13px]">
@@ -553,7 +566,7 @@ function MobileDaySheet({ day, mode, nextDay }: { day: Day; mode: Mode; nextDay?
         )}
 
         {hotels.length > 0 && (
-          <SheetSection title="Lodging" eyebrow={`${hotels.length} block`} mockSource="hotel">
+          <SheetSection title="Lodging" eyebrow={`${hotels.length} block`} mockSource={hotelsImported ? undefined : 'hotel'} realSource={hotelsImported ? 'hotel_confirmation' : undefined}>
             <ul className="space-y-3">
               {hotels.map((h) => (
                 <li key={h.id}>
@@ -634,7 +647,7 @@ function MobileContact({ label, name, phone }: { label: string; name: string; ph
   );
 }
 
-function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
+function DaySheet({ day, mode, viewAsUser }: { day: Day; mode: Mode; viewAsUser?: CurrentUser }) {
   const {
     tour,
     user,
@@ -643,14 +656,17 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
     getTravelForDay,
     getHotelsForDay,
   } = useApp();
+  const effectiveUser = viewAsUser ?? user;
   const venue = getMockVenue(day.venueId);
   const allItems = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
   const allTravel = getTravelForDay(day.id);
   const allHotels = getHotelsForDay(day.id);
 
-  const items = mode === 'edit' ? allItems : allItems.filter((it) => resolveVisibility(it.visibility, user) !== 'blocked');
-  const travel = mode === 'edit' ? allTravel : allTravel.filter((t) => resolveVisibility(t.visibility, user) !== 'blocked');
-  const hotels = mode === 'edit' ? allHotels : allHotels.filter((h) => resolveVisibility(h.visibility, user) !== 'blocked');
+  const items = mode === 'edit' ? allItems : allItems.filter((it) => resolveVisibility(it.visibility, effectiveUser) !== 'blocked');
+  const travel = mode === 'edit' ? allTravel : allTravel.filter((t) => resolveVisibility(t.visibility, effectiveUser) !== 'blocked');
+  const hotels = mode === 'edit' ? allHotels : allHotels.filter((h) => resolveVisibility(h.visibility, effectiveUser) !== 'blocked');
+  const flightsImported = tour.flightImports.some((f) => f.status === 'imported');
+  const hotelsImported = tour.hotelImport != null;
 
   return (
     <article className="bg-[var(--color-card)] border border-[var(--color-rule)] rounded-[4px] overflow-hidden shadow-[0_1px_0_rgba(21,19,15,0.04)]">
@@ -665,7 +681,7 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
               <span>{day.city ?? '-'}{venue ? ` · ${venue.name}` : ''}</span>
               {venue && <MockTag source="venue" field="Venue name" />}
               {mode === 'personal' && (
-                <span className="text-[var(--color-ink-4)] font-normal">· For: {user.role}</span>
+                <span className="text-[var(--color-ink-4)] font-normal">· For: {effectiveUser.role}</span>
               )}
             </div>
           </div>
@@ -737,8 +753,9 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
           <SheetSection
             title="Travel"
             eyebrow={`${travel.length} segment${travel.length === 1 ? '' : 's'}`}
-            mockSource="travel"
-            mockNote="Flight and bus segments are mock placeholders. Production data would come from travel-agent confirmations."
+            mockSource={flightsImported ? undefined : 'travel'}
+            mockNote={flightsImported ? undefined : "Flight and bus segments are mock placeholders. Production data would come from travel-agent confirmations."}
+            realSource={flightsImported ? 'flight_confirmation' : undefined}
           >
             <ul className="space-y-3">
               {travel.map((t) => (
@@ -772,8 +789,9 @@ function DaySheet({ day, mode }: { day: Day; mode: Mode }) {
           <SheetSection
             title="Lodging"
             eyebrow={`${hotels.length} block`}
-            mockSource="hotel"
-            mockNote="Hotel names, addresses, and check-in times are mock. The rider states rooming requirements, but the actual hotel comes from travel advance."
+            mockSource={hotelsImported ? undefined : 'hotel'}
+            mockNote={hotelsImported ? undefined : "Hotel names, addresses, and check-in times are mock. The rider states rooming requirements, but the actual hotel comes from travel advance."}
+            realSource={hotelsImported ? 'hotel_confirmation' : undefined}
           >
             <ul className="space-y-3">
               {hotels.map((h) => (
@@ -1090,19 +1108,23 @@ function SheetSection({
   children,
   mockSource,
   mockNote,
+  realSource,
 }: {
   title: string;
   eyebrow?: string;
   children: ReactNode;
   mockSource?: SourceKey;
   mockNote?: string;
+  realSource?: RealSourceKey;
 }) {
   return (
     <section>
       <div className="flex items-baseline justify-between mb-3 pb-2 border-b border-[var(--color-rule-soft)]">
         <h3 className="font-display text-[18px] font-bold text-[var(--color-ink)] inline-flex items-baseline gap-1">
           {title}
-          {mockSource && <MockTag source={mockSource} field={title} note={mockNote} />}
+          {realSource
+            ? <SourceTag source={realSource} field={title} />
+            : mockSource && <MockTag source={mockSource} field={title} note={mockNote} />}
         </h3>
         {eyebrow && <span className="eyebrow">{eyebrow}</span>}
       </div>

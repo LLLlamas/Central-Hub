@@ -1,25 +1,20 @@
-// IndexedDB persistence for uploaded rider PDF bytes.
+// IndexedDB persistence for general document bytes — route CSVs and hotel PDFs.
 //
-// localStorage holds the parsed RiderImport metadata; the raw PDF bytes live
-// here so the embedded viewer + every "open the rider PDF" affordance survives
-// a page refresh. On boot, AppStateProvider rehydrates a Blob URL from these
-// bytes and assigns it to `RiderImport.pdfObjectUrl`.
+// Sibling to `riderPdfStore.ts`: same DB (`tour-hub`), but a separate object
+// store (`documents`) added in DB_VERSION 2. The `rider-pdfs` store from v1 is
+// preserved in the upgrade so rider bytes survive the version bump.
 //
-// Keyed by `RiderImport.id` so re-uploads (which mint a new id) don't collide
-// with the prior rider's bytes — they're cleaned up explicitly via
-// `deleteRiderPdf` / `clearAllRiderPdfs`. Native IndexedDB only, no deps.
+// Keyed by an arbitrary document id (e.g. the route-import filename or a hotel
+// import id). Cleared explicitly via `deleteDocument` / `clearAllDocuments`.
+// Native IndexedDB only, no deps.
 //
-// In non-browser environments (SSR, vitest jsdom-less) every call resolves
-// to a benign no-op / null so callers don't need to feature-detect.
+// In non-browser environments (SSR, vitest jsdom-less) every call resolves to a
+// benign no-op / null so callers don't need to feature-detect.
 
 const DB_NAME = 'tour-hub';
-// v2 adds the `documents` store (see lib/documentStore.ts). Both modules open
-// the same DB, so they must share a version — opening at a lower version than
-// the live DB throws VersionError. Create both stores in the upgrade so either
-// entry point can be the one that runs the migration.
 const DB_VERSION = 2;
-const STORE = 'rider-pdfs';
-const DOC_STORE = 'documents';
+const RIDER_STORE = 'rider-pdfs';
+const STORE = 'documents';
 
 function hasIdb(): boolean {
   return typeof indexedDB !== 'undefined';
@@ -30,8 +25,8 @@ function openDb(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
+      if (!db.objectStoreNames.contains(RIDER_STORE)) db.createObjectStore(RIDER_STORE);
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
-      if (!db.objectStoreNames.contains(DOC_STORE)) db.createObjectStore(DOC_STORE);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -46,7 +41,7 @@ function txDone(tx: IDBTransaction): Promise<void> {
   });
 }
 
-export async function saveRiderPdf(id: string, bytes: ArrayBuffer): Promise<void> {
+export async function saveDocument(id: string, bytes: ArrayBuffer): Promise<void> {
   if (!hasIdb()) return;
   try {
     const db = await openDb();
@@ -55,11 +50,11 @@ export async function saveRiderPdf(id: string, bytes: ArrayBuffer): Promise<void
     await txDone(tx);
     db.close();
   } catch (err) {
-    console.warn('[riderPdfStore] saveRiderPdf failed:', err);
+    console.warn('[documentStore] saveDocument failed:', err);
   }
 }
 
-export async function loadRiderPdf(id: string): Promise<ArrayBuffer | null> {
+export async function loadDocument(id: string): Promise<ArrayBuffer | null> {
   if (!hasIdb()) return null;
   try {
     const db = await openDb();
@@ -72,12 +67,12 @@ export async function loadRiderPdf(id: string): Promise<ArrayBuffer | null> {
     db.close();
     return value instanceof ArrayBuffer ? value : null;
   } catch (err) {
-    console.warn('[riderPdfStore] loadRiderPdf failed:', err);
+    console.warn('[documentStore] loadDocument failed:', err);
     return null;
   }
 }
 
-export async function deleteRiderPdf(id: string): Promise<void> {
+export async function deleteDocument(id: string): Promise<void> {
   if (!hasIdb()) return;
   try {
     const db = await openDb();
@@ -86,11 +81,11 @@ export async function deleteRiderPdf(id: string): Promise<void> {
     await txDone(tx);
     db.close();
   } catch (err) {
-    console.warn('[riderPdfStore] deleteRiderPdf failed:', err);
+    console.warn('[documentStore] deleteDocument failed:', err);
   }
 }
 
-export async function clearAllRiderPdfs(): Promise<void> {
+export async function clearAllDocuments(): Promise<void> {
   if (!hasIdb()) return;
   try {
     const db = await openDb();
@@ -99,6 +94,6 @@ export async function clearAllRiderPdfs(): Promise<void> {
     await txDone(tx);
     db.close();
   } catch (err) {
-    console.warn('[riderPdfStore] clearAllRiderPdfs failed:', err);
+    console.warn('[documentStore] clearAllDocuments failed:', err);
   }
 }

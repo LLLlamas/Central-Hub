@@ -227,6 +227,20 @@ export const realSources = {
     artifactLabel: 'Open rider PDF',
   },
 
+  flight_confirmation: {
+    document: 'Uploaded flight confirmation',
+    section: 'Travel-agent grid CSV or per-flight confirmation PDFs',
+    detail:
+      'Flight segments were imported from uploaded confirmation files — either a travel-agent grid (one row per passenger × leg) or per-flight PDFs from the airline. Passenger matching and approval happened on the Import Flights page.',
+  },
+
+  hotel_confirmation: {
+    document: 'Uploaded hotel block PDF',
+    section: 'Hotel block confirmation',
+    detail:
+      'Hotel details were imported from the uploaded hotel block confirmation PDF. Room allocations are name-matched to the tour roster.',
+  },
+
 } satisfies Record<string, RealSource>;
 
 export type RealSourceKey = keyof typeof realSources;

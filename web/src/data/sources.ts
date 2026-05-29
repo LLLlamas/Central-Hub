@@ -539,6 +539,13 @@ export const sources = {
     detail:
       'A live feed of where each truck is and when it’ll arrive, for the big touring convoys, shown on the production manager’s dashboard.',
   },
+  gear_costs: {
+    source: "TM / Production Manager estimates",
+    realSource: "manual_entry",
+    phase: "advance",
+    detail:
+      'Estimated costs are entered by the TM or PM during advance. They come from rental quotes, venue contracts, and per-show budgets — not automatically calculated. Mark items as "Sourced" once confirmed with a vendor.',
+  },
 } satisfies Record<string, Provenance>;
 
 export type SourceKey = keyof typeof sources;

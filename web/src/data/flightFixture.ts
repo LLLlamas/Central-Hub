@@ -19,8 +19,19 @@ interface RawFlight {
   departureTime: string; // ISO datetime
   arrivalTime: string;
   recordLocator: string;
+  /** Estimated cost per passenger — what the travel-agent quote works out to
+   *  for an economy ticket on this leg. Stamped onto the resulting Travel
+   *  record so the Supplies & Costs page can roll up the totals. */
+  costPerPassenger: number;
+  currency: string;
   passengers: { name: string; seat: string }[];
 }
+
+/** Per-leg cost lookup, keyed by `${airline}::${flightNumber}::${departDate}` —
+ *  used by AppState.commitFlightImportToScratch to stamp the cost onto each
+ *  Travel record when an import is approved. Both the per-flight PDF path and
+ *  the bulk grid CSV path benefit from the same lookup. */
+export const FLIGHT_COST_BY_LEG: Record<string, { costPerPassenger: number; currency: string }> = {};
 
 // Same 8-passenger group books both intra-Mexico flights.
 const GROUP = [
@@ -46,6 +57,8 @@ const RAW_FLIGHTS: RawFlight[] = [
     departureTime: '2025-09-22T09:35',
     arrivalTime: '2025-09-22T15:20',
     recordLocator: 'ABCD12',
+    costPerPassenger: 420,
+    currency: 'USD',
     passengers: GROUP,
   },
   {
@@ -59,9 +72,20 @@ const RAW_FLIGHTS: RawFlight[] = [
     departureTime: '2025-09-27T11:00',
     arrivalTime: '2025-09-27T12:35',
     recordLocator: 'XYZ987',
+    costPerPassenger: 165,
+    currency: 'USD',
     passengers: GROUP,
   },
 ];
+
+// Populate the per-leg cost lookup so AppState can find a leg's cost without
+// re-importing the whole raw fixture (parser-driven imports never round-trip
+// through this file).
+for (const raw of RAW_FLIGHTS) {
+  const departDate = raw.departureTime.slice(0, 10);
+  const key = `${raw.airline}::${raw.flightNumber}::${departDate}`;
+  FLIGHT_COST_BY_LEG[key] = { costPerPassenger: raw.costPerPassenger, currency: raw.currency };
+}
 
 /**
  * Build a review-ready FlightImport for the given fixture, matching passenger

@@ -81,6 +81,7 @@ function buildIndex(tour: Tour): PaletteItem[] {
     { type: 'page', label: 'Calendar', to: '/calendar', keywords: ['dates'] },
     { type: 'page', label: 'People', to: '/personnel', keywords: ['personnel', 'crew', 'roster'] },
     { type: 'page', label: 'Plots', to: '/plots', keywords: ['plot', 'plots', 'stage plot', 'lightplot', 'cad', 'rider images', 'drawings'] },
+    { type: 'page', label: 'Supplies & Costs', to: '/gear', keywords: ['gear', 'equipment', 'supplies', 'backline', 'mics', 'catering', 'dressing room', 'cost', 'budget', 'inventory', 'flights', 'travel', 'hotel', 'rooms'] },
     { type: 'page', label: 'Schedule Permissions', to: '/schedule', keywords: ['visibility', 'abac', 'permissions', 'schedule'] },
     { type: 'page', label: 'Day Sheets', to: '/daysheet', keywords: ['day sheet'] },
     { type: 'page', label: 'More', to: '/more', keywords: ['tools', 'settings'] },

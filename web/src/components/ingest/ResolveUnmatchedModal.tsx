@@ -10,6 +10,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   imp: FlightImport;
+  /** When set, the modal scopes to just this passenger name. */
+  focusName?: string;
 }
 
 /**
@@ -23,7 +25,7 @@ interface Props {
  * The choice is stored in AppState (`flightPassengerResolutions`); the commit
  * step applies it when the user hits "Approve & import".
  */
-export function ResolveUnmatchedModal({ open, onClose, imp }: Props) {
+export function ResolveUnmatchedModal({ open, onClose, imp, focusName }: Props) {
   const { tour, getFlightPassengerResolution, setFlightPassengerResolution } = useApp();
 
   const unmatchedNames = useMemo(() => {
@@ -33,8 +35,15 @@ export function ResolveUnmatchedModal({ open, onClose, imp }: Props) {
         if (!p.matchedTourPersonId) set.add(p.name);
       }),
     );
-    return [...set];
-  }, [imp]);
+    const all = [...set];
+    // Focus-mode: when the modal was opened from a specific row, show only that
+    // name (or fall back to all if the name was already resolved/edited away).
+    if (focusName) {
+      const hit = all.find((n) => n.trim().toLowerCase() === focusName.trim().toLowerCase());
+      return hit ? [hit] : all;
+    }
+    return all;
+  }, [imp, focusName]);
 
   // Local draft — saved into AppState on "Save".
   const initial = useMemo<Record<string, FlightPassengerResolution>>(() => {

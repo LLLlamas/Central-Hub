@@ -163,7 +163,9 @@ export function TodaySurface({ className }: { className?: string }) {
             <div className="border-t border-[var(--color-rule-soft)] pt-5">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-[13px] font-semibold text-[var(--color-ink)]">Movement</h3>
-                <MockTag source="travel" field="Travel and lodging" />
+                {tour.flightImports.some((f) => f.status === 'imported')
+                  ? <SourceTag source="flight_confirmation" field="Travel and lodging" />
+                  : <MockTag source="travel" field="Travel and lodging" />}
               </div>
               {travel.length > 0 && (
                 <ul className="mt-3 space-y-2">
