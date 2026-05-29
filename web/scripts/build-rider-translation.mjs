@@ -6,6 +6,7 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 const inputFileName = 'RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf';
 const outputFileName = 'RIDER ELSA Y ELMAR 2025 - English Side-by-Side.pdf';
 const englishOnlyFileName = 'RIDER ELSA Y ELMAR 2025 - English Translation.pdf';
+const visualPageNumbers = new Set([11, 12, 13, 14, 15, 16]);
 
 const translations = [
   String.raw`TECH RIDER | Full Band 2025
@@ -1019,6 +1020,51 @@ function shouldEmphasize(text) {
   return false;
 }
 
+function drawMask(page, { x, y, width, height }) {
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height,
+    color: rgb(1, 1, 1),
+  });
+}
+
+function drawVisualPageEnglishOverlay(page, pageNumber, fonts) {
+  if (pageNumber === 11) {
+    drawMask(page, { x: 148, y: 727, width: 190, height: 24 });
+    drawMask(page, { x: 50, y: 474, width: 130, height: 24 });
+    page.drawText('FOH 8', { x: 157, y: 735, size: 11.5, font: fonts.regular, color: rgb(0.08, 0.1, 0.13) });
+    page.drawText('FRONT FILL', { x: 252, y: 735, size: 11.5, font: fonts.regular, color: rgb(0.08, 0.1, 0.13) });
+    page.drawText('7- STAGE PLOT', { x: 57, y: 482, size: 11.5, font: fonts.bold, color: rgb(0.08, 0.1, 0.13) });
+  }
+
+  if (pageNumber === 12) {
+    drawMask(page, { x: 50, y: 486, width: 500, height: 74 });
+    page.drawText('8- LIGHTING AND LIGHTPLOT', {
+      x: 57,
+      y: 543,
+      size: 11.5,
+      font: fonts.bold,
+      color: rgb(0.08, 0.1, 0.13),
+    });
+    page.drawText('This list must be functioning perfectly. All cabling, machines, consoles, etc.', {
+      x: 57,
+      y: 510,
+      size: 11.5,
+      font: fonts.regular,
+      color: rgb(0.08, 0.1, 0.13),
+    });
+    page.drawText('must be in optimal condition.', {
+      x: 57,
+      y: 494,
+      size: 11.5,
+      font: fonts.regular,
+      color: rgb(0.08, 0.1, 0.13),
+    });
+  }
+}
+
 const translatedBytes = await outputPdf.save();
 writeFileSync(outputPath, translatedBytes);
 
@@ -1026,10 +1072,32 @@ const englishOnlyPdf = await PDFDocument.create();
 const englishRegular = await englishOnlyPdf.embedFont(StandardFonts.Helvetica);
 const englishBold = await englishOnlyPdf.embedFont(StandardFonts.HelveticaBold);
 const englishMono = await englishOnlyPdf.embedFont(StandardFonts.Courier);
+const englishVisualPages = new Map();
+
+for (const pageNumber of visualPageNumbers) {
+  englishVisualPages.set(pageNumber, await englishOnlyPdf.embedPage(sourcePdf.getPage(pageNumber - 1)));
+}
 
 for (let i = 0; i < translations.length; i += 1) {
   const sourcePageSize = sourcePdf.getPage(i).getSize();
   const page = englishOnlyPdf.addPage([sourcePageSize.width, sourcePageSize.height]);
+  const pageNumber = i + 1;
+
+  if (visualPageNumbers.has(pageNumber)) {
+    page.drawPage(englishVisualPages.get(pageNumber), {
+      x: 0,
+      y: 0,
+      width: sourcePageSize.width,
+      height: sourcePageSize.height,
+    });
+    drawVisualPageEnglishOverlay(page, pageNumber, {
+      regular: englishRegular,
+      bold: englishBold,
+      mono: englishMono,
+    });
+    continue;
+  }
+
   drawAlignedTranslation({
     page,
     text: translations[i],

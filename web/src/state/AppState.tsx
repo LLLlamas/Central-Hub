@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { createScratchTour, scratchUsers, scratchDefaultUserKey } from '@/data/scratchTour';
 import { loadScratchTour, saveScratchTour } from '@/lib/scratchStorage';
 import { loadOverlays, saveOverlays, clearOverlays } from '@/lib/overlayStorage';
+import { clearAllRiderPdfs, deleteRiderPdf, loadRiderPdf } from '@/lib/riderPdfStore';
 import * as tourQueries from '@/lib/tourQueries';
 import type { ParsedRoute } from '@/lib/routeCsv';
 import { vis } from '@/lib/visibility';
@@ -361,6 +362,38 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     saveScratchTour(tour);
   }, [tour]);
 
+  // Rehydrate the rider PDF's Blob URL after a reload. `scratchStorage` strips
+  // `pdfObjectUrl` on save; the raw bytes live in IndexedDB keyed by import id.
+  // Load them, mint a fresh Blob URL, and patch it back onto the import so the
+  // embedded viewer + every "view the rider PDF" affordance keeps working
+  // without a re-upload.
+  useEffect(() => {
+    const ri = tour.riderImports[0];
+    if (!ri || ri.pdfObjectUrl) return;
+    let cancelled = false;
+    let mintedUrl: string | undefined;
+    (async () => {
+      const bytes = await loadRiderPdf(ri.id);
+      if (cancelled || !bytes) return;
+      mintedUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      setTour((t) => {
+        if (t.riderImports[0]?.id !== ri.id) return t;
+        return {
+          ...t,
+          riderImports: [{ ...t.riderImports[0], pdfObjectUrl: mintedUrl }, ...t.riderImports.slice(1)],
+        };
+      });
+    })().catch(() => {
+      /* rehydrate failure is non-fatal — UI degrades to "no PDF" affordances */
+    });
+    return () => {
+      cancelled = true;
+      // Don't revoke `mintedUrl` here: it's now held by `tour.riderImports[0]`
+      // and the next effect run (only when the import id changes) will be a
+      // no-op because `pdfObjectUrl` is set. A full reset clears it.
+    };
+  }, [tour.riderImports[0]?.id]);
+
   // Re-derive plot data URLs after a reload. `scratchStorage` strips them on
   // save (base64 PNGs blow the localStorage quota), so a restored tour has
   // plot metadata but no images — render them once from the rider PDF.
@@ -454,6 +487,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setScheduleItemEditHistory(new Map());
     setFlightPassengerResolutionsMap(new Map());
     clearOverlays();
+    void clearAllRiderPdfs();
   }, []);
 
   // ---- Tour mutators -------------------------------------------------------
@@ -672,6 +706,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         ...t,
         riderImports: t.riderImports.filter((r) => r.id !== id),
       }));
+      void deleteRiderPdf(id);
     },
     [updateScratchTour],
   );

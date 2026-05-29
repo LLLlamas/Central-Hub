@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { getRealSource, type RealSourceKey } from '@/data/realSources';
+import { resolveProvenanceUrl } from '@/data/sources';
 import { Modal } from '@/components/ui/Modal';
-import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { linkifyRiderRefs } from '@/components/RiderRef';
 import { usePdfViewer } from '@/components/PdfViewer';
+import { useApp } from '@/state/AppState';
 import { cn } from '@/lib/cn';
 
 interface SourceTagProps {
@@ -27,7 +28,9 @@ interface SourceTagProps {
 export function SourceTag({ source, field, className }: SourceTagProps) {
   const [open, setOpen] = useState(false);
   const { openPdf } = usePdfViewer();
+  const { tour } = useApp();
   const src = getRealSource(source);
+  const artifactUrl = resolveProvenanceUrl(src.artifactUrl, tour);
 
   return (
     <>
@@ -104,12 +107,12 @@ export function SourceTag({ source, field, className }: SourceTagProps) {
             <p className="text-[12px] text-[var(--color-ink-3)] leading-relaxed">{linkifyRiderRefs(src.detail)}</p>
           )}
 
-          {src.artifactUrl && (
+          {artifactUrl && (
             <button
               type="button"
               onClick={() =>
                 openPdf({
-                  url: src.artifactUrl!,
+                  url: artifactUrl,
                   page: src.pages?.[0],
                   title: src.artifactLabel ?? src.document,
                 })

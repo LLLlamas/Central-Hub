@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Modal } from '@/components/ui/Modal';
 import { useApp } from '@/state/AppState';
@@ -20,9 +21,10 @@ import { FileDropZone } from '@/components/ingest/FileDropZone';
 import { UploadResultNote } from '@/components/ingest/UploadResultNote';
 import type { UploadNote } from '@/components/ingest/UploadResultNote';
 import { RIDER_PDF_PATH } from '@/lib/riderSections';
-import { matchFixture, fixturesOfKind, nonMatchNote } from '@/lib/fixtureMatcher';
+import { matchFixture } from '@/lib/fixtureMatcher';
 import { buildScratchRiderImport, buildScratchRiderPersonnel, hydrateRiderPlotImages } from '@/data/riderFixture';
 import { parseRiderPdf } from '@/lib/pdfParser';
+import { saveRiderPdf } from '@/lib/riderPdfStore';
 import { cn } from '@/lib/cn';
 import type {
   RiderImport,
@@ -35,6 +37,15 @@ import type {
   SectionEditRecord,
   UpdateStamp,
 } from '@/types';
+
+// Active rider PDF URL — Blob URL of the user's uploaded file. Returns
+// `undefined` when no rider has been imported (and there is no canonical
+// fallback). Every "open the rider PDF" affordance pivots on this; when it's
+// undefined, consumers hide the affordance instead of opening a stale fixture.
+function useActiveRiderPdfUrl(): string | undefined {
+  const { tour } = useApp();
+  return tour.riderImports[0]?.pdfObjectUrl;
+}
 
 // Friendly English fallback labels per RiderSectionType — used only when a
 // section has no TOC-verbatim title (legacy data, derived "other", etc.).
@@ -77,9 +88,26 @@ function collectPlots(imp: RiderImport): Array<{ sectionKey: string; section: Ri
   return out;
 }
 
+/** Group plot images by their owning section — one card per section in the
+ *  Plots tab + the /plots route, opening a fullscreen image lightbox over
+ *  that section's pages only. */
+export function collectPlotsBySection(
+  imp: RiderImport,
+): Array<{ sectionKey: string; section: RiderSection; plots: import('@/types').PlotImage[] }> {
+  const out: Array<{ sectionKey: string; section: RiderSection; plots: import('@/types').PlotImage[] }> = [];
+  imp.sections.forEach((s, i) => {
+    if (s.plots && s.plots.length > 0) {
+      out.push({ sectionKey: `${s.type}-${i}`, section: s, plots: s.plots });
+    }
+  });
+  return out;
+}
+
+// Hook-context guard: this is a React component, so useActiveRiderPdfUrl() is valid.
 export function RiderIngest() {
   const { tour, isSectionApproved, getPendingEdit } = useApp();
   const { openPdf } = usePdfViewer();
+  const pdfUrl = useActiveRiderPdfUrl();
   const imp = tour.riderImports[0];
 
   // Active selection: either a section key (`type-index`) or the special "plots" sentinel.
@@ -93,6 +121,7 @@ export function RiderIngest() {
     return `${first.type}-${idx}`;
   });
   const [isReuploading, setIsReuploading] = useState(false);
+  const [approvedExpanded, setApprovedExpanded] = useState(false);
 
   if (!imp || isReuploading) {
     return (
@@ -125,7 +154,10 @@ export function RiderIngest() {
       const bi = b.s.tocIndex ?? 99;
       return ai - bi;
     });
-  const approvedCount = sectionRows.filter(({ key }) => isSectionApproved(key)).length;
+  const approvedRows = sectionRows.filter(({ key }) => isSectionApproved(key));
+  const unapprovedRows = sectionRows.filter(({ key }) => !isSectionApproved(key));
+  const approvedCount = approvedRows.length;
+  const totalCount = sectionRows.length;
   const plots = collectPlots(imp);
 
   const activeSection = active !== 'plots'
@@ -145,16 +177,22 @@ export function RiderIngest() {
         }
         meta={
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => openPdf({ url: RIDER_PDF_PATH, title: imp.filename })}
-              title="View the rider PDF"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-            >
+            {pdfUrl ? (
+              <button
+                type="button"
+                onClick={() => openPdf({ url: pdfUrl, title: imp.filename })}
+                title="View the rider PDF"
+                className="cursor-pointer hover:opacity-80 transition-opacity"
+              >
+                <Chip tone="critical">
+                  <Icon.Document size={10} /> {imp.filename}
+                </Chip>
+              </button>
+            ) : (
               <Chip tone="critical">
                 <Icon.Document size={10} /> {imp.filename}
               </Chip>
-            </button>
+            )}
             <Chip tone="neutral" variant="outline">
               <Icon.Document size={10} /> {imp.pageCount} pages
             </Chip>
@@ -177,20 +215,29 @@ export function RiderIngest() {
         {/* Left rail — TOC-ordered section list + Plots entry */}
         <Card padded={false} className="overflow-hidden">
           <div data-tour="rider-sections" className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
-            <div className="eyebrow">Sections</div>
+            <div className="eyebrow">Sections to review</div>
             <div className="text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
-              {imp.sections.filter((s) => s.tocIndex != null).length || imp.sections.length} from the table of contents
+              {unapprovedRows.length === 0
+                ? `All ${totalCount} approved`
+                : `${unapprovedRows.length} of ${totalCount} remaining`}
             </div>
           </div>
           <ul className="divide-y divide-[var(--color-rule-soft)] max-h-[680px] overflow-y-auto">
-            {sectionRows.map(({ s, key }) => (
+            {unapprovedRows.length === 0 && (
+              <li className="px-4 py-6 text-center">
+                <div className="text-[12px] text-[var(--color-ink-3)] italic">
+                  Every section has been approved.
+                </div>
+              </li>
+            )}
+            {unapprovedRows.map(({ s, key }) => (
               <SectionRailItem
                 key={key}
                 section={s}
                 active={key === active}
                 onSelect={() => setActive(key)}
                 pendingEdit={!!getPendingEdit(key)}
-                approved={isSectionApproved(key)}
+                approved={false}
               />
             ))}
             {plots.length > 0 && (
@@ -221,10 +268,74 @@ export function RiderIngest() {
           </ul>
         </Card>
 
-        {/* Right side — Plots grid OR section two-pane review */}
-        <div className="min-w-0">
+        {/* Right side — Approved-sections card + Plots grid OR section two-pane review */}
+        <div className="min-w-0 space-y-4">
+          {totalCount > 0 && (
+            <Card padded={false} className="overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setApprovedExpanded((v) => !v)}
+                className="w-full flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[var(--color-paper)]/40 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Icon.Check size={12} />
+                  <span className="text-[12.5px] font-semibold">
+                    Approved sections
+                  </span>
+                  <span className="font-mono tabular text-[11px] text-[var(--color-ink-3)]">
+                    {approvedCount}/{totalCount}
+                  </span>
+                </div>
+                <span className="font-mono uppercase tracking-[0.10em] text-[10px] text-[var(--color-ink-3)] inline-flex items-center gap-1">
+                  {approvedExpanded ? 'Hide' : 'Show'}
+                  <Icon.Arrow size={9} className={approvedExpanded ? 'rotate-90' : ''} />
+                </span>
+              </button>
+              {approvedExpanded && (
+                <ul className="border-t border-[var(--color-rule-soft)] divide-y divide-[var(--color-rule-soft)] max-h-[280px] overflow-y-auto">
+                  {approvedRows.length === 0 ? (
+                    <li className="px-4 py-4 text-[12px] italic text-[var(--color-ink-3)] text-center">
+                      No sections approved yet.
+                    </li>
+                  ) : (
+                    approvedRows.map(({ s, key }) => (
+                      <li key={key}>
+                        <button
+                          type="button"
+                          onClick={() => setActive(key)}
+                          className={cn(
+                            'w-full text-left px-4 py-2 hover:bg-[var(--color-paper)]/60 transition-colors flex items-center justify-between gap-3',
+                            key === active && 'bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]',
+                          )}
+                        >
+                          <div className="flex items-baseline gap-2 min-w-0">
+                            <span className={cn(
+                              'font-mono tabular text-[11px] shrink-0',
+                              key === active ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-ink-3)]',
+                            )}>
+                              §{s.tocIndex ?? '?'}
+                            </span>
+                            <span className="text-[12.5px] font-semibold truncate">
+                              {sectionLabel(s)}
+                            </span>
+                          </div>
+                          <span className={cn(
+                            'shrink-0 font-mono uppercase tracking-[0.10em] text-[10px]',
+                            key === active ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-ink-4)]',
+                          )}>
+                            Approved
+                          </span>
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              )}
+            </Card>
+          )}
+
           {active === 'plots' ? (
-            <PlotsPanel imp={imp} onSelectSection={(key) => setActive(key)} />
+            <PlotsPanel imp={imp} />
           ) : activeSection && active !== 'plots' ? (
             <SectionReviewSplit
               section={activeSection}
@@ -337,6 +448,7 @@ function SectionReviewSplit({
   sectionKey: string;
   sourceLang: string;
 }) {
+  const pdfUrl = useActiveRiderPdfUrl();
   // Plot sections (stage plot / lightplot) are CAD drawings, not text. Skip
   // the source PDF iframe + the text-extraction surface entirely and render
   // the rendered plot images as a single-pane review.
@@ -353,9 +465,12 @@ function SectionReviewSplit({
   }
 
   // The conflicts pseudo-section has no source pages — render extracted only.
-  const showPdf = section.pages.length > 0;
+  // Also omit the embedded viewer when there's no live PDF URL (rider not
+  // uploaded, or boot-rehydration hasn't completed): the extracted text pane
+  // takes the full width instead of leaving a broken iframe slot.
+  const showPdf = section.pages.length > 0 && !!pdfUrl;
   return (
-    <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5 min-w-0">
+    <div className={cn('grid gap-5 min-w-0', showPdf ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : 'lg:grid-cols-1')}>
       {showPdf && (
         <div className="space-y-2 min-w-0">
           <div className="flex items-baseline justify-between gap-3 flex-wrap">
@@ -364,7 +479,7 @@ function SectionReviewSplit({
             </div>
           </div>
           <PdfViewerInline
-            url={RIDER_PDF_PATH}
+            url={pdfUrl!}
             page={section.pages[0]}
             title={sectionLabel(section)}
             height="50vh"
@@ -397,13 +512,13 @@ function PlotSectionReview({
     approveSection,
     reopenSection,
   } = useApp();
-  const { openPdf } = usePdfViewer();
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const approved = isSectionApproved(sectionKey);
   const approval = getSectionApproval(sectionKey);
   const effStatus: RiderSectionStatus = approved ? 'approved' : section.status;
   const label = sectionLabel(section);
   const plots = section.plots ?? [];
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   return (
     <SectionCard
@@ -457,46 +572,52 @@ function PlotSectionReview({
         <p className="text-[12.5px] text-[var(--color-ink-3)] italic">No plot images detected for this section.</p>
       ) : (
         <div className="space-y-4">
-          {plots.map((plot, i) => (
-            <figure
-              key={`${plot.page}-${i}`}
-              className="rounded-[4px] border border-[var(--color-rule-soft)] overflow-hidden bg-[var(--color-paper-2)]"
-            >
-              <button
-                type="button"
-                onClick={() => openPdf({ url: RIDER_PDF_PATH, page: plot.page, title: plot.caption })}
-                className="block w-full text-left"
-                title={`Open page ${plot.page} in the rider PDF`}
+          {plots.map((plot, i) => {
+            const imgBlock = plot.dataUrl ? (
+              <img src={plot.dataUrl} alt={plot.caption} className="block w-full h-auto" />
+            ) : (
+              <div className="py-16 flex flex-col items-center justify-center gap-2 text-[var(--color-ink-3)]">
+                <Icon.Document size={22} />
+                <span className="text-[12px] font-semibold">Rendering page {plot.page}…</span>
+              </div>
+            );
+            return (
+              <figure
+                key={`${plot.page}-${i}`}
+                className="rounded-[4px] border border-[var(--color-rule-soft)] overflow-hidden bg-[var(--color-paper-2)]"
               >
-                {plot.dataUrl ? (
-                  <img
-                    src={plot.dataUrl}
-                    alt={plot.caption}
-                    className="block w-full h-auto"
-                  />
-                ) : (
-                  <div className="py-16 flex flex-col items-center justify-center gap-2 text-[var(--color-ink-3)]">
-                    <Icon.Document size={22} />
-                    <span className="text-[12px] font-semibold">Rendering page {plot.page}…</span>
-                  </div>
-                )}
-              </button>
-              <figcaption className="px-3 py-2 flex items-center justify-between gap-2 text-[11px] border-t border-[var(--color-rule-soft)] bg-[var(--color-card)]">
-                <span className="font-mono uppercase tracking-[0.10em] text-[var(--color-ink-3)]">
-                  {plot.caption} · page {plot.page}
-                </span>
                 <button
                   type="button"
-                  onClick={() => openPdf({ url: RIDER_PDF_PATH, page: plot.page, title: plot.caption })}
-                  className="inline-flex items-center gap-1 font-semibold text-[var(--color-ocean)] hover:underline"
+                  onClick={() => setLightboxIdx(i)}
+                  className="block w-full text-left"
+                  title={`View page ${plot.page} fullscreen`}
                 >
-                  Open in viewer <Icon.Arrow size={11} />
+                  {imgBlock}
                 </button>
-              </figcaption>
-            </figure>
-          ))}
+                <figcaption className="px-3 py-2 flex items-center justify-between gap-2 text-[11px] border-t border-[var(--color-rule-soft)] bg-[var(--color-card)]">
+                  <span className="font-mono uppercase tracking-[0.10em] text-[var(--color-ink-3)]">
+                    {plot.caption} · page {plot.page}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxIdx(i)}
+                    className="inline-flex items-center gap-1 font-semibold text-[var(--color-ocean)] hover:underline"
+                  >
+                    View fullscreen <Icon.Arrow size={11} />
+                  </button>
+                </figcaption>
+              </figure>
+            );
+          })}
         </div>
       )}
+      <PlotImageLightbox
+        open={lightboxIdx != null}
+        onClose={() => setLightboxIdx(null)}
+        section={section}
+        plots={plots}
+        initialIndex={lightboxIdx ?? 0}
+      />
     </SectionCard>
   );
 }
@@ -667,19 +788,25 @@ function PendingEditBanner({
   );
 }
 
-export function PlotCard({
-  sectionKey,
+/** One card per section — preview thumb + page-range caption. Click opens
+ *  the image lightbox over JUST this section's pages. */
+export function SectionPlotCard({
   section,
-  plot,
-  onSelectSection,
+  plots,
+  onOpen,
 }: {
-  sectionKey: string;
   section: RiderSection;
-  plot: import('@/types').PlotImage;
-  // Omit on /plots — there's no embedded section navigator at that altitude.
-  onSelectSection?: (key: string) => void;
+  plots: import('@/types').PlotImage[];
+  onOpen: () => void;
 }) {
-  const { openPdf } = usePdfViewer();
+  const preview = plots.find((p) => p.dataUrl) ?? plots[0];
+  const firstPage = plots[0]?.page;
+  const lastPage = plots[plots.length - 1]?.page;
+  const pageRange = firstPage == null
+    ? ''
+    : firstPage === lastPage
+      ? `Page ${firstPage}`
+      : `Pages ${firstPage}–${lastPage}`;
   return (
     <Card
       padded={false}
@@ -687,55 +814,147 @@ export function PlotCard({
     >
       <button
         type="button"
-        onClick={() => openPdf({ url: RIDER_PDF_PATH, page: plot.page, title: plot.caption })}
-        className="block w-full bg-[var(--color-paper-2)] aspect-[4/3] overflow-hidden"
-        title={`Open page ${plot.page} in the rider PDF`}
+        onClick={onOpen}
+        className="block w-full bg-[var(--color-paper-2)] aspect-[4/3] overflow-hidden relative"
+        title={`Open ${plots.length} image${plots.length === 1 ? '' : 's'} for ${sectionLabel(section)}`}
       >
-        {plot.dataUrl ? (
+        {preview?.dataUrl ? (
           <img
-            src={plot.dataUrl}
-            alt={plot.caption}
+            src={preview.dataUrl}
+            alt={sectionLabel(section)}
             className="block w-full h-full object-contain"
-            style={{ maxHeight: '100%' }}
           />
         ) : (
           <div className="h-full flex flex-col items-center justify-center gap-2 text-[var(--color-ink-3)]">
             <Icon.Image size={22} />
-            <span className="text-[11px] font-semibold">Rendering page {plot.page}…</span>
+            <span className="text-[11px] font-semibold">Rendering pages…</span>
           </div>
+        )}
+        {plots.length > 1 && (
+          <span className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-[3px] bg-[rgba(15,13,11,0.72)] text-[var(--color-paper)] font-mono tabular text-[10px]">
+            <Icon.Image size={9} /> {plots.length}
+          </span>
         )}
       </button>
       <div className="px-3 py-2 border-t border-[var(--color-rule-soft)]">
-        <div className="flex items-baseline justify-between gap-2">
-          <div className="min-w-0">
-            <div className="eyebrow truncate">
-              {section.tocIndex != null ? `§${section.tocIndex} · ` : ''}
-              {sectionLabel(section)}
-            </div>
-            <div className="font-semibold text-[12px] leading-tight mt-0.5 truncate" title={plot.caption}>
-              {plot.caption}
-            </div>
-          </div>
-          <span className="shrink-0 font-mono tabular text-[10px] text-[var(--color-ink-4)]">
-            p.{plot.page}
+        <div className="eyebrow truncate">
+          {section.tocIndex != null ? `§${section.tocIndex}` : ''}
+        </div>
+        <div className="font-semibold text-[12.5px] leading-tight mt-0.5 truncate" title={sectionLabel(section)}>
+          {sectionLabel(section)}
+        </div>
+        <div className="mt-0.5 flex items-center justify-between gap-2">
+          <span className="font-mono tabular text-[10px] text-[var(--color-ink-4)]">{pageRange}</span>
+          <span className="inline-flex items-center gap-1 font-semibold text-[10.5px] text-[var(--color-ocean)] opacity-0 group-hover:opacity-100 transition-opacity">
+            View <Icon.Arrow size={10} />
           </span>
         </div>
-        {onSelectSection && (
-          <div className="mt-1.5 flex items-center justify-between gap-2 text-[10.5px]">
-            <button
-              type="button"
-              onClick={() => onSelectSection(sectionKey)}
-              className="font-mono uppercase tracking-[0.10em] text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
-            >
-              §{section.tocIndex ?? '?'} review
-            </button>
-            <span className="inline-flex items-center gap-1 font-semibold text-[var(--color-ocean)] opacity-0 group-hover:opacity-100 transition-opacity">
-              Click to enlarge <Icon.Arrow size={10} />
-            </span>
-          </div>
-        )}
       </div>
     </Card>
+  );
+}
+
+/** Fullscreen image-only lightbox over a section's plot pages. Arrow keys +
+ *  on-screen prev/next; Esc closes. No PDF chrome — these are images. */
+export function PlotImageLightbox({
+  open,
+  onClose,
+  section,
+  plots,
+  initialIndex = 0,
+}: {
+  open: boolean;
+  onClose: () => void;
+  section: RiderSection | null;
+  plots: import('@/types').PlotImage[];
+  initialIndex?: number;
+}) {
+  const [idx, setIdx] = useState(initialIndex);
+
+  useEffect(() => { if (open) setIdx(initialIndex); }, [open, initialIndex]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+      else if (e.key === 'ArrowLeft') setIdx((i) => Math.max(0, i - 1));
+      else if (e.key === 'ArrowRight') setIdx((i) => Math.min(plots.length - 1, i + 1));
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open, onClose, plots.length]);
+
+  if (!open || !section || plots.length === 0) return null;
+  if (typeof document === 'undefined' || !document.body) return null;
+  const current = plots[Math.min(idx, plots.length - 1)];
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[300] flex flex-col bg-[rgba(15,13,11,0.94)]"
+    >
+      <header className="flex items-center justify-between gap-3 px-6 py-3 text-[var(--color-paper)] shrink-0">
+        <div className="min-w-0">
+          <div className="font-mono text-[10px] uppercase tracking-[0.14em] opacity-70">
+            {section.tocIndex != null ? `§${section.tocIndex} · ` : ''}Plot images
+          </div>
+          <h2 className="font-display text-[16px] font-bold truncate">
+            {sectionLabel(section)}
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-[3px] hover:bg-white/10 transition-colors"
+        >
+          <Icon.X size={16} />
+        </button>
+      </header>
+      <div className="flex-1 flex items-center justify-center px-4 relative min-h-0">
+        {idx > 0 && (
+          <button
+            type="button"
+            onClick={() => setIdx(idx - 1)}
+            aria-label="Previous image"
+            className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/25 inline-flex items-center justify-center text-[var(--color-paper)] transition-colors z-10"
+          >
+            <Icon.Chevron size={18} className="rotate-180" />
+          </button>
+        )}
+        {current.dataUrl ? (
+          <img
+            src={current.dataUrl}
+            alt={current.caption}
+            className="max-h-full max-w-full object-contain select-none"
+            draggable={false}
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-2 text-[var(--color-paper)]/70">
+            <Icon.Image size={32} />
+            <span className="font-mono uppercase tracking-[0.14em] text-[11px]">Rendering page {current.page}…</span>
+          </div>
+        )}
+        {idx < plots.length - 1 && (
+          <button
+            type="button"
+            onClick={() => setIdx(idx + 1)}
+            aria-label="Next image"
+            className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/25 inline-flex items-center justify-center text-[var(--color-paper)] transition-colors z-10"
+          >
+            <Icon.Chevron size={18} />
+          </button>
+        )}
+      </div>
+      <footer className="px-6 py-3 flex items-center justify-between gap-3 text-[var(--color-paper)]/80 shrink-0">
+        <div className="font-mono text-[11px] tabular">
+          Page {current.page} · {idx + 1} of {plots.length}
+        </div>
+        <div className="text-[11.5px] truncate max-w-[60%] text-right">{current.caption}</div>
+      </footer>
+    </div>,
+    document.body,
   );
 }
 
@@ -744,16 +963,12 @@ export function collectAllPlots(imp: RiderImport) {
   return collectPlots(imp);
 }
 
-function PlotsPanel({
-  imp,
-  onSelectSection,
-}: {
-  imp: RiderImport;
-  onSelectSection: (sectionKey: string) => void;
-}) {
-  const plots = collectPlots(imp);
+function PlotsPanel({ imp }: { imp: RiderImport }) {
+  const sectionPlots = collectPlotsBySection(imp);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const totalPages = sectionPlots.reduce((n, sp) => n + sp.plots.length, 0);
 
-  if (plots.length === 0) {
+  if (sectionPlots.length === 0) {
     return (
       <div className="rounded-[4px] border border-dashed border-[var(--color-rule)] py-16 text-center">
         <p className="text-[13px] text-[var(--color-ink-3)]">No stage plot or lightplot pages detected.</p>
@@ -761,6 +976,8 @@ function PlotsPanel({
       </div>
     );
   }
+
+  const active = lightboxIdx != null ? sectionPlots[lightboxIdx] : null;
 
   return (
     <div className="space-y-4">
@@ -771,11 +988,13 @@ function PlotsPanel({
             <SourceTag source="rider_plots" field="Stage plot & lightplot" />
           </h2>
           <p className="text-[12px] text-[var(--color-ink-3)] mt-0.5 leading-relaxed">
-            Image-only pages — stage plot and lightplot drawings — pulled out of the rider so you don't have to scroll past every CAD sheet to find them. Click any thumbnail to open the source page in the viewer.
+            One card per plot section. Click to flip through that section's pages as fullscreen images — no PDF scrolling, no other rider pages.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Chip tone="neutral" variant="outline">{plots.length} image page{plots.length === 1 ? '' : 's'}</Chip>
+          <Chip tone="neutral" variant="outline">
+            {sectionPlots.length} section{sectionPlots.length === 1 ? '' : 's'} · {totalPages} image{totalPages === 1 ? '' : 's'}
+          </Chip>
           <Link
             to="/plots"
             className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[var(--color-ocean)] hover:underline"
@@ -786,22 +1005,28 @@ function PlotsPanel({
         </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        {plots.map(({ sectionKey, section, plot }, i) => (
-          <PlotCard
-            key={`${sectionKey}-${plot.page}-${i}`}
-            sectionKey={sectionKey}
+        {sectionPlots.map(({ sectionKey, section, plots }, i) => (
+          <SectionPlotCard
+            key={sectionKey}
             section={section}
-            plot={plot}
-            onSelectSection={onSelectSection}
+            plots={plots}
+            onOpen={() => setLightboxIdx(i)}
           />
         ))}
       </div>
+      <PlotImageLightbox
+        open={active != null}
+        onClose={() => setLightboxIdx(null)}
+        section={active?.section ?? null}
+        plots={active?.plots ?? []}
+      />
     </div>
   );
 }
 
 function SectionPageLinks({ pages, sectionLabel }: { pages: number[]; sectionLabel: string }) {
   const { openPdf } = usePdfViewer();
+  const pdfUrl = useActiveRiderPdfUrl();
   if (pages.length === 0) return null;
   return (
     <span>
@@ -809,13 +1034,17 @@ function SectionPageLinks({ pages, sectionLabel }: { pages: number[]; sectionLab
       {pages.map((p, i) => (
         <span key={p}>
           {i > 0 && ', '}
-          <button
-            type="button"
-            onClick={() => openPdf({ url: RIDER_PDF_PATH, page: p, title: `${sectionLabel} — p.${p}` })}
-            className="font-mono text-[var(--color-ocean)] underline decoration-dotted underline-offset-[3px] hover:decoration-solid hover:text-[var(--color-ink)] transition-colors"
-          >
-            {p}
-          </button>
+          {pdfUrl ? (
+            <button
+              type="button"
+              onClick={() => openPdf({ url: pdfUrl, page: p, title: `${sectionLabel} — p.${p}` })}
+              className="font-mono text-[var(--color-ocean)] underline decoration-dotted underline-offset-[3px] hover:decoration-solid hover:text-[var(--color-ink)] transition-colors"
+            >
+              {p}
+            </button>
+          ) : (
+            <span className="font-mono text-[var(--color-ink-3)]">{p}</span>
+          )}
         </span>
       ))}
       {' · '}
@@ -1804,7 +2033,6 @@ function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
   const { addRiderImportToScratch } = useApp();
   const [note, setNote] = useState<UploadNote | null>(null);
   const [isParsing, setIsParsing] = useState(false);
-  const riderFixture = fixturesOfKind('rider')[0];
 
   const handleFiles = async (files: File[]) => {
     const file = files[0];
@@ -1813,17 +2041,49 @@ function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
     setIsParsing(true);
     try {
       const parsed = await parseRiderPdf(file);
+      if (!parsed.sections.length) throw new Error('Parser returned no sections.');
+      // Persist the raw bytes so a refresh can rehydrate the Blob URL — the
+      // parser already detached its copy into the worker, so re-read from the
+      // File (multiple reads are allowed).
+      await saveRiderPdf(parsed.id, await file.arrayBuffer());
       addRiderImportToScratch(parsed, buildScratchRiderPersonnel());
       onDone?.();
-    } catch {
-      // Parsing failed — fall back to fixture if this looks like the right file.
+    } catch (err) {
+      console.error('[rider parse] failed:', err);
       const fixture = matchFixture(file.name);
+      const msg = err instanceof Error ? err.message : String(err);
       if (fixture?.kind === 'rider') {
-        const hydrated = await hydrateRiderPlotImages(buildScratchRiderImport());
+        const fixtureImport = buildScratchRiderImport();
+        // Fetch the canonical fixture PDF and stash it under the fixture
+        // import's id, so the embedded viewer + plot links work even on the
+        // fallback path. The warning note tells the user they're seeing fixture
+        // data.
+        let blobUrl: string | undefined;
+        try {
+          const resp = await fetch(RIDER_PDF_PATH);
+          if (resp.ok) {
+            const bytes = await resp.arrayBuffer();
+            await saveRiderPdf(fixtureImport.id, bytes);
+            blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+          }
+        } catch (fetchErr) {
+          console.warn('[rider parse] fixture PDF fetch failed:', fetchErr);
+        }
+        const withBlob: RiderImport = blobUrl ? { ...fixtureImport, pdfObjectUrl: blobUrl } : fixtureImport;
+        const hydrated = await hydrateRiderPlotImages(withBlob);
         addRiderImportToScratch(hydrated, buildScratchRiderPersonnel());
+        setNote({
+          tone: 'warning',
+          title: 'Live parse failed — loaded sample data instead',
+          detail: `Couldn't parse "${file.name}": ${msg}. Falling back to the canonical Spanish fixture. Check the browser console for the full stack.`,
+        });
         onDone?.();
       } else {
-        setNote(nonMatchNote(file, fixture, 'a rider PDF', riderFixture.filename));
+        setNote({
+          tone: 'warning',
+          title: "Couldn't parse this rider",
+          detail: `Parser error on "${file.name}": ${msg}. Check the browser console for the full stack — the rider may use an unusual table-of-contents layout the parser doesn't yet recognize.`,
+        });
       }
     } finally {
       setIsParsing(false);
@@ -1836,7 +2096,9 @@ function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
         accept=".pdf"
         onFiles={handleFiles}
         title={isParsing ? 'Parsing PDF…' : 'Drop the rider PDF'}
-        hint={isParsing ? 'Extracting sections — this takes a few seconds.' : `Upload "${riderFixture.filename}" — ${riderFixture.extracts}`}
+        hint={isParsing
+          ? 'Extracting sections — this takes a few seconds.'
+          : 'Any rider PDF works — the parser reads the table of contents and pulls out sections, band roster, PM contact, and party size. Spanish or English.'}
         icon={<Icon.Sparkle size={22} />}
         tourAnchor="rider-dropzone"
       />

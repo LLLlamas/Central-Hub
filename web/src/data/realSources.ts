@@ -12,6 +12,8 @@
 // A few values are user-provided (e.g. the Tour Manager).
 // =============================================================
 
+import type { ProvenanceUrl } from '@/data/sources';
+
 export interface RealSource {
   /** Originating document — for the rider, always the same; for user input, "User entry". */
   document: string;
@@ -23,16 +25,17 @@ export interface RealSource {
   quote?: string;
   /** Optional detail / explanation. */
   detail?: string;
-  /** Optional URL to the source artifact (e.g. /rider.pdf#page=6). */
-  artifactUrl?: string;
+  /** Optional URL to the source artifact. May be a tagged resolver
+   *  (`{ kind: 'active_rider_pdf' }`) that resolves at render time against the
+   *  active rider's Blob URL — when nothing is uploaded yet, `<SourceTag>`
+   *  hides the open-PDF affordance. */
+  artifactUrl?: ProvenanceUrl;
   /** Friendly artifact label for the link. */
   artifactLabel?: string;
 }
 
-import { RIDER_PDF_PATH } from '@/lib/riderSections';
-
 const RIDER_DOC = 'Rider PDF · Elsa y Elmar — Full Band 2025';
-const RIDER_FILE = RIDER_PDF_PATH;
+const RIDER_FILE: ProvenanceUrl = { kind: 'active_rider_pdf' };
 
 export const realSources = {
   // ---- Rider cover (page 1) ----------------------------------

@@ -4,7 +4,8 @@ import { Modal } from '@/components/ui/Modal';
 import { Icon } from '@/components/ui/Icon';
 
 export interface PdfRef {
-  /** Path to the PDF, served from `web/public/` (e.g. RIDER_PDF_PATH). */
+  /** Path to the PDF — either a public URL served from `web/public/` or a
+   *  runtime Blob URL (e.g. the active rider's `pdfObjectUrl`). */
   url: string;
   /** Optional page to deep-link to (uses the browser PDF `#page=` anchor). */
   page?: number;

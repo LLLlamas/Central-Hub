@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getSource, realSourceLabels, phaseLabels, type SourceKey, type ProvenanceArtifact, type LiveSource } from '@/data/sources';
+import { getSource, realSourceLabels, phaseLabels, resolveProvenanceUrl, type SourceKey, type ProvenanceArtifact, type LiveSource } from '@/data/sources';
 import { Modal } from '@/components/ui/Modal';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
@@ -7,6 +7,7 @@ import { usePdfViewer } from '@/components/PdfViewer';
 import { useApp } from '@/state/AppState';
 import { fmtFullDate } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import type { Tour } from '@/types';
 
 interface MockTagProps {
   source: SourceKey;
@@ -19,8 +20,12 @@ interface MockTagProps {
   className?: string;
 }
 
-function ArtifactLink({ artifact }: { artifact: ProvenanceArtifact }) {
+function ArtifactLink({ artifact, tour }: { artifact: ProvenanceArtifact; tour: Tour }) {
   const { openPdf } = usePdfViewer();
+  const resolvedUrl = resolveProvenanceUrl(artifact.url, tour);
+  // No live URL yet (e.g. tagged `active_rider_pdf` without an upload) — hide
+  // the link rather than render a dead click target.
+  if (!resolvedUrl) return null;
   const iconChar =
     artifact.kind === 'csv'
       ? '▦'
@@ -54,13 +59,13 @@ function ArtifactLink({ artifact }: { artifact: ProvenanceArtifact }) {
       {artifact.kind === 'pdf' ? (
         <button
           type="button"
-          onClick={() => openPdf({ url: artifact.url, title: artifact.label })}
+          onClick={() => openPdf({ url: resolvedUrl, title: artifact.label })}
           className={cn('w-full text-left', cls)}
         >
           {inner}
         </button>
       ) : (
-        <a href={artifact.url} target="_blank" rel="noopener noreferrer" className={cls}>
+        <a href={resolvedUrl} target="_blank" rel="noopener noreferrer" className={cls}>
           {inner}
         </a>
       )}
@@ -68,8 +73,9 @@ function ArtifactLink({ artifact }: { artifact: ProvenanceArtifact }) {
   );
 }
 
-function LiveUploadBlock({ live }: { live: LiveSource }) {
+function LiveUploadBlock({ live, tour }: { live: LiveSource; tour: Tour }) {
   const { openPdf } = usePdfViewer();
+  const resolvedUrl = resolveProvenanceUrl(live.url, tour);
   const iconChar = live.kind === 'csv' ? '▦' : '📕';
   const filenameCls =
     'flex items-center gap-2.5 px-3 py-2 rounded-[3px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] hover:bg-[var(--color-paper-2)]/50 transition-colors group';
@@ -96,10 +102,10 @@ function LiveUploadBlock({ live }: { live: LiveSource }) {
       <div className="font-mono text-[10px] font-semibold tracking-[0.14em] uppercase text-[var(--color-moss)] mb-1.5">
         From your uploaded file
       </div>
-      {live.kind === 'pdf' && live.url ? (
+      {live.kind === 'pdf' && resolvedUrl ? (
         <button
           type="button"
-          onClick={() => openPdf({ url: live.url!, title: live.filename })}
+          onClick={() => openPdf({ url: resolvedUrl, title: live.filename })}
           className={cn('w-full text-left', filenameCls)}
         >
           {filenameInner}
@@ -191,7 +197,7 @@ export function MockTag({ source, label = '(mock)', note, field, className }: Mo
 
         {live && (
           <div className="mt-4">
-            <LiveUploadBlock live={live} />
+            <LiveUploadBlock live={live} tour={tour} />
           </div>
         )}
 
@@ -208,8 +214,8 @@ export function MockTag({ source, label = '(mock)', note, field, className }: Mo
               Sample files this would come from
             </div>
             <ul className="space-y-1.5">
-              {prov.artifacts.map((a) => (
-                <ArtifactLink key={a.url} artifact={a} />
+              {prov.artifacts.map((a, i) => (
+                <ArtifactLink key={typeof a.url === 'string' ? a.url : `tag-${i}`} artifact={a} tour={tour} />
               ))}
             </ul>
             <p className="mt-2 text-[10.5px] text-[var(--color-ink-3)] leading-relaxed">

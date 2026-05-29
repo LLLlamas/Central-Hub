@@ -14,7 +14,6 @@
 // =============================================================
 
 import { FIXTURES } from '@/lib/fixtureMatcher';
-import { RIDER_PDF_PATH } from '@/lib/riderSections';
 import type { Tour, UpdateStamp } from '@/types';
 
 export type RealSource =
@@ -34,11 +33,18 @@ export type LifecyclePhase =
   | 'settlement'     // every night + post-tour
   | 'ongoing';       // anytime
 
+/** Tagged URL — resolved at render time by `<MockTag>` / `<SourceTag>` against
+ *  AppState. Used when the artifact is the actively uploaded rider PDF (whose
+ *  Blob URL only exists at runtime). When the tag resolves to undefined (no
+ *  rider uploaded yet) the consumer hides the link entirely. */
+export type ProvenanceUrl = string | { kind: 'active_rider_pdf' };
+
 export interface ProvenanceArtifact {
   /** Display label for the link. */
   label: string;
-  /** URL (relative or absolute) — pointing to the mock file in /public. */
-  url: string;
+  /** URL (relative or absolute) — pointing to the mock file in /public, or a
+   *  tagged resolver for the active rider PDF. */
+  url: ProvenanceUrl;
   /** Optional kind for icon choice. */
   kind?: 'csv' | 'doc' | 'pdf' | 'email' | 'image' | 'json';
 }
@@ -50,8 +56,9 @@ export interface ProvenanceArtifact {
 export interface LiveSource {
   filename: string;
   kind: 'csv' | 'pdf';
-  /** Public URL of the fixture so PDF filenames can open in-app. */
-  url?: string;
+  /** Public URL of the fixture so PDF filenames can open in-app. May be a
+   *  tagged resolver — see `ProvenanceUrl`. */
+  url?: ProvenanceUrl;
   /** UpdateStamp for the import — date + user. */
   stamp?: UpdateStamp;
   /** One-line note explaining the production flow that would replace this. */
@@ -99,7 +106,7 @@ function riderLive(tour: Tour): LiveSource | null {
   return {
     filename: latest.filename,
     kind: 'pdf',
-    url: RIDER_PDF_PATH,
+    url: { kind: 'active_rider_pdf' },
     stamp: { at: latest.uploadedAt, by: latest.uploadedBy },
     productionNote:
       'Normally each rider section is read from the uploaded PDF and reviewed next to the original before you approve it.',
@@ -538,6 +545,20 @@ export type SourceKey = keyof typeof sources;
 
 export function getSource(key: SourceKey): Provenance {
   return sources[key] as Provenance;
+}
+
+/** Resolve a `ProvenanceUrl` against the active tour. Tagged resolvers (today
+ *  just `active_rider_pdf`) map to `tour.riderImports[0].pdfObjectUrl`; plain
+ *  strings pass through. Returns undefined when the tag has no backing data
+ *  yet — consumers hide the open-PDF affordance in that case. */
+export function resolveProvenanceUrl(
+  url: ProvenanceUrl | undefined,
+  tour: Tour,
+): string | undefined {
+  if (url == null) return undefined;
+  if (typeof url === 'string') return url;
+  if (url.kind === 'active_rider_pdf') return tour.riderImports[0]?.pdfObjectUrl;
+  return undefined;
 }
 
 // Helper to pretty-print a real-source enum for the UI — plain English, no jargon.

@@ -79,11 +79,18 @@ async function renderPagesToPng(
 ): Promise<Map<number, RenderedPage>> {
   const out = new Map<number, RenderedPage>();
   if (typeof document === 'undefined' || pageNumbers.length === 0) return out;
-  // Copy the buffer — pdfjs detaches the source Uint8Array, so we can't reuse
-  // a buffer that was passed to getDocument earlier (e.g. by extractPages).
-  const data = new Uint8Array(buffer.byteLength);
-  data.set(new Uint8Array(buffer));
-  const pdf = await getDocument({ data }).promise;
+  // Caller must pass an UNDETACHED buffer — pdfjs takes ownership of whatever
+  // we hand it. If byteLength is 0, the original was already consumed by a
+  // prior getDocument() call; bail out cleanly so we don't throw downstream.
+  if (buffer.byteLength === 0) return out;
+  let pdf;
+  try {
+    const data = new Uint8Array(buffer.byteLength);
+    data.set(new Uint8Array(buffer));
+    pdf = await getDocument({ data }).promise;
+  } catch {
+    return out;
+  }
   for (const n of pageNumbers) {
     if (n < 1 || n > pdf.numPages) continue;
     try {
@@ -671,6 +678,9 @@ function plotsInRange(pages: PPage[], r: SectionRange): PlotImage[] {
 
 export async function parseRiderPdf(file: File): Promise<RiderImport> {
   const buffer = await file.arrayBuffer();
+  // Independent buffer for the second pdfjs load — extractPages hands the
+  // original to pdfjs which detaches it (transfers to the worker).
+  const renderBuffer = buffer.slice(0);
   const pages = await extractPages(buffer);
   const cover = extractCover(pages);
 
@@ -680,12 +690,11 @@ export async function parseRiderPdf(file: File): Promise<RiderImport> {
     : buildLegacySections(pages, cover.language);
 
   // Render plot pages to PNG so the review UI can show the drawing inline
-  // instead of embedding the source PDF. Buffer is reused — a fresh
-  // getDocument() call is required because the first one consumed it.
+  // instead of embedding the source PDF.
   const plotPages = new Set<number>();
   for (const s of sections) for (const p of s.plots ?? []) plotPages.add(p.page);
   if (plotPages.size > 0) {
-    const rendered = await renderPagesToPng(buffer, [...plotPages]);
+    const rendered = await renderPagesToPng(renderBuffer, [...plotPages]);
     for (const s of sections) {
       if (!s.plots) continue;
       s.plots = s.plots.map((p) => {
@@ -710,6 +719,7 @@ export async function parseRiderPdf(file: File): Promise<RiderImport> {
   return {
     id: `ri_parsed_${Date.now()}`,
     filename: file.name,
+    pdfObjectUrl: typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(file) : undefined,
     uploadedAt: new Date().toISOString().slice(0, 16),
     uploadedBy: 'Tour Manager',
     sourceLanguage: cover.language,

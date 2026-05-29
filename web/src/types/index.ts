@@ -573,6 +573,11 @@ export interface RiderSection {
 export interface RiderImport {
   id: ID;
   filename: string;
+  /** Blob URL for the uploaded PDF — live in the current browser session only.
+   *  Stripped before localStorage persistence; rehydrated on boot from the raw
+   *  bytes stored in IndexedDB (`lib/riderPdfStore.ts`), keyed by `id`. When
+   *  undefined, every "open the rider PDF" affordance hides itself. */
+  pdfObjectUrl?: string;
   uploadedAt: ISODateTime;
   uploadedBy: string;
   sourceLanguage: string;

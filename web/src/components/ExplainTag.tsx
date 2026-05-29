@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Icon } from '@/components/ui/Icon';
 import { usePdfViewer } from '@/components/PdfViewer';
-import { RIDER_PDF_PATH, getRiderSection } from '@/lib/riderSections';
+import { useApp } from '@/state/AppState';
+import { getRiderSection } from '@/lib/riderSections';
 import { cn } from '@/lib/cn';
 import type { Conflict } from '@/types';
 
@@ -47,6 +48,8 @@ export function ExplainTag({
 }: ExplainTagProps) {
   const [open, setOpen] = useState(false);
   const { openPdf } = usePdfViewer();
+  const { tour } = useApp();
+  const pdfUrl = tour.riderImports[0]?.pdfObjectUrl;
 
   const page =
     riderLink?.page ??
@@ -87,11 +90,11 @@ export function ExplainTag({
           {typeof children === 'string' ? <p>{children}</p> : children}
         </div>
 
-        {page != null && (
+        {page != null && pdfUrl && (
           <button
             type="button"
             onClick={() =>
-              openPdf({ url: RIDER_PDF_PATH, page, title: 'Rider PDF' })
+              openPdf({ url: pdfUrl, page, title: 'Rider PDF' })
             }
             className="mt-4 w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-[3px] border border-[var(--color-gold)]/40 hover:border-[var(--color-gold)] hover:bg-[var(--color-paper-2)]/50 transition-colors group"
           >

@@ -53,17 +53,20 @@ export function loadScratchTour(): Tour | null {
 function stripForPersistence(tour: Tour): Tour {
   return {
     ...tour,
-    riderImports: tour.riderImports.map((ri) => ({
-      ...ri,
-      sections: ri.sections.map((s) =>
-        s.plots
-          ? {
-              ...s,
-              plots: s.plots.map(({ dataUrl: _omit, width: _w, height: _h, ...rest }) => rest),
-            }
-          : s,
-      ),
-    })),
+    riderImports: tour.riderImports.map((ri) => {
+      const { pdfObjectUrl: _omitUrl, ...rest } = ri;
+      return {
+        ...rest,
+        sections: rest.sections.map((s) =>
+          s.plots
+            ? {
+                ...s,
+                plots: s.plots.map(({ dataUrl: _omit, width: _w, height: _h, ...keep }) => keep),
+              }
+            : s,
+        ),
+      };
+    }),
   };
 }
 

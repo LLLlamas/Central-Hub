@@ -1,6 +1,7 @@
 import type { ReactNode, MouseEvent } from 'react';
-import { getRiderSection, RIDER_PDF_PATH } from '@/lib/riderSections';
+import { getRiderSection } from '@/lib/riderSections';
 import { usePdfViewer } from '@/components/PdfViewer';
+import { useApp } from '@/state/AppState';
 import { cn } from '@/lib/cn';
 
 interface RiderRefProps {
@@ -30,7 +31,9 @@ const linkStyle =
  */
 export function RiderRef({ section, label, short, className }: RiderRefProps) {
   const { openPdf } = usePdfViewer();
+  const { tour } = useApp();
   const s = getRiderSection(section);
+  const pdfUrl = tour.riderImports[0]?.pdfObjectUrl;
 
   if (!s) {
     return (
@@ -41,10 +44,28 @@ export function RiderRef({ section, label, short, className }: RiderRefProps) {
     );
   }
 
+  // No rider uploaded → degrade to plain (non-clickable) text. We don't fake a
+  // disabled-looking link that does nothing on click.
+  if (!pdfUrl) {
+    if (short) {
+      return (
+        <span className={cn('inline align-baseline font-mono tabular text-[var(--color-ink-3)]', className)}>
+          p.{s.pages[0]}
+        </span>
+      );
+    }
+    return (
+      <span className={cn('inline-flex items-baseline gap-1 align-baseline text-[var(--color-ink-3)]', className)}>
+        <span>{label ?? s.name}</span>
+        <span className="font-mono text-[0.85em]">(p.{s.pages[0]})</span>
+      </span>
+    );
+  }
+
   const open = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    openPdf({ url: RIDER_PDF_PATH, page: s.pages[0], title: `Rider — ${s.name}` });
+    openPdf({ url: pdfUrl, page: s.pages[0], title: `Rider — ${s.name}` });
   };
 
   if (short) {
