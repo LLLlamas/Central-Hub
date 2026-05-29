@@ -24,12 +24,10 @@ export function TodaySurface({ className }: { className?: string }) {
     isDayLocked,
     toggleDayLocked,
     getDayLastUpdated,
-    resolvedConflicts,
     getDay,
     getScheduleItemsForDay,
     getTravelForDay,
     getHotelsForDay,
-    getAllConflicts,
   } = useApp();
   const day = getDay(MOCK_TODAY);
 
@@ -47,8 +45,6 @@ export function TodaySurface({ className }: { className?: string }) {
   const nextItem = visibleSchedule.find((it) => it.startTime >= currentClock) ?? visibleSchedule[0];
   const travel = getTravelForDay(day.id).filter((t) => managerView || resolveVisibility(t.visibility, user) !== 'blocked');
   const hotels = getHotelsForDay(day.id).filter((h) => managerView || resolveVisibility(h.visibility, user) !== 'blocked');
-  const unresolved = getAllConflicts().filter((c) => !resolvedConflicts.has(c.id));
-  const unlockedPastDays = tour.days.filter((d) => d.date <= day.date && !isDayLocked(d.id));
   const unpublishedToday = !day.published;
 
   return (
@@ -109,22 +105,7 @@ export function TodaySurface({ className }: { className?: string }) {
           </div>
 
           {managerView && (
-            <div className="mt-5 grid gap-2 sm:grid-cols-3">
-              <AttentionLink
-                to="/ingest/riders"
-                icon={<Icon.Alert size={14} />}
-                label={`${unresolved.length} rider conflict${unresolved.length === 1 ? '' : 's'}`}
-                hint="Needs decision"
-                active={unresolved.length > 0}
-                sourceTag
-              />
-              <AttentionLink
-                to="/calendar"
-                icon={<Icon.Lock size={14} />}
-                label={`${unlockedPastDays.length} past day${unlockedPastDays.length === 1 ? '' : 's'} unlocked`}
-                hint={unlockedPastDays.length > 0 ? 'Close out' : 'Closed out'}
-                active={unlockedPastDays.length > 0}
-              />
+            <div className="mt-5">
               <AttentionLink
                 to={`/daysheet/${day.date}`}
                 icon={<Icon.Document size={14} />}

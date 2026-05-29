@@ -11,7 +11,6 @@ import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { EditableText, EditableSelect } from '@/components/ui/EditableText';
-import { MockBadge } from '@/components/provenance/MockBadge';
 import { SourceTag } from '@/components/provenance/SourceTag';
 import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { ExplainTag, ExcludedBrandExplain } from '@/components/ExplainTag';
@@ -203,7 +202,6 @@ export function RiderIngest() {
             <Chip tone="neutral" variant="outline">
               {approvedCount}/{imp.sections.length} approved
             </Chip>
-            <MockBadge source="rider_import" className="ml-2" />
           </div>
         }
       />
@@ -464,26 +462,39 @@ function SectionReviewSplit({
     );
   }
 
-  // The conflicts pseudo-section has no source pages — render extracted only.
-  // Also omit the embedded viewer when there's no live PDF URL (rider not
-  // uploaded, or boot-rehydration hasn't completed): the extracted text pane
-  // takes the full width instead of leaving a broken iframe slot.
-  const showPdf = section.pages.length > 0 && !!pdfUrl;
+  // Always render the side-by-side when the section is anchored to pages — the
+  // user wants a stable two-pane shape so they can compare source to extracted
+  // text. If the live PDF URL hasn't resolved yet (boot rehydration pending or
+  // upload bytes missing), show a placeholder card in the left slot instead of
+  // collapsing the layout. Conflicts-pseudo sections with zero source pages
+  // still drop to single column.
+  const hasPages = section.pages.length > 0;
+  const pageRange = hasPages
+    ? `pages ${section.pages[0]}${section.endPage && section.endPage !== section.pages[0] ? `–${section.endPage}` : ''}`
+    : '';
   return (
-    <div className={cn('grid gap-5 min-w-0', showPdf ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : 'lg:grid-cols-1')}>
-      {showPdf && (
+    <div className={cn('grid gap-5 min-w-0', hasPages ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : 'lg:grid-cols-1')}>
+      {hasPages && (
         <div className="space-y-2 min-w-0">
           <div className="flex items-baseline justify-between gap-3 flex-wrap">
-            <div className="eyebrow">
-              Source · pages {section.pages[0]}{section.endPage && section.endPage !== section.pages[0] ? `–${section.endPage}` : ''}
-            </div>
+            <div className="eyebrow">Source · {pageRange}</div>
           </div>
-          <PdfViewerInline
-            url={pdfUrl!}
-            page={section.pages[0]}
-            title={sectionLabel(section)}
-            height="50vh"
-          />
+          {pdfUrl ? (
+            <PdfViewerInline
+              url={pdfUrl}
+              page={section.pages[0]}
+              title={sectionLabel(section)}
+              height="50vh"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-2 rounded-[4px] border border-dashed border-[var(--color-rule)] bg-[var(--color-paper-2)]/40 text-center px-4" style={{ height: '50vh' }}>
+              <Icon.Document size={22} className="text-[var(--color-ink-4)]" />
+              <p className="text-[12.5px] font-semibold text-[var(--color-ink)]">Source PDF unavailable</p>
+              <p className="text-[11.5px] text-[var(--color-ink-3)] max-w-xs">
+                The rider was imported earlier but the PDF bytes aren't in this browser. Re-upload the rider to restore the side-by-side viewer.
+              </p>
+            </div>
+          )}
         </div>
       )}
       <div className="space-y-5 min-w-0">
@@ -1214,31 +1225,8 @@ function SectionView({
           />
         )}
       </SectionCard>
-
-      <details className="card overflow-hidden">
-        <summary className="cursor-pointer px-5 py-3 text-[12.5px] font-semibold text-[var(--color-ink)]">
-          View raw extraction
-        </summary>
-        <pre className="font-mono text-[11px] leading-[1.5] text-[var(--color-ink-2)] bg-[var(--color-paper-2)]/40 p-4 border-t border-[var(--color-rule-soft)] overflow-x-auto max-h-[280px] w-full max-w-full">
-{JSON.stringify(stripUiNoise(eff), null, 2)}
-        </pre>
-      </details>
     </>
   );
-}
-
-function stripUiNoise(s: RiderSection) {
-  const out: any = { type: s.type, pages: s.pages, confidence: s.confidence, language: s.language };
-  if (s.inputList) out.input_list = s.inputList;
-  if (s.monitorMix) out.monitor_mix = s.monitorMix;
-  if (s.fohOutputs) out.foh_outputs = s.fohOutputs;
-  if (s.backline) out.backline = s.backline;
-  if (s.lodging) out.lodging = s.lodging;
-  if (s.catering) out.catering = s.catering;
-  if (s.conflicts) out.conflicts = s.conflicts;
-  if (s.freeText) out.free_text = s.freeText;
-  if (s.freeTextEn) out.free_text_en = s.freeTextEn;
-  return out;
 }
 
 // =========================================================

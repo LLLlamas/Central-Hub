@@ -1,4 +1,4 @@
-import { NavLink, Link } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
 import { Icon } from '@/components/ui/Icon';
 import { Chip } from '@/components/ui/Chip';
@@ -33,13 +33,11 @@ const groupLabels: Record<NavEntry['group'], string> = {
 };
 
 export function Sidebar() {
-  const { tour, user, lockedDays, resolvedConflicts, getAllConflicts } = useApp();
+  const { tour, user, lockedDays } = useApp();
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const today = MOCK_TODAY;
   const dToStart = daysBetween(today, tour.startDate);
   const dToEnd = daysBetween(today, tour.endDate);
-  const allConflicts = getAllConflicts();
-  const unresolvedConflictCount = allConflicts.filter((c) => !resolvedConflicts.has(c.id)).length;
   const lockedCount = tour.days.filter((d) => lockedDays.has(d.id)).length;
 
   const stateLabel =
@@ -87,26 +85,6 @@ export function Sidebar() {
             <Icon.Lock size={10} className="text-[var(--color-accent)]" />
             <span>{lockedCount}/{tour.days.length} locked</span>
           </div>
-          {unresolvedConflictCount > 0 ? (
-            <Link
-              to="/ingest/riders"
-              className="inline-flex items-center gap-1 text-[10.5px] font-mono tabular text-[var(--color-accent)] hover:text-[var(--color-ink)]"
-              title={`${unresolvedConflictCount} unresolved rider conflict${unresolvedConflictCount === 1 ? '' : 's'} - click to review`}
-            >
-              <Icon.Alert size={10} />
-              <span>{unresolvedConflictCount} unresolved</span>
-            </Link>
-          ) : (
-            allConflicts.length > 0 && (
-              <span
-                className="inline-flex items-center gap-1 text-[10.5px] font-mono tabular text-[var(--color-moss)]"
-                title={`All ${allConflicts.length} rider conflicts resolved`}
-              >
-                <Icon.Check size={10} />
-                <span>All resolved</span>
-              </span>
-            )
-          )}
         </div>
       </div>
 
