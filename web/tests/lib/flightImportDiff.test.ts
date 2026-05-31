@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { diffFlightImports, diffIsEmpty } from '@/lib/flightImportDiff';
 import type { FlightImport, ParsedFlight } from '@/types';
 
@@ -6,15 +6,15 @@ function fi(id: string, passengers: { name: string; seat?: string }[], pfPatch: 
   return {
     id,
     filename: `${id}.csv`,
-    uploadedAt: '2025-09-25T09:00',
+    uploadedAt: '2026-09-25T09:00',
     status: 'review',
     parsedFlights: [{
-      airline: 'Aeroméxico',
+      airline: 'AeromÃ©xico',
       flightNumber: 'AM 19',
       departureAirport: 'LAX',
       arrivalAirport: 'MEX',
-      departureTime: '2025-09-22T09:35',
-      arrivalTime: '2025-09-22T15:20',
+      departureTime: '2026-09-22T09:35',
+      arrivalTime: '2026-09-22T15:20',
       recordLocator: 'ABCD12',
       passengers,
       ...pfPatch,
@@ -54,7 +54,7 @@ describe('diffFlightImports', () => {
 
   it('flags metadata changes', () => {
     const a = fi('a', [{ name: 'Elsa' }]);
-    const b = fi('b', [{ name: 'Elsa' }], { departureTime: '2025-09-22T10:00' });
+    const b = fi('b', [{ name: 'Elsa' }], { departureTime: '2026-09-22T10:00' });
     expect(diffFlightImports(a, b).metadataChanged).toBe(true);
   });
 

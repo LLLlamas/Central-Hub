@@ -1,18 +1,18 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { matchFixture, fixturesOfKind, nonMatchNote, FIXTURES } from '@/lib/fixtureMatcher';
 
 describe('matchFixture', () => {
   it('matches a known fixture by exact filename', () => {
-    expect(matchFixture('AM19_Group_LAX-MEX_2025-09-22.pdf')?.kind).toBe('flight');
+    expect(matchFixture('AM19_Group_LAX-MEX_2026-09-22.pdf')?.kind).toBe('flight');
     expect(matchFixture('mock-tour-route-mexico-7day.csv')?.kind).toBe('route');
   });
 
   it('is case-insensitive', () => {
-    expect(matchFixture('am19_group_lax-mex_2025-09-22.PDF')?.id).toBe('flight_am19');
+    expect(matchFixture('am19_group_lax-mex_2026-09-22.PDF')?.id).toBe('flight_am19');
   });
 
   it("tolerates the browser's duplicate-download suffix", () => {
-    expect(matchFixture('AM19_Group_LAX-MEX_2025-09-22 (1).pdf')?.id).toBe('flight_am19');
+    expect(matchFixture('AM19_Group_LAX-MEX_2026-09-22 (1).pdf')?.id).toBe('flight_am19');
     expect(matchFixture('mock-tour-route-mexico-7day (2).csv')?.kind).toBe('route');
   });
 

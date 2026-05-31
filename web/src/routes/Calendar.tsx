@@ -9,7 +9,7 @@ import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { dayTypeLabel } from '@/lib/format';
 import type { Day, DayType } from '@/types';
 import { cn } from '@/lib/cn';
-import { MOCK_TODAY } from '@/lib/today';
+import { getTodayIso } from '@/lib/today';
 import { parseISO, format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addDays } from 'date-fns';
 
 const ALL_TYPES: DayType[] = ['show', 'off', 'travel', 'rehearsal', 'promo', 'hold'];
@@ -114,7 +114,7 @@ export function CalendarPage() {
                       key={day.id}
                       day={day}
                       locked={isDayLocked(day.id)}
-                      isToday={day.date === MOCK_TODAY}
+                      isToday={day.date === getTodayIso()}
                     />
                   ))}
                 </div>
@@ -132,7 +132,7 @@ export function CalendarPage() {
               allDays={dayByDate}
               filter={filter}
               isDayLocked={isDayLocked}
-              today={MOCK_TODAY}
+              today={getTodayIso()}
             />
           ))}
         </div>

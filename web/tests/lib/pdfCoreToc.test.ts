@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   parseTocEntries,
   findHeadingPages,
@@ -7,7 +7,7 @@ import {
 } from '@/lib/pdfCore.mjs';
 import type { PPage } from '@/lib/pdfCore.mjs';
 
-// Helpers — synthesize a PItem at a sensible position.
+// Helpers â€” synthesize a PItem at a sensible position.
 const item = (text: string, x = 70, y = 700, h = 12) => ({ text, x, y, w: text.length * 6, h });
 
 // A page where every TOC row is laid out as separate "N." + "Title" items at
@@ -26,7 +26,7 @@ function bodyPage(num: number, headings: string[]): PPage {
 }
 
 describe('parseTocEntries', () => {
-  it('detects a 14-row TOC and returns entries in §N order', () => {
+  it('detects a 14-row TOC and returns entries in Â§N order', () => {
     const toc = tocPage(2, [
       [1, 'Intro'], [2, 'Notas'], [3, 'Permisos'], [4, 'Soporte, Escenario'],
       [5, 'Especificaciones Tecnicas'], [6, 'Input - Output'], [7, 'Stage plot'],
@@ -85,7 +85,7 @@ describe('findHeadingPages', () => {
 
   it('excludes the TOC page itself from loose-pass matches', () => {
     // A rider that uses "N. Title" headings (looseDotPass). The TOC page
-    // shouldn't be picked up as §1's start.
+    // shouldn't be picked up as Â§1's start.
     const tocEntries = Object.assign(
       [{ num: 1, title: 'Intro' }, { num: 2, title: 'Notas' }],
       { tocPage: 2 },
@@ -117,13 +117,13 @@ describe('classifyTocTitle', () => {
     expect(classifyTocTitle('Notas')).toBe('production_control');
     expect(classifyTocTitle('Permisos')).toBe('permits');
     expect(classifyTocTitle('Soporte, Escenario')).toBe('stage_specs');
-    expect(classifyTocTitle('Especificaciones Técnicas')).toBe('audio_pa');
+    expect(classifyTocTitle('Especificaciones TÃ©cnicas')).toBe('audio_pa');
     expect(classifyTocTitle('Input - Output')).toBe('input_list');
     expect(classifyTocTitle('Stage plot')).toBe('stage_plot');
-    expect(classifyTocTitle('Iluminación y Lightplot')).toBe('lighting_equipment');
+    expect(classifyTocTitle('IluminaciÃ³n y Lightplot')).toBe('lighting_equipment');
     expect(classifyTocTitle('Backline')).toBe('backline');
     expect(classifyTocTitle('Soundcheck')).toBe('soundcheck');
-    expect(classifyTocTitle('Transportación')).toBe('ground_transport');
+    expect(classifyTocTitle('TransportaciÃ³n')).toBe('ground_transport');
     expect(classifyTocTitle('Hospedaje')).toBe('lodging');
     expect(classifyTocTitle('Camerinos')).toBe('dressing_rooms');
     expect(classifyTocTitle('Catering')).toBe('catering');

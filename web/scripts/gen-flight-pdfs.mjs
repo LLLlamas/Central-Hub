@@ -27,7 +27,7 @@ const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 const flights = [
   {
-    file: 'AM19_Group_LAX-MEX_2025-09-22.pdf',
+    file: 'AM19_Group_LAX-MEX_2026-09-22.pdf',
     airline: 'Aeroméxico',
     airlineCode: 'AM',
     confTitle: 'Group E-Ticket Itinerary',
@@ -39,7 +39,7 @@ const flights = [
     to: 'MEX',
     toCity: 'Mexico City',
     toAirport: 'Benito Juárez Intl',
-    date: 'Mon, 22 Sep 2025',
+    date: 'Tue, 22 Sep 2026',
     depart: '09:35',
     arrive: '15:20',
     boarding: '09:05',
@@ -60,7 +60,7 @@ const flights = [
     ],
   },
   {
-    file: 'VB1014_Group_MEX-MTY_2025-09-27.pdf',
+    file: 'VB1014_Group_MEX-MTY_2026-09-27.pdf',
     airline: 'VivaAerobus',
     airlineCode: 'VB',
     confTitle: 'Booking Confirmation',
@@ -72,7 +72,7 @@ const flights = [
     to: 'MTY',
     toCity: 'Monterrey',
     toAirport: 'Mariano Escobedo Intl',
-    date: 'Sat, 27 Sep 2025',
+    date: 'Sun, 27 Sep 2026',
     depart: '11:00',
     arrive: '12:35',
     boarding: '10:30',
@@ -98,7 +98,7 @@ const flights = [
 // email/PDF a TM receives in their inbox.
 const hotels = [
   {
-    file: 'Hotel_CDMX_NH_Reforma_2025-09-22.pdf',
+    file: 'Hotel_CDMX_NH_Reforma_2026-09-22.pdf',
     name: 'NH Collection Mexico City Reforma',
     brand: 'NH Collection Hotels',
     address: 'Paseo de la Reforma 122, Juárez, 06600 Ciudad de México',
@@ -109,10 +109,10 @@ const hotels = [
     confirmation: 'NHX-558210',
     bookedBy: 'Andante Travel — Touring Desk',
     bookedByContact: 'touring@andantetravel.com',
-    bookingDate: 'Mon, 18 Aug 2025',
-    checkInDate: 'Mon, 22 Sep 2025',
+    bookingDate: 'Mon, 17 Aug 2026',
+    checkInDate: 'Tue, 22 Sep 2026',
     checkInTime: '15:00',
-    checkOutDate: 'Sat, 27 Sep 2025',
+    checkOutDate: 'Sun, 27 Sep 2026',
     checkOutTime: '12:00',
     nights: 5,
     guests: '8 adults',
@@ -135,7 +135,7 @@ const hotels = [
     ],
   },
   {
-    file: 'Hotel_MTY_Fiesta_Americana_2025-09-27.pdf',
+    file: 'Hotel_MTY_Fiesta_Americana_2026-09-27.pdf',
     name: 'Fiesta Americana Monterrey Valle',
     brand: 'Fiesta Americana Hotels & Resorts',
     address: 'Av. Lázaro Cárdenas 2305, Valle Oriente, 66260 Monterrey',
@@ -146,10 +146,10 @@ const hotels = [
     confirmation: 'FA-MTY-77431',
     bookedBy: 'Andante Travel — Touring Desk',
     bookedByContact: 'touring@andantetravel.com',
-    bookingDate: 'Mon, 18 Aug 2025',
-    checkInDate: 'Sat, 27 Sep 2025',
+    bookingDate: 'Mon, 17 Aug 2026',
+    checkInDate: 'Sun, 27 Sep 2026',
     checkInTime: '15:00',
-    checkOutDate: 'Sun, 28 Sep 2025',
+    checkOutDate: 'Mon, 28 Sep 2026',
     checkOutTime: '12:00',
     nights: 1,
     guests: '8 adults',

@@ -30,7 +30,7 @@ import {
   travelModeLabel,
 } from '@/lib/format';
 import { resolveVisibility } from '@/lib/visibility';
-import { MOCK_TODAY, getGeneratedAtLabel } from '@/lib/today';
+import { getTodayIso, getGeneratedAtLabel } from '@/lib/today';
 import { cn } from '@/lib/cn';
 
 type Mode = 'edit' | 'personal';
@@ -59,7 +59,7 @@ export function DaySheets() {
 
   const defaultDate = useMemo(() => {
     if (date) return date;
-    const demoDay = getDay(MOCK_TODAY);
+    const demoDay = getDay(getTodayIso());
     const firstShow = tour.days.find((d) => d.dayType === 'show');
     return demoDay?.date ?? firstShow?.date ?? tour.days[0]?.date ?? '';
   }, [date, tour.days]);

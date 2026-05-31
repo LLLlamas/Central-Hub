@@ -75,22 +75,26 @@ interface PaletteItem {
 
 function buildIndex(tour: Tour, user: CurrentUser): PaletteItem[] {
   const items: PaletteItem[] = [];
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
 
-  // Top-level pages.
-  const pages: PaletteItem[] = [
+  // Top-level pages. Manager-only pages are hidden for crew so the palette
+  // can't navigate them somewhere they'd hit a not-authorized fallback.
+  const pages: (PaletteItem & { managerOnly?: boolean })[] = [
     { type: 'page', label: 'Today', to: '/', keywords: ['home', 'dashboard', 'overview'] },
     { type: 'page', label: 'Calendar', to: '/calendar', keywords: ['dates'] },
+    { type: 'page', label: 'My Travel & Info', to: '/me', keywords: ['me', 'my', 'flights', 'hotel', 'travel', 'schedule', 'submit', 'document', 'personal'] },
     { type: 'page', label: 'People', to: '/personnel', keywords: ['personnel', 'crew', 'roster'] },
     { type: 'page', label: 'Plots', to: '/plots', keywords: ['plot', 'plots', 'stage plot', 'lightplot', 'cad', 'rider images', 'drawings'] },
     { type: 'page', label: 'Supplies & Costs', to: '/gear', keywords: ['gear', 'equipment', 'supplies', 'backline', 'mics', 'catering', 'dressing room', 'cost', 'budget', 'inventory', 'flights', 'travel', 'hotel', 'rooms'] },
-    { type: 'page', label: 'Schedule Permissions', to: '/schedule', keywords: ['visibility', 'abac', 'permissions', 'schedule'] },
-    { type: 'page', label: 'App User Permissions', to: '/access', keywords: ['access', 'members', 'roles', 'invite', 'crew', 'revoke', 'team', 'users'] },
+    { type: 'page', label: 'Submissions', to: '/submissions', keywords: ['submissions', 'inbox', 'review', 'approve', 'documents', 'pending'], managerOnly: true },
+    { type: 'page', label: 'Schedule Permissions', to: '/schedule', keywords: ['visibility', 'abac', 'permissions', 'schedule'], managerOnly: true },
+    { type: 'page', label: 'App User Permissions', to: '/access', keywords: ['access', 'members', 'roles', 'invite', 'crew', 'revoke', 'team', 'users'], managerOnly: true },
     { type: 'page', label: 'Day Sheets', to: '/daysheet', keywords: ['day sheet'] },
     { type: 'page', label: 'More', to: '/more', keywords: ['tools', 'settings'] },
-    { type: 'page', label: 'Import route & travel', to: '/ingest/flights', keywords: ['flight', 'route', 'travel', 'csv', 'ingest'] },
-    { type: 'page', label: 'Import rider', to: '/ingest/riders', keywords: ['rider', 'pdf', 'conflicts', 'ingest'] },
+    { type: 'page', label: 'Import route & travel', to: '/ingest/flights', keywords: ['flight', 'route', 'travel', 'csv', 'ingest'], managerOnly: true },
+    { type: 'page', label: 'Import rider', to: '/ingest/riders', keywords: ['rider', 'pdf', 'conflicts', 'ingest'], managerOnly: true },
   ];
-  items.push(...pages);
+  items.push(...pages.filter((p) => !p.managerOnly || managerView).map(({ managerOnly: _m, ...p }) => p));
 
   // Days.
   for (const d of tour.days) {

@@ -5,7 +5,7 @@
 // names that don't match (e.g. a touring name not yet on the roster) surface
 // as "unmatched", exactly as a real AI ingest would.
 
-import { MOCK_NOW } from '@/lib/today';
+import { getNowIso } from '@/lib/today';
 import type { FlightImport, ParsedFlight, TourPerson } from '@/types';
 
 interface RawFlight {
@@ -49,13 +49,13 @@ const RAW_FLIGHTS: RawFlight[] = [
   {
     fixtureId: 'flight_am19',
     importId: 'fi_am19',
-    filename: 'AM19_Group_LAX-MEX_2025-09-22.pdf',
+    filename: 'AM19_Group_LAX-MEX_2026-09-22.pdf',
     airline: 'Aeroméxico',
     flightNumber: 'AM 19',
     departureAirport: 'LAX',
     arrivalAirport: 'MEX',
-    departureTime: '2025-09-22T09:35',
-    arrivalTime: '2025-09-22T15:20',
+    departureTime: '2026-09-22T09:35',
+    arrivalTime: '2026-09-22T15:20',
     recordLocator: 'ABCD12',
     costPerPassenger: 420,
     currency: 'USD',
@@ -64,13 +64,13 @@ const RAW_FLIGHTS: RawFlight[] = [
   {
     fixtureId: 'flight_vb1014',
     importId: 'fi_vb1014',
-    filename: 'VB1014_Group_MEX-MTY_2025-09-27.pdf',
+    filename: 'VB1014_Group_MEX-MTY_2026-09-27.pdf',
     airline: 'VivaAerobus',
     flightNumber: 'VB 1014',
     departureAirport: 'MEX',
     arrivalAirport: 'MTY',
-    departureTime: '2025-09-27T11:00',
-    arrivalTime: '2025-09-27T12:35',
+    departureTime: '2026-09-27T11:00',
+    arrivalTime: '2026-09-27T12:35',
     recordLocator: 'XYZ987',
     costPerPassenger: 165,
     currency: 'USD',
@@ -120,7 +120,7 @@ export function buildScratchFlightImport(
   return {
     id: raw.importId,
     filename: raw.filename,
-    uploadedAt: MOCK_NOW,
+    uploadedAt: getNowIso(),
     status: 'review',
     parsedFlights: [parsedFlight],
     unmatchedNames,

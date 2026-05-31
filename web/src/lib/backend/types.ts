@@ -1,8 +1,25 @@
-import type { ID, Tour, Membership, MemberRole, TourGroupSummary } from '@/types';
+import type {
+  ID,
+  Tour,
+  Membership,
+  MemberRole,
+  TourGroupSummary,
+  DocumentSubmission,
+  SubmissionType,
+} from '@/types';
 import type { OverlayBundle } from '@/lib/overlayStorage';
 
 export type Unsub = () => void;
-export type PdfScope = 'rider' | 'doc';
+export type PdfScope = 'rider' | 'doc' | 'submissions';
+
+/** Init for a new submission — id + storage path are computed by the backend. */
+export interface ProposeSubmissionInit {
+  tourId: ID;
+  type: SubmissionType;
+  title: string;
+  description?: string;
+  filename?: string;
+}
 
 export interface Backend {
   readonly kind: 'local' | 'supabase';
@@ -46,4 +63,19 @@ export interface Backend {
   nudge?(tourId: ID, requestedGroupId?: ID): Promise<void>;
   /** Groups of the active tour, callable by any authed (incl. pending) user. */
   listActiveTourGroups?(): Promise<TourGroupSummary[]>;
+
+  // ── Document submissions (Milestone 2) ──
+  // On `local` these persist to a new overlay array so the flow is testable;
+  // on `supabase` they go through the propose_submission() RPC + submissions
+  // table + tour-pdfs storage. All gated behind isSupabase / BACKEND_KIND at
+  // the call sites so the local path stays byte-identical.
+
+  /** Crew/anyone proposes a document; forced to pending. Returns the row. */
+  proposeSubmission?(init: ProposeSubmissionInit): Promise<DocumentSubmission | null>;
+  /** Submissions visible to the caller — own (everyone) + all (managers). */
+  listSubmissions?(tourId: ID): Promise<DocumentSubmission[]>;
+  /** Manager approves a submission (records reviewer + optional note). */
+  approveSubmission?(id: ID, reviewedBy: string, note?: string): Promise<void>;
+  /** Manager rejects a submission with a reason. */
+  rejectSubmission?(id: ID, reviewedBy: string, reason: string): Promise<void>;
 }

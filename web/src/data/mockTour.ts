@@ -1,5 +1,5 @@
-/* ============================================================
- * TOUR DATA — Elsa y Elmar · Full Band 2025
+﻿/* ============================================================
+ * TOUR DATA â€” Elsa y Elmar Â· Full Band 2025
  * ------------------------------------------------------------
  * This file mixes REAL data extracted from the rider PDF
  * (`RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf`)
@@ -14,7 +14,7 @@
  *     soundcheck rules, transport spec, rooming list, dressing
  *     rooms, catering menus, conflicts
  *
- * MOCK (no rider source — placeholders awaiting real data):
+ * MOCK (no rider source â€” placeholders awaiting real data):
  *   - Tour dates and route (would come from agent deal memos)
  *   - Schedule item times (rider only says 6h soundcheck min)
  *   - Specific hotels and venues
@@ -44,41 +44,41 @@ import type {
 import { vis } from '@/lib/visibility';
 
 // ============================================================
-// REAL · Organization (artist's team)
+// REAL Â· Organization (artist's team)
 // Source: cover page of rider implies an artist team; we don't
 // know the official name. Using a plausible placeholder.
 // ============================================================
 export const mockOrgId = 'org_elsa_team';
 
 // ============================================================
-// MOCK · Tour shell
+// MOCK Â· Tour shell
 // Real source: TM setup wizard after agent hand-off. The rider
 // PDF tells us this is the "Full Band 2025" tour but contains
-// NO route, NO dates, NO venues — that all comes from the
+// NO route, NO dates, NO venues â€” that all comes from the
 // booking agent's deal memo + routing spreadsheet (Phase 1).
 // ============================================================
-const tourId = 'tour_full_band_2025';
+const tourId = 'tour_full_band_2026';
 
 // ============================================================
-// REAL/MOCK MIXED · Groups
+// REAL/MOCK MIXED Â· Groups
 // Mostly inferred from the rider's rooming list and monitor
 // outputs (which roles exist on this tour). Exact group names
 // are TM choice and would normally be copied from a prior tour.
 // ============================================================
 // Exported so the scratch tour (data/scratchTour.ts) reuses the exact same
-// group taxonomy — groups are a reusable template, not tour-specific data.
+// group taxonomy â€” groups are a reusable template, not tour-specific data.
 export const groups: Group[] = [
   { id: 'grp_artist', name: 'Artist', color: '#b8392b', description: 'The band itself.' },
   { id: 'grp_aparty', name: 'A Party', color: '#d97a4a', description: 'Artist + close circle (MUA, personal).' },
   { id: 'grp_mgmt', name: 'Management', color: '#a07a2e', description: 'Tour manager, artist manager.' },
   { id: 'grp_production', name: 'Production', color: '#5a6638', description: 'PM, stage manager.' },
-  { id: 'grp_audio', name: 'Audio', color: '#3c5a6a', description: 'Front-of-house engineer (rider §6).' },
+  { id: 'grp_audio', name: 'Audio', color: '#3c5a6a', description: 'Front-of-house engineer (rider Â§6).' },
   { id: 'grp_lighting', name: 'Lighting', color: '#7a5a8a', description: 'Lighting designer.' },
   { id: 'grp_video', name: 'Video', color: '#2e6478', description: 'VJ / playback.' },
-  { id: 'grp_staff', name: 'Staff', color: '#6b665c', description: 'Touring staff (rooming list §12).' },
+  { id: 'grp_staff', name: 'Staff', color: '#6b665c', description: 'Touring staff (rooming list Â§12).' },
 ];
 
-// Group tags — none in the rider for this tour size (1 audio engineer covers FOH+monitors).
+// Group tags â€” none in the rider for this tour size (1 audio engineer covers FOH+monitors).
 const groupTags: GroupTag[] = [];
 
 // ============================================================
@@ -86,17 +86,17 @@ const groupTags: GroupTag[] = [];
 // Sources marked per-person below.
 // ============================================================
 const persons: Person[] = [
-  // --- REAL from rider §6/§12
+  // --- REAL from rider Â§6/Â§12
   { id: 'p_elsa', name: 'Elsa Carvajal' },
   { id: 'p_julian', name: 'Julian Bernal' },
-  // --- REAL first name only (rider §6 monitor mix); last name unknown
+  // --- REAL first name only (rider Â§6 monitor mix); last name unknown
   { id: 'p_juan', name: 'Juan' },
   { id: 'p_daniel', name: 'Daniel' },
   // --- REAL from rider cover page
-  { id: 'p_manuel', name: 'Manuel González', email: 'magcs81@gmail.com', phone: '+52 55 54 74 70 48' },
-  // --- PLACEHOLDER · Tour Manager (real name TBD)
+  { id: 'p_manuel', name: 'Manuel GonzÃ¡lez', email: 'magcs81@gmail.com', phone: '+52 55 54 74 70 48' },
+  // --- PLACEHOLDER Â· Tour Manager (real name TBD)
   { id: 'p_lorenzo', name: 'Tour Manager' },
-  // --- PLACEHOLDERS for roles named in rider §12 but without names.
+  // --- PLACEHOLDERS for roles named in rider Â§12 but without names.
   //     These will be replaced when the TM provides crew names.
   { id: 'p_audio', name: 'Audio Engineer' },
   { id: 'p_lighting', name: 'Lighting Engineer' },
@@ -108,8 +108,8 @@ const persons: Person[] = [
 ];
 const personById = Object.fromEntries(persons.map((p) => [p.id, p]));
 
-const TOUR_START = '2025-09-22';
-const TOUR_END = '2025-10-23';
+const TOUR_START = '2026-09-22';
+const TOUR_END = '2026-10-23';
 
 function tp(
   id: string,
@@ -133,36 +133,36 @@ function tp(
 }
 
 const personnel: TourPerson[] = [
-  // REAL · Artist (from rider §6 + §12)
+  // REAL Â· Artist (from rider Â§6 + Â§12)
   tp('tp_elsa', 'p_elsa', 'Lead Vocals', 'grp_artist'),
   tp('tp_julian', 'p_julian', 'Guitar & Backing Vox', 'grp_artist'),
   tp('tp_juan', 'p_juan', 'Drums', 'grp_artist', [], { isPlaceholder: true }),
   tp('tp_daniel', 'p_daniel', 'Bass', 'grp_artist', [], { isPlaceholder: true }),
-  // REAL · Production (from rider cover)
+  // REAL Â· Production (from rider cover)
   tp('tp_manuel', 'p_manuel', 'Production Manager', 'grp_production'),
-  // PLACEHOLDER · Mgmt (TM name TBD, like the other unfilled crew roles)
+  // PLACEHOLDER Â· Mgmt (TM name TBD, like the other unfilled crew roles)
   tp('tp_lorenzo', 'p_lorenzo', 'Tour Manager', 'grp_mgmt', [], { isPlaceholder: true }),
-  // PLACEHOLDERS · technical crew (rider §12)
+  // PLACEHOLDERS Â· technical crew (rider Â§12)
   tp('tp_audio', 'p_audio', 'Audio Engineer (FOH + Monitors)', 'grp_audio', [], { isPlaceholder: true }),
   tp('tp_lighting', 'p_lighting', 'Lighting Designer', 'grp_lighting', [], { isPlaceholder: true }),
   tp('tp_vj', 'p_vj', 'VJ / Playback', 'grp_video', [], { isPlaceholder: true }),
-  // PLACEHOLDERS · A Party (rider §12 — share a single room)
+  // PLACEHOLDERS Â· A Party (rider Â§12 â€” share a single room)
   tp('tp_mua', 'p_mua', 'Makeup Artist', 'grp_aparty', [], { isPlaceholder: true }),
   tp('tp_personal', 'p_personal', 'Personal Assistant', 'grp_aparty', [], { isPlaceholder: true }),
-  // PLACEHOLDERS · Staff (rider §12 double room)
+  // PLACEHOLDERS Â· Staff (rider Â§12 double room)
   tp('tp_staff1', 'p_staff1', 'Touring Staff', 'grp_staff', [], { isPlaceholder: true }),
   tp('tp_staff2', 'p_staff2', 'Touring Staff', 'grp_staff', [], { isPlaceholder: true }),
 ];
 
 // ============================================================
-// MOCK · Days (auto-generated from tour date range — the
+// MOCK Â· Days (auto-generated from tour date range â€” the
 // route, cities, and DayTypes are all mock because the rider
 // contains no tour route.)
 // ============================================================
-// MOCK · In production every record carries audit columns (updated_at /
+// MOCK Â· In production every record carries audit columns (updated_at /
 // updated_by). Days created at calendar build-out default to this stamp;
 // the demo-zone days below override it with more recent edits.
-const TOUR_SETUP_STAMP: UpdateStamp = { at: '2025-07-05T16:20', by: 'Tour Manager' };
+const TOUR_SETUP_STAMP: UpdateStamp = { at: '2026-07-05T16:20', by: 'Tour Manager' };
 
 type DaySeed = Omit<Day, 'id'> & { id?: string };
 function makeDay(seed: DaySeed): Day {
@@ -185,92 +185,92 @@ function makeDay(seed: DaySeed): Day {
 
 const days: Day[] = [
   // ---- MOCK Leg 1: Mexico ---------------------------------
-  makeDay({ date: '2025-09-22', dayType: 'travel', city: 'LAX → CDMX', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2025-09-21T18:30', by: 'Tour Manager' } }),
-  makeDay({ date: '2025-09-23', dayType: 'rehearsal', city: 'Mexico City', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2025-09-22T11:05', by: 'Manuel González' } }),
-  makeDay({ date: '2025-09-24', dayType: 'rehearsal', city: 'Mexico City', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2025-09-23T14:15', by: 'Manuel González' } }),
-  makeDay({ date: '2025-09-25', dayType: 'show', city: 'Mexico City', country: 'MX', venueId: 'v_auditorio_nacional', published: false, legId: 'leg_mx', weather: { high: 24, low: 13, conditions: 'Partly cloudy' }, lastUpdated: { at: '2025-09-24T19:40', by: 'Tour Manager' } }),
-  makeDay({ date: '2025-09-26', dayType: 'off', city: 'Mexico City', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2025-09-19T10:00', by: 'Tour Manager' } }),
-  makeDay({ date: '2025-09-27', dayType: 'travel', city: 'CDMX → MTY', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2025-09-24T16:20', by: 'Manuel González' } }),
-  makeDay({ date: '2025-09-28', dayType: 'show', city: 'Monterrey', country: 'MX', venueId: 'v_auditorio_banamex', published: false, legId: 'leg_mx', lastUpdated: { at: '2025-09-23T09:30', by: 'Manuel González' } }),
-  makeDay({ date: '2025-09-29', dayType: 'travel', city: 'MTY → GDL', country: 'MX', published: false, legId: 'leg_mx' }),
-  makeDay({ date: '2025-09-30', dayType: 'show', city: 'Guadalajara', country: 'MX', venueId: 'v_auditorio_telmex', published: false, legId: 'leg_mx' }),
-  makeDay({ date: '2025-10-01', dayType: 'off', city: 'Guadalajara', country: 'MX', published: false, legId: 'leg_mx' }),
-  makeDay({ date: '2025-10-02', dayType: 'travel', city: 'GDL → LAX', country: 'US', published: false, legId: 'leg_mx' }),
+  makeDay({ date: '2026-09-22', dayType: 'travel', city: 'LAX â†’ CDMX', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2026-09-21T18:30', by: 'Tour Manager' } }),
+  makeDay({ date: '2026-09-23', dayType: 'rehearsal', city: 'Mexico City', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2026-09-22T11:05', by: 'Manuel GonzÃ¡lez' } }),
+  makeDay({ date: '2026-09-24', dayType: 'rehearsal', city: 'Mexico City', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2026-09-23T14:15', by: 'Manuel GonzÃ¡lez' } }),
+  makeDay({ date: '2026-09-25', dayType: 'show', city: 'Mexico City', country: 'MX', venueId: 'v_auditorio_nacional', published: false, legId: 'leg_mx', weather: { high: 24, low: 13, conditions: 'Partly cloudy' }, lastUpdated: { at: '2026-09-24T19:40', by: 'Tour Manager' } }),
+  makeDay({ date: '2026-09-26', dayType: 'off', city: 'Mexico City', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2026-09-19T10:00', by: 'Tour Manager' } }),
+  makeDay({ date: '2026-09-27', dayType: 'travel', city: 'CDMX â†’ MTY', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2026-09-24T16:20', by: 'Manuel GonzÃ¡lez' } }),
+  makeDay({ date: '2026-09-28', dayType: 'show', city: 'Monterrey', country: 'MX', venueId: 'v_auditorio_banamex', published: false, legId: 'leg_mx', lastUpdated: { at: '2026-09-23T09:30', by: 'Manuel GonzÃ¡lez' } }),
+  makeDay({ date: '2026-09-29', dayType: 'travel', city: 'MTY â†’ GDL', country: 'MX', published: false, legId: 'leg_mx' }),
+  makeDay({ date: '2026-09-30', dayType: 'show', city: 'Guadalajara', country: 'MX', venueId: 'v_auditorio_telmex', published: false, legId: 'leg_mx' }),
+  makeDay({ date: '2026-10-01', dayType: 'off', city: 'Guadalajara', country: 'MX', published: false, legId: 'leg_mx' }),
+  makeDay({ date: '2026-10-02', dayType: 'travel', city: 'GDL â†’ LAX', country: 'US', published: false, legId: 'leg_mx' }),
 
   // ---- MOCK Leg 2: USA -----------------------------------
-  makeDay({ date: '2025-10-03', dayType: 'show', city: 'Los Angeles', country: 'US', venueId: 'v_greek', published: false, legId: 'leg_us', lastUpdated: { at: '2025-09-12T13:00', by: 'Tour Manager' } }),
-  makeDay({ date: '2025-10-04', dayType: 'off', city: 'Los Angeles', country: 'US', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2025-10-05', dayType: 'promo', city: 'Los Angeles', country: 'US', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2025-10-06', dayType: 'travel', city: 'LA → SF', country: 'US', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2025-10-07', dayType: 'show', city: 'Oakland', country: 'US', venueId: 'v_fox', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2025-10-08', dayType: 'travel', city: 'SFO → MIA', country: 'US', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2025-10-09', dayType: 'show', city: 'Miami', country: 'US', venueId: 'v_knight', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2025-10-10', dayType: 'off', city: 'Miami', country: 'US', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2025-10-11', dayType: 'travel', city: 'MIA → BOG', country: 'CO', published: false, legId: 'leg_us' }),
+  makeDay({ date: '2026-10-03', dayType: 'show', city: 'Los Angeles', country: 'US', venueId: 'v_greek', published: false, legId: 'leg_us', lastUpdated: { at: '2026-09-12T13:00', by: 'Tour Manager' } }),
+  makeDay({ date: '2026-10-04', dayType: 'off', city: 'Los Angeles', country: 'US', published: false, legId: 'leg_us' }),
+  makeDay({ date: '2026-10-05', dayType: 'promo', city: 'Los Angeles', country: 'US', published: false, legId: 'leg_us' }),
+  makeDay({ date: '2026-10-06', dayType: 'travel', city: 'LA â†’ SF', country: 'US', published: false, legId: 'leg_us' }),
+  makeDay({ date: '2026-10-07', dayType: 'show', city: 'Oakland', country: 'US', venueId: 'v_fox', published: false, legId: 'leg_us' }),
+  makeDay({ date: '2026-10-08', dayType: 'travel', city: 'SFO â†’ MIA', country: 'US', published: false, legId: 'leg_us' }),
+  makeDay({ date: '2026-10-09', dayType: 'show', city: 'Miami', country: 'US', venueId: 'v_knight', published: false, legId: 'leg_us' }),
+  makeDay({ date: '2026-10-10', dayType: 'off', city: 'Miami', country: 'US', published: false, legId: 'leg_us' }),
+  makeDay({ date: '2026-10-11', dayType: 'travel', city: 'MIA â†’ BOG', country: 'CO', published: false, legId: 'leg_us' }),
 
   // ---- MOCK Leg 3: South America -------------------------
-  makeDay({ date: '2025-10-12', dayType: 'show', city: 'Bogotá', country: 'CO', venueId: 'v_movistar_bog', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2025-10-13', dayType: 'off', city: 'Bogotá', country: 'CO', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2025-10-14', dayType: 'travel', city: 'BOG → LIM', country: 'PE', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2025-10-15', dayType: 'show', city: 'Lima', country: 'PE', venueId: 'v_anfiteatro_lim', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2025-10-16', dayType: 'off', city: 'Lima', country: 'PE', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2025-10-17', dayType: 'travel', city: 'LIM → SCL', country: 'CL', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2025-10-18', dayType: 'show', city: 'Santiago', country: 'CL', venueId: 'v_movistar_scl', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2025-10-19', dayType: 'off', city: 'Santiago', country: 'CL', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2025-10-20', dayType: 'travel', city: 'SCL → BUE', country: 'AR', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2025-10-21', dayType: 'show', city: 'Buenos Aires', country: 'AR', venueId: 'v_movistar_bue', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2025-10-22', dayType: 'off', city: 'Buenos Aires', country: 'AR', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2025-10-23', dayType: 'travel', city: 'BUE → LAX', country: 'US', published: false, legId: 'leg_sa' }),
+  makeDay({ date: '2026-10-12', dayType: 'show', city: 'BogotÃ¡', country: 'CO', venueId: 'v_movistar_bog', published: false, legId: 'leg_sa' }),
+  makeDay({ date: '2026-10-13', dayType: 'off', city: 'BogotÃ¡', country: 'CO', published: false, legId: 'leg_sa' }),
+  makeDay({ date: '2026-10-14', dayType: 'travel', city: 'BOG â†’ LIM', country: 'PE', published: false, legId: 'leg_sa' }),
+  makeDay({ date: '2026-10-15', dayType: 'show', city: 'Lima', country: 'PE', venueId: 'v_anfiteatro_lim', published: false, legId: 'leg_sa' }),
+  makeDay({ date: '2026-10-16', dayType: 'off', city: 'Lima', country: 'PE', published: false, legId: 'leg_sa' }),
+  makeDay({ date: '2026-10-17', dayType: 'travel', city: 'LIM â†’ SCL', country: 'CL', published: false, legId: 'leg_sa' }),
+  makeDay({ date: '2026-10-18', dayType: 'show', city: 'Santiago', country: 'CL', venueId: 'v_movistar_scl', published: false, legId: 'leg_sa' }),
+  makeDay({ date: '2026-10-19', dayType: 'off', city: 'Santiago', country: 'CL', published: false, legId: 'leg_sa' }),
+  makeDay({ date: '2026-10-20', dayType: 'travel', city: 'SCL â†’ BUE', country: 'AR', published: false, legId: 'leg_sa' }),
+  makeDay({ date: '2026-10-21', dayType: 'show', city: 'Buenos Aires', country: 'AR', venueId: 'v_movistar_bue', published: false, legId: 'leg_sa' }),
+  makeDay({ date: '2026-10-22', dayType: 'off', city: 'Buenos Aires', country: 'AR', published: false, legId: 'leg_sa' }),
+  makeDay({ date: '2026-10-23', dayType: 'travel', city: 'BUE â†’ LAX', country: 'US', published: false, legId: 'leg_sa' }),
 ];
 
 const dayByDate = Object.fromEntries(days.map((d) => [d.date, d]));
 
 // ============================================================
-// MOCK · Schedule items
+// MOCK Â· Schedule items
 // The rider specifies "6 hours soundcheck minimum from load-in"
-// and "closed-door soundcheck" — that's all the schedule data
+// and "closed-door soundcheck" â€” that's all the schedule data
 // it contains. Specific times below are mock.
 // ============================================================
 const scheduleItems: ScheduleItem[] = [
-  // --- Show day · Mexico City (Sep 25) — fully fleshed ---
-  { id: 'si_0925_busc', dayId: dayByDate['2025-09-25'].id, type: 'bus_call', title: 'Bus call (hotel lobby)', startTime: '08:30', visibility: vis.everyone('sees') },
-  { id: 'si_0925_load', dayId: dayByDate['2025-09-25'].id, type: 'load_in', title: 'Crew load-in', startTime: '09:00', endTime: '12:00', location: 'Auditorio Nacional · Stage door', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'sees') },
-  { id: 'si_0925_lunch', dayId: dayByDate['2025-09-25'].id, type: 'lunch', title: 'Crew lunch', startTime: '12:30', endTime: '13:30', location: 'Camerino 03 (Crew)', visibility: vis.everyone('sees') },
-  { id: 'si_0925_sndchk', dayId: dayByDate['2025-09-25'].id, type: 'soundcheck', title: 'Soundcheck — closed door (6h min from load-in)', startTime: '15:30', endTime: '17:30', location: 'Auditorio Nacional · Stage', notes: 'Closed door per rider §10', visibility: { default: 'sees', groups: { grp_artist: 'sees', grp_audio: 'owns', grp_lighting: 'sees' } } },
-  { id: 'si_0925_press', dayId: dayByDate['2025-09-25'].id, type: 'press', title: 'Press junket — Rolling Stone México', startTime: '16:00', endTime: '16:45', location: 'Camerino 01 (Elsa)', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
-  { id: 'si_0925_dinner', dayId: dayByDate['2025-09-25'].id, type: 'dinner', title: 'Band dinner', startTime: '18:00', endTime: '19:00', visibility: { default: 'sees', groups: { grp_artist: 'sees', grp_aparty: 'sees' } } },
-  { id: 'si_0925_doors', dayId: dayByDate['2025-09-25'].id, type: 'doors', title: 'Doors', startTime: '20:00', visibility: vis.everyone('sees') },
-  { id: 'si_0925_set', dayId: dayByDate['2025-09-25'].id, type: 'set', title: 'Elsa y Elmar — Full Band set', startTime: '21:30', endTime: '23:15', location: 'Auditorio Nacional · Stage', visibility: vis.everyone('sees') },
-  { id: 'si_0925_curfew', dayId: dayByDate['2025-09-25'].id, type: 'curfew', title: 'Curfew', startTime: '23:30', visibility: vis.everyone('sees') },
-  { id: 'si_0925_lout', dayId: dayByDate['2025-09-25'].id, type: 'load_out', title: 'Load-out', startTime: '23:45', endTime: '03:00', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'sees') },
+  // --- Show day Â· Mexico City (Sep 25) â€” fully fleshed ---
+  { id: 'si_0925_busc', dayId: dayByDate['2026-09-25'].id, type: 'bus_call', title: 'Bus call (hotel lobby)', startTime: '08:30', visibility: vis.everyone('sees') },
+  { id: 'si_0925_load', dayId: dayByDate['2026-09-25'].id, type: 'load_in', title: 'Crew load-in', startTime: '09:00', endTime: '12:00', location: 'Auditorio Nacional Â· Stage door', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'sees') },
+  { id: 'si_0925_lunch', dayId: dayByDate['2026-09-25'].id, type: 'lunch', title: 'Crew lunch', startTime: '12:30', endTime: '13:30', location: 'Camerino 03 (Crew)', visibility: vis.everyone('sees') },
+  { id: 'si_0925_sndchk', dayId: dayByDate['2026-09-25'].id, type: 'soundcheck', title: 'Soundcheck â€” closed door (6h min from load-in)', startTime: '15:30', endTime: '17:30', location: 'Auditorio Nacional Â· Stage', notes: 'Closed door per rider Â§10', visibility: { default: 'sees', groups: { grp_artist: 'sees', grp_audio: 'owns', grp_lighting: 'sees' } } },
+  { id: 'si_0925_press', dayId: dayByDate['2026-09-25'].id, type: 'press', title: 'Press junket â€” Rolling Stone MÃ©xico', startTime: '16:00', endTime: '16:45', location: 'Camerino 01 (Elsa)', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
+  { id: 'si_0925_dinner', dayId: dayByDate['2026-09-25'].id, type: 'dinner', title: 'Band dinner', startTime: '18:00', endTime: '19:00', visibility: { default: 'sees', groups: { grp_artist: 'sees', grp_aparty: 'sees' } } },
+  { id: 'si_0925_doors', dayId: dayByDate['2026-09-25'].id, type: 'doors', title: 'Doors', startTime: '20:00', visibility: vis.everyone('sees') },
+  { id: 'si_0925_set', dayId: dayByDate['2026-09-25'].id, type: 'set', title: 'Elsa y Elmar â€” Full Band set', startTime: '21:30', endTime: '23:15', location: 'Auditorio Nacional Â· Stage', visibility: vis.everyone('sees') },
+  { id: 'si_0925_curfew', dayId: dayByDate['2026-09-25'].id, type: 'curfew', title: 'Curfew', startTime: '23:30', visibility: vis.everyone('sees') },
+  { id: 'si_0925_lout', dayId: dayByDate['2026-09-25'].id, type: 'load_out', title: 'Load-out', startTime: '23:45', endTime: '03:00', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'sees') },
 
-  // --- Show day · Los Angeles (Oct 3) — partial ---
-  { id: 'si_1003_busc', dayId: dayByDate['2025-10-03'].id, type: 'bus_call', title: 'Bus call', startTime: '09:00', visibility: vis.everyone('sees') },
-  { id: 'si_1003_load', dayId: dayByDate['2025-10-03'].id, type: 'load_in', title: 'Crew load-in', startTime: '09:30', endTime: '12:30', location: 'The Greek · Stage door', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'sees') },
-  { id: 'si_1003_sndchk', dayId: dayByDate['2025-10-03'].id, type: 'soundcheck', title: 'Soundcheck — closed door', startTime: '15:00', endTime: '16:30', visibility: { default: 'sees', groups: { grp_artist: 'sees', grp_audio: 'owns' } } },
-  { id: 'si_1003_doors', dayId: dayByDate['2025-10-03'].id, type: 'doors', title: 'Doors', startTime: '19:00', visibility: vis.everyone('sees') },
-  { id: 'si_1003_set', dayId: dayByDate['2025-10-03'].id, type: 'set', title: 'Elsa y Elmar — Full Band set', startTime: '20:30', endTime: '22:30', visibility: vis.everyone('sees') },
+  // --- Show day Â· Los Angeles (Oct 3) â€” partial ---
+  { id: 'si_1003_busc', dayId: dayByDate['2026-10-03'].id, type: 'bus_call', title: 'Bus call', startTime: '09:00', visibility: vis.everyone('sees') },
+  { id: 'si_1003_load', dayId: dayByDate['2026-10-03'].id, type: 'load_in', title: 'Crew load-in', startTime: '09:30', endTime: '12:30', location: 'The Greek Â· Stage door', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'sees') },
+  { id: 'si_1003_sndchk', dayId: dayByDate['2026-10-03'].id, type: 'soundcheck', title: 'Soundcheck â€” closed door', startTime: '15:00', endTime: '16:30', visibility: { default: 'sees', groups: { grp_artist: 'sees', grp_audio: 'owns' } } },
+  { id: 'si_1003_doors', dayId: dayByDate['2026-10-03'].id, type: 'doors', title: 'Doors', startTime: '19:00', visibility: vis.everyone('sees') },
+  { id: 'si_1003_set', dayId: dayByDate['2026-10-03'].id, type: 'set', title: 'Elsa y Elmar â€” Full Band set', startTime: '20:30', endTime: '22:30', visibility: vis.everyone('sees') },
 
-  // --- Promo day · LA (Oct 5) ---
-  { id: 'si_1005_p1', dayId: dayByDate['2025-10-05'].id, type: 'press', title: 'NPR Alt.Latino interview', startTime: '10:00', endTime: '11:00', location: 'NPR West · Culver City', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
-  { id: 'si_1005_p2', dayId: dayByDate['2025-10-05'].id, type: 'press', title: 'Billboard photoshoot', startTime: '14:00', endTime: '16:30', location: 'Quixote Studios', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
-  { id: 'si_1005_meet', dayId: dayByDate['2025-10-05'].id, type: 'meet_greet', title: 'VIP meet & greet', startTime: '18:00', endTime: '19:00', visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
+  // --- Promo day Â· LA (Oct 5) ---
+  { id: 'si_1005_p1', dayId: dayByDate['2026-10-05'].id, type: 'press', title: 'NPR Alt.Latino interview', startTime: '10:00', endTime: '11:00', location: 'NPR West Â· Culver City', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
+  { id: 'si_1005_p2', dayId: dayByDate['2026-10-05'].id, type: 'press', title: 'Billboard photoshoot', startTime: '14:00', endTime: '16:30', location: 'Quixote Studios', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
+  { id: 'si_1005_meet', dayId: dayByDate['2026-10-05'].id, type: 'meet_greet', title: 'VIP meet & greet', startTime: '18:00', endTime: '19:00', visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
 
-  // --- Rehearsal day · CDMX (Sep 23) ---
-  { id: 'si_0923_call', dayId: dayByDate['2025-09-23'].id, type: 'lobby_call', title: 'Hotel lobby call', startTime: '10:00', visibility: vis.everyone('sees') },
-  { id: 'si_0923_reh', dayId: dayByDate['2025-09-23'].id, type: 'rehearsal', title: 'Production rehearsal', startTime: '11:00', endTime: '18:00', location: 'Foro Indie Rocks (rented)', visibility: vis.everyone('sees') },
+  // --- Rehearsal day Â· CDMX (Sep 23) ---
+  { id: 'si_0923_call', dayId: dayByDate['2026-09-23'].id, type: 'lobby_call', title: 'Hotel lobby call', startTime: '10:00', visibility: vis.everyone('sees') },
+  { id: 'si_0923_reh', dayId: dayByDate['2026-09-23'].id, type: 'rehearsal', title: 'Production rehearsal', startTime: '11:00', endTime: '18:00', location: 'Foro Indie Rocks (rented)', visibility: vis.everyone('sees') },
 ];
 
 // ============================================================
-// MOCK · Travel (rider §11 specifies 2 vans + 1 cargo + 8
+// MOCK Â· Travel (rider Â§11 specifies 2 vans + 1 cargo + 8
 // flights but no specific flights/dates).
 // ============================================================
 const travel: Travel[] = [
   {
     id: 'tr_lax_cdmx',
-    dayId: dayByDate['2025-09-22'].id,
+    dayId: dayByDate['2026-09-22'].id,
     mode: 'flight',
-    carrier: 'Aeroméxico',
+    carrier: 'AeromÃ©xico',
     identifier: 'AM 19',
     from: 'LAX',
     to: 'MEX',
@@ -291,7 +291,7 @@ const travel: Travel[] = [
   },
   {
     id: 'tr_cdmx_mty',
-    dayId: dayByDate['2025-09-27'].id,
+    dayId: dayByDate['2026-09-27'].id,
     mode: 'flight',
     carrier: 'VivaAerobus',
     identifier: 'VB 1014',
@@ -305,7 +305,7 @@ const travel: Travel[] = [
   },
   {
     id: 'tr_la_oak',
-    dayId: dayByDate['2025-10-06'].id,
+    dayId: dayByDate['2026-10-06'].id,
     mode: 'bus',
     carrier: 'Hemphill Brothers',
     identifier: 'Bus 1',
@@ -319,15 +319,15 @@ const travel: Travel[] = [
 ];
 
 // ============================================================
-// MOCK · Hotels (rider §12 gives rooming list + room-type
+// MOCK Â· Hotels (rider Â§12 gives rooming list + room-type
 // requirements but no specific hotel.)
 // ============================================================
 const hotels: Hotel[] = [
   {
     id: 'h_cdmx_st_regis',
-    dayId: dayByDate['2025-09-23'].id,
+    dayId: dayByDate['2026-09-23'].id,
     name: 'St. Regis Mexico City',
-    address: 'Paseo de la Reforma 439, Cuauhtémoc, 06500 Ciudad de México',
+    address: 'Paseo de la Reforma 439, CuauhtÃ©moc, 06500 Ciudad de MÃ©xico',
     phone: '+52 55 5228 1818',
     checkIn: '15:00',
     checkOut: '12:00',
@@ -342,9 +342,9 @@ const hotels: Hotel[] = [
   },
   {
     id: 'h_cdmx_nh',
-    dayId: dayByDate['2025-09-23'].id,
+    dayId: dayByDate['2026-09-23'].id,
     name: 'NH Collection Mexico City Reforma',
-    address: 'Paseo de la Reforma 122, Juárez, 06600',
+    address: 'Paseo de la Reforma 122, JuÃ¡rez, 06600',
     phone: '+52 55 5208 2222',
     checkIn: '15:00',
     checkOut: '12:00',
@@ -354,7 +354,7 @@ const hotels: Hotel[] = [
       { tourPersonId: 'tp_juan', roomType: 'Single' },
       { tourPersonId: 'tp_daniel', roomType: 'Single' },
       { tourPersonId: 'tp_audio', roomType: 'Single' },
-      // MUA + Personal Asst share a single room per rider §12
+      // MUA + Personal Asst share a single room per rider Â§12
       { tourPersonId: 'tp_mua', roomNumber: '07', roomType: 'Single (shared)' },
       { tourPersonId: 'tp_personal', roomNumber: '07', roomType: 'Single (shared)' },
       { tourPersonId: 'tp_vj', roomType: 'Double' },
@@ -368,16 +368,16 @@ const hotels: Hotel[] = [
 ];
 
 // ============================================================
-// MOCK · Tasks
+// MOCK Â· Tasks
 // ============================================================
 const tasks: Task[] = [
-  { id: 't_carnet', title: 'Confirm carnet status with customs broker before MX entry', dayId: dayByDate['2025-09-22'].id, ownerTourPersonId: 'tp_manuel', due: '2025-09-15T17:00', status: 'doing', visibility: vis.onlyGroups(['grp_production', 'grp_mgmt'], 'sees') },
-  { id: 't_iems', title: 'Pick up 4 IEM packs returning from repair (Sennheiser SC)', ownerTourPersonId: 'tp_audio', due: '2025-09-20T17:00', status: 'todo', visibility: vis.onlyGroups(['grp_audio'], 'sees') },
-  { id: 't_passes', title: 'Print pass laminates for all crew before LAX departure', dayId: dayByDate['2025-09-22'].id, ownerTourPersonId: 'tp_manuel', due: '2025-09-21T17:00', status: 'doing', visibility: vis.onlyGroups(['grp_production'], 'sees') },
+  { id: 't_carnet', title: 'Confirm carnet status with customs broker before MX entry', dayId: dayByDate['2026-09-22'].id, ownerTourPersonId: 'tp_manuel', due: '2026-09-15T17:00', status: 'doing', visibility: vis.onlyGroups(['grp_production', 'grp_mgmt'], 'sees') },
+  { id: 't_iems', title: 'Pick up 4 IEM packs returning from repair (Sennheiser SC)', ownerTourPersonId: 'tp_audio', due: '2026-09-20T17:00', status: 'todo', visibility: vis.onlyGroups(['grp_audio'], 'sees') },
+  { id: 't_passes', title: 'Print pass laminates for all crew before LAX departure', dayId: dayByDate['2026-09-22'].id, ownerTourPersonId: 'tp_manuel', due: '2026-09-21T17:00', status: 'doing', visibility: vis.onlyGroups(['grp_production'], 'sees') },
 ];
 
 // ============================================================
-// REAL · Documents (the rider itself, with its revisions)
+// REAL Â· Documents (the rider itself, with its revisions)
 // Source: cover page says "Updated: September 2025". The
 // "PLEASE IGNORE PREVIOUS VERSIONS" warning is captured.
 // ============================================================
@@ -385,35 +385,35 @@ const documents: Document[] = [
   {
     id: 'doc_rider',
     kind: 'rider',
-    title: 'Elsa y Elmar — Full Band 2025 Tech Rider',
-    liveLink: 'https://tour-hub.example.com/r/eye-fb-2025',
+    title: 'Elsa y Elmar â€” Full Band 2025 Tech Rider',
+    liveLink: 'https://tour-hub.example.com/r/eye-fb-2026',
     currentRevision: 2,
     revisions: [
-      { id: 'rev_1', revision: 1, uploadedAt: '2025-07-03T14:22', uploadedBy: 'Manuel González', sourceUrl: '#', sourceLanguage: 'es', pageCount: 27, notes: 'Original release (filename: 030725)' },
-      { id: 'rev_2', revision: 2, uploadedAt: '2025-09-10T09:51', uploadedBy: 'Manuel González', sourceUrl: '#', sourceLanguage: 'es', pageCount: 27, notes: 'September 2025 update — supersedes all previous versions' },
+      { id: 'rev_1', revision: 1, uploadedAt: '2026-07-03T14:22', uploadedBy: 'Manuel GonzÃ¡lez', sourceUrl: '#', sourceLanguage: 'es', pageCount: 27, notes: 'Original release (filename: 030725)' },
+      { id: 'rev_2', revision: 2, uploadedAt: '2026-09-10T09:51', uploadedBy: 'Manuel GonzÃ¡lez', sourceUrl: '#', sourceLanguage: 'es', pageCount: 27, notes: 'September 2025 update â€” supersedes all previous versions' },
     ],
     visibility: vis.everyone('sees'),
   },
 ];
 
 // ============================================================
-// MOCK · Flight Imports (AI ingest queue) — kept for demoing
+// MOCK Â· Flight Imports (AI ingest queue) â€” kept for demoing
 // the flight-ingest UI. Passenger names use real personnel.
 // ============================================================
 const flightImports: FlightImport[] = [
   {
     id: 'fi_lax_cdmx',
-    filename: 'AM19_Group_LAX-MEX_2025-09-22.pdf',
-    uploadedAt: '2025-09-01T11:24',
+    filename: 'AM19_Group_LAX-MEX_2026-09-22.pdf',
+    uploadedAt: '2026-09-01T11:24',
     status: 'imported',
     parsedFlights: [
       {
-        airline: 'Aeroméxico',
+        airline: 'AeromÃ©xico',
         flightNumber: 'AM 19',
         departureAirport: 'LAX',
         arrivalAirport: 'MEX',
-        departureTime: '2025-09-22T09:35',
-        arrivalTime: '2025-09-22T15:20',
+        departureTime: '2026-09-22T09:35',
+        arrivalTime: '2026-09-22T15:20',
         recordLocator: 'ABCD12',
         passengers: [
           { name: 'Elsa Carvajal', seat: '2A', matchedTourPersonId: 'tp_elsa' },
@@ -421,7 +421,7 @@ const flightImports: FlightImport[] = [
           { name: 'Juan', seat: '3A', matchedTourPersonId: 'tp_juan' },
           { name: 'Daniel', seat: '3C', matchedTourPersonId: 'tp_daniel' },
           { name: 'Tour Manager', seat: '4A', matchedTourPersonId: 'tp_lorenzo' },
-          { name: 'Manuel González', seat: '4C', matchedTourPersonId: 'tp_manuel' },
+          { name: 'Manuel GonzÃ¡lez', seat: '4C', matchedTourPersonId: 'tp_manuel' },
           { name: 'Audio Engineer', seat: '5A', matchedTourPersonId: 'tp_audio' },
           { name: 'MUA', seat: '5C', matchedTourPersonId: 'tp_mua' },
         ],
@@ -432,11 +432,11 @@ const flightImports: FlightImport[] = [
 ];
 
 // ============================================================
-// REAL · Rider Import — the 14 sections from the real PDF,
+// REAL Â· Rider Import â€” the 14 sections from the real PDF,
 // extracted per the schemas in handoff-post-pdf-interpret.md.
 // ============================================================
 
-// --- Input list (§6) — 44 channels ---
+// --- Input list (Â§6) â€” 44 channels ---
 const inputList44: NonNullable<RiderSection['inputList']> = [
   { channelNumber: 1, source: 'Kick In', micOrDi: 'Sennheiser e901', standType: 'none', phantom48v: true },
   { channelNumber: 2, source: 'Kick Out', micOrDi: 'Sennheiser e902', standType: 'mini_boom', phantom48v: false },
@@ -467,7 +467,7 @@ const inputList44: NonNullable<RiderSection['inputList']> = [
     micOrDi: 'Radial PRO DI',
     standType: 'none',
     phantom48v: false,
-    extractionFlags: [{ level: 'warning', message: 'Source name blank in rider — DI assigned but channel role unclear. Confirm with FOH.' }],
+    extractionFlags: [{ level: 'warning', message: 'Source name blank in rider â€” DI assigned but channel role unclear. Confirm with FOH.' }],
   },
   { channelNumber: 25, source: 'Bass DI', micOrDi: 'Radial PRO DI', standType: 'none', phantom48v: false },
   {
@@ -476,7 +476,7 @@ const inputList44: NonNullable<RiderSection['inputList']> = [
     micOrDi: 'Shure SM57',
     standType: 'short_boom',
     phantom48v: false,
-    extractionFlags: [{ level: 'warning', message: 'Same label as CH 27 — likely L/R pair with typo. Confirm.' }],
+    extractionFlags: [{ level: 'warning', message: 'Same label as CH 27 â€” likely L/R pair with typo. Confirm.' }],
   },
   {
     channelNumber: 27,
@@ -484,7 +484,7 @@ const inputList44: NonNullable<RiderSection['inputList']> = [
     micOrDi: 'Shure SM57',
     standType: 'short_boom',
     phantom48v: false,
-    extractionFlags: [{ level: 'warning', message: 'Duplicate label with CH 26 — likely should be "GTR R".' }],
+    extractionFlags: [{ level: 'warning', message: 'Duplicate label with CH 26 â€” likely should be "GTR R".' }],
   },
   { channelNumber: 28, source: 'Mini Juno L', micOrDi: 'Radial PRO DI', standType: 'none', phantom48v: false },
   { channelNumber: 29, source: 'Mini Juno R', micOrDi: 'Radial PRO DI', standType: 'none', phantom48v: false },
@@ -495,29 +495,29 @@ const inputList44: NonNullable<RiderSection['inputList']> = [
   { channelNumber: 34, source: 'Vox Main ELSA', micOrDi: 'Sennheiser EW 500 G4 + e935', standType: 'straight', phantom48v: false, wireless: true, wirelessSystem: 'EW 500 G4', notes: '470-558 MHz' },
   { channelNumber: 35, source: 'Vox SPARE', micOrDi: 'Sennheiser EW 500 G4 + e935', standType: 'straight', phantom48v: false, wireless: true, wirelessSystem: 'EW 500 G4' },
   { channelNumber: 36, source: 'Vox JULIAN', micOrDi: 'Sennheiser e935', standType: 'boom', phantom48v: false, notes: 'Guitar mic position' },
-  { channelNumber: 37, source: 'Talkback — Elsa', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
-  { channelNumber: 38, source: 'Talkback — Drums', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
-  { channelNumber: 39, source: 'Talkback — Bass', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
-  { channelNumber: 40, source: 'Talkback — GTR', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
-  { channelNumber: 41, source: 'Talkback — Stage L', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
-  { channelNumber: 42, source: 'Talkback — Stage R', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
-  { channelNumber: 43, source: 'Talkback — PROD', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
-  { channelNumber: 44, source: 'Talkback — Local FOH', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
+  { channelNumber: 37, source: 'Talkback â€” Elsa', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
+  { channelNumber: 38, source: 'Talkback â€” Drums', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
+  { channelNumber: 39, source: 'Talkback â€” Bass', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
+  { channelNumber: 40, source: 'Talkback â€” GTR', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
+  { channelNumber: 41, source: 'Talkback â€” Stage L', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
+  { channelNumber: 42, source: 'Talkback â€” Stage R', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
+  { channelNumber: 43, source: 'Talkback â€” PROD', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
+  { channelNumber: 44, source: 'Talkback â€” Local FOH', micOrDi: 'Shure SM58', standType: 'short_boom', phantom48v: false },
 ];
 
-// --- Monitor mixes (§6) — 8 stereo ---
+// --- Monitor mixes (Â§6) â€” 8 stereo ---
 const monitorMix8: NonNullable<RiderSection['monitorMix']> = [
-  { outputs: '1-2', mixName: 'MAIN — ELSA', personName: 'Elsa', type: 'in_ear_stereo' },
-  { outputs: '3-4', mixName: 'DRUM — JUAN', personName: 'Juan', type: 'in_ear_stereo' },
-  { outputs: '5-6', mixName: 'BASS — DANIEL', personName: 'Daniel', type: 'in_ear_stereo' },
-  { outputs: '7-8', mixName: 'GUITAR — JULIAN', personName: 'Julian', type: 'in_ear_stereo' },
+  { outputs: '1-2', mixName: 'MAIN â€” ELSA', personName: 'Elsa', type: 'in_ear_stereo' },
+  { outputs: '3-4', mixName: 'DRUM â€” JUAN', personName: 'Juan', type: 'in_ear_stereo' },
+  { outputs: '5-6', mixName: 'BASS â€” DANIEL', personName: 'Daniel', type: 'in_ear_stereo' },
+  { outputs: '7-8', mixName: 'GUITAR â€” JULIAN', personName: 'Julian', type: 'in_ear_stereo' },
   { outputs: '9-10', mixName: 'SPARE', type: 'in_ear_stereo' },
   { outputs: '11-12', mixName: 'STAFF', type: 'in_ear_stereo', bodypackCount: 4, notes: '4 bodypacks for crew on stage' },
   { outputs: '13-14', mixName: 'GUEST', type: 'in_ear_stereo' },
   { outputs: '15-16', mixName: 'CUE', type: 'in_ear_stereo', notes: 'Engineer cue feed' },
 ];
 
-// --- FOH outputs (§6) — 8 ---
+// --- FOH outputs (Â§6) â€” 8 ---
 const fohOutputs8: NonNullable<RiderSection['fohOutputs']> = [
   { outputNumber: '1', source: 'SMPTE to Lighting & Video', notes: 'Timecode feed' },
   { outputNumber: '2', source: 'Talkback speaker' },
@@ -527,7 +527,7 @@ const fohOutputs8: NonNullable<RiderSection['fohOutputs']> = [
   { outputNumber: '8', source: 'Front Fill' },
 ];
 
-// --- Backline (§9) ---
+// --- Backline (Â§9) ---
 const backlineSpec: NonNullable<RiderSection['backline']> = {
   drums: {
     kitOptions: ['Gretsch Classic Maple', 'DW Collectors', 'Yamaha Hybrid Maple'],
@@ -536,9 +536,9 @@ const backlineSpec: NonNullable<RiderSection['backline']> = {
       { type: 'rack_tom', size: '13"' },
       { type: 'floor_tom', size: '16"' },
       { type: 'floor_tom', size: '18"', notes: 'with legs' },
-      { type: 'snare_main', size: '14×6 or 14×8', notes: 'Supraphonic, Black Magic, or similar' },
-      { type: 'snare_2', size: '14×6 Maple', notes: 'Gretsch Brooklyn USA or similar' },
-      { type: 'snare_spare', size: '14×6' },
+      { type: 'snare_main', size: '14Ã—6 or 14Ã—8', notes: 'Supraphonic, Black Magic, or similar' },
+      { type: 'snare_2', size: '14Ã—6 Maple', notes: 'Gretsch Brooklyn USA or similar' },
+      { type: 'snare_spare', size: '14Ã—6' },
     ],
     hardware: [
       { item: 'Snare stands', qty: 3, preferred: ['DW', 'Pearl'] },
@@ -552,15 +552,15 @@ const backlineSpec: NonNullable<RiderSection['backline']> = {
   },
   bass: {
     options: [
-      { optionNumber: 1, head: 'Ampeg SVT-Classic', cab: 'Ampeg 8×10' },
+      { optionNumber: 1, head: 'Ampeg SVT-Classic', cab: 'Ampeg 8Ã—10' },
       { optionNumber: 2, head: 'Aguilar Tone Hammer 700', cab: 'Aguilar DB 810' },
       { optionNumber: 3, head: 'Aguilar DB 751', cab: 'Aguilar DB 810' },
     ],
   },
   guitar: [
-    { item: 'Fender Twin Reverb 2×12', qty: 1, notes: 'Main' },
-    { item: 'Fender Hot Rod 2×12', qty: 1 },
-    { item: 'Fender Twin Reverb 2×12 (spare)', qty: 1, notes: 'Spare' },
+    { item: 'Fender Twin Reverb 2Ã—12', qty: 1, notes: 'Main' },
+    { item: 'Fender Hot Rod 2Ã—12', qty: 1 },
+    { item: 'Fender Twin Reverb 2Ã—12 (spare)', qty: 1, notes: 'Spare' },
   ],
   miscellaneous: [
     { item: 'Hercules keyboard stands', qty: 4, brandPreferred: 'Hercules' },
@@ -572,20 +572,20 @@ const backlineSpec: NonNullable<RiderSection['backline']> = {
   risersRequired: false,
   videoScreen: {
     type: 'LED',
-    dimensions: '12×5m',
+    dimensions: '12Ã—5m',
     aspectRatio: '16:9',
-    resolutionPreferred: '1920×1080',
-    resolutionMin: '1280×720',
+    resolutionPreferred: '1920Ã—1080',
+    resolutionMin: '1280Ã—720',
   },
 };
 
-// --- Lodging (§12) ---
+// --- Lodging (Â§12) ---
 const lodgingSpec: NonNullable<RiderSection['lodging']> = {
   hotelRequirements: { artistPreApproval: true, amenitiesRequired: ['24h_room_service', 'breakfast', 'wifi'] },
   roomingList: [
     { roomNumber: 1, roomType: 'junior_suite', occupants: [{ name: 'Elsa Carvajal', role: 'artist' }] },
     { roomNumber: 2, roomType: 'single', occupants: [{ name: 'Julian Bernal', role: 'guitarist' }] },
-    { roomNumber: 3, roomType: 'single', occupants: [{ name: 'Manuel González', role: 'production_manager' }] },
+    { roomNumber: 3, roomType: 'single', occupants: [{ name: 'Manuel GonzÃ¡lez', role: 'production_manager' }] },
     { roomNumber: 4, roomType: 'single', occupants: [{ name: 'Tour Manager', role: 'tour_manager' }] },
     { roomNumber: 5, roomType: 'single', occupants: [{ role: 'bassist' }] },
     { roomNumber: 6, roomType: 'single', occupants: [{ role: 'drummer' }] },
@@ -598,7 +598,7 @@ const lodgingSpec: NonNullable<RiderSection['lodging']> = {
   totalOccupants: 13,
 };
 
-// --- Catering (§14) ---
+// --- Catering (Â§14) ---
 const cateringSpec: NonNullable<RiderSection['catering']> = {
   menus: [
     {
@@ -613,7 +613,7 @@ const cateringSpec: NonNullable<RiderSection['catering']> = {
         { item: 'Gatorade', qty: 6, unit: 'bottles' },
         { item: 'Electrolit', qty: 6, unit: 'bottles' },
         { item: 'Manzanas', itemEn: 'Apples', qty: 8 },
-        { item: 'Plátanos', itemEn: 'Bananas', qty: 8 },
+        { item: 'PlÃ¡tanos', itemEn: 'Bananas', qty: 8 },
         { item: 'Nature Valley bars', qty: 'assorted' },
         { item: 'Mixed berries', qty: 1, unit: 'tray' },
         { item: 'Toallas faciales negras', itemEn: 'Black face towels', qty: 8 },
@@ -625,18 +625,18 @@ const cateringSpec: NonNullable<RiderSection['catering']> = {
       menuTime: 'soundcheck',
       availableBy: '90 min before soundcheck',
       items: [
-        { item: 'Agua Santa María', qty: 8, unit: 'bottles' },
+        { item: 'Agua Santa MarÃ­a', qty: 8, unit: 'bottles' },
         { item: 'Agua mineral', itemEn: 'Sparkling water', qty: 8, unit: 'bottles' },
         { item: 'Gatorade / Electrolit', qty: 8, unit: 'bottles' },
-        { item: 'Té negro', itemEn: 'Black tea', qty: 1, unit: 'box' },
-        { item: 'Té de jengibre', itemEn: 'Ginger tea', qty: 1, unit: 'box' },
-        { item: 'Café regular y descafeinado', itemEn: 'Regular + decaf coffee', qty: 1, unit: 'station' },
+        { item: 'TÃ© negro', itemEn: 'Black tea', qty: 1, unit: 'box' },
+        { item: 'TÃ© de jengibre', itemEn: 'Ginger tea', qty: 1, unit: 'box' },
+        { item: 'CafÃ© regular y descafeinado', itemEn: 'Regular + decaf coffee', qty: 1, unit: 'station' },
         { item: 'French press + kettle', qty: 1 },
         { item: 'Jengibre fresco', itemEn: 'Fresh ginger', qty: 1, unit: 'piece' },
         { item: 'Limones', itemEn: 'Lemons', qty: 8 },
         { item: 'Crema', itemEn: 'Creamer', qty: 1, unit: 'pint' },
-        { item: 'Leche de almendra sin azúcar', itemEn: 'Unsweetened almond milk', qty: 1, unit: 'carton', dietaryTags: ['no_sugar'] },
-        { item: 'Yogurt griego sin azúcar', itemEn: 'Greek yogurt (unsweetened)', qty: 1, unit: 'cup', dietaryTags: ['no_sugar'] },
+        { item: 'Leche de almendra sin azÃºcar', itemEn: 'Unsweetened almond milk', qty: 1, unit: 'carton', dietaryTags: ['no_sugar'] },
+        { item: 'Yogurt griego sin azÃºcar', itemEn: 'Greek yogurt (unsweetened)', qty: 1, unit: 'cup', dietaryTags: ['no_sugar'] },
         { item: 'Frutos rojos', itemEn: 'Berries', qty: 1, unit: 'tray' },
         { item: 'Tabla de embutidos', itemEn: 'Charcuterie tray', qty: 1 },
         { item: 'Nueces mixtas', itemEn: 'Mixed nuts', qty: 1, unit: 'bowl' },
@@ -653,21 +653,21 @@ const cateringSpec: NonNullable<RiderSection['catering']> = {
         { item: 'Bowl de gomitas', itemEn: 'Gummy bowl', qty: 1 },
         { item: 'Tylenol', qty: 1, unit: 'pack' },
         { item: 'Cuchillo + tabla', itemEn: 'Knife + cutting board', qty: 1 },
-        { item: 'Globos pequeños', itemEn: 'Small balloons', qty: 1, unit: 'pack', notes: 'Medium or small only' },
+        { item: 'Globos pequeÃ±os', itemEn: 'Small balloons', qty: 1, unit: 'pack', notes: 'Medium or small only' },
         { item: 'Platillos regionales mexicanos', itemEn: 'Regional Mexican dishes', qty: 1, notes: 'Vegetarian options. Confirm with TM.', dietaryTags: ['vegetarian_option_required'] },
       ],
     },
     {
-      room: 'Camerino 02 (Músicos)',
+      room: 'Camerino 02 (MÃºsicos)',
       menuTime: 'show',
       items: [
-        { item: 'Agua Santa María', qty: 16, unit: 'bottles' },
+        { item: 'Agua Santa MarÃ­a', qty: 16, unit: 'bottles' },
         { item: 'Topo Chico (sparkling)', qty: 16, unit: 'bottles' },
         { item: 'Sports drinks', qty: 10, unit: 'bottles' },
         { item: 'Coca-Cola', qty: 6, unit: 'cans' },
         { item: 'Coca-Cola Zero', qty: 6, unit: 'cans' },
         { item: 'Limones', itemEn: 'Lemons', qty: 6 },
-        { item: 'Plátanos', itemEn: 'Bananas', qty: 8 },
+        { item: 'PlÃ¡tanos', itemEn: 'Bananas', qty: 8 },
         { item: 'Tabla de embutidos', itemEn: 'Charcuterie tray', qty: 1 },
         { item: 'Almendras', itemEn: 'Almonds', qty: 1, unit: 'bowl' },
         { item: 'Pistachos', itemEn: 'Pistachios', qty: 1, unit: 'bowl' },
@@ -679,17 +679,17 @@ const cateringSpec: NonNullable<RiderSection['catering']> = {
       menuTime: 'show',
       items: [
         { item: 'Agua', itemEn: 'Water', qty: 16, unit: 'bottles' },
-        { item: 'Sandwich station', qty: 1, notes: 'Whole grain bread, ham, turkey ham, manchego, panela, tomato/onion/avocado, mayo, mustard, chipotle, jalapeño + electric press' },
+        { item: 'Sandwich station', qty: 1, notes: 'Whole grain bread, ham, turkey ham, manchego, panela, tomato/onion/avocado, mayo, mustard, chipotle, jalapeÃ±o + electric press' },
         { item: 'Desechables biodegradables', itemEn: 'Biodegradable disposables', qty: 1, unit: 'set', dietaryTags: ['biodegradable'] },
       ],
     },
     {
-      room: 'Camerino 02 (Músicos)',
+      room: 'Camerino 02 (MÃºsicos)',
       menuTime: 'post_show',
       items: [
-        { item: 'Vino blanco o rosado', itemEn: 'White or rosé wine', qty: 1, unit: 'bottle' },
-        { item: 'Cervezas frías', itemEn: 'Cold beers', qty: 15, brandExcluded: ['Sol', 'Corona'], notes: 'NOT Sol, NOT Corona' },
-        { item: 'Mezcal', qty: 2, unit: 'bottles', brandPreferred: ['Amaras', 'Unión', '400 Conejos'], notes: 'Outside MX: local equivalents' },
+        { item: 'Vino blanco o rosado', itemEn: 'White or rosÃ© wine', qty: 1, unit: 'bottle' },
+        { item: 'Cervezas frÃ­as', itemEn: 'Cold beers', qty: 15, brandExcluded: ['Sol', 'Corona'], notes: 'NOT Sol, NOT Corona' },
+        { item: 'Mezcal', qty: 2, unit: 'bottles', brandPreferred: ['Amaras', 'UniÃ³n', '400 Conejos'], notes: 'Outside MX: local equivalents' },
         { item: 'Platillos regionales', itemEn: 'Regional dishes', qty: 1, dietaryTags: ['vegetarian_option_required'] },
       ],
     },
@@ -697,7 +697,7 @@ const cateringSpec: NonNullable<RiderSection['catering']> = {
       room: 'Camerino 03 (Crew)',
       menuTime: 'post_show',
       items: [
-        { item: 'Cervezas frías', itemEn: 'Cold beers', qty: 10, brandExcluded: ['Sol', 'Corona'], notes: 'NOT Sol, NOT Corona' },
+        { item: 'Cervezas frÃ­as', itemEn: 'Cold beers', qty: 10, brandExcluded: ['Sol', 'Corona'], notes: 'NOT Sol, NOT Corona' },
         { item: 'Ensaladas', itemEn: 'Salads', qty: 2, notes: 'Confirm with TM' },
         { item: 'Platillos regionales', itemEn: 'Regional dishes', qty: 1, dietaryTags: ['vegetarian_option_required'] },
       ],
@@ -716,13 +716,13 @@ const conflicts: Conflict[] = [
     id: 'cf_generators',
     type: 'numeric_disagreement',
     severity: 'high',
-    description: 'Generator count and capacity disagree between §4 stage specs and §8 lighting/power.',
+    description: 'Generator count and capacity disagree between Â§4 stage specs and Â§8 lighting/power.',
     sectionsInvolved: ['stage_specs', 'lighting_equipment'],
     values: [
-      { section: '§4 Stage specs', value: '2 generators, 1800A across 3 phases at 110-125V/60Hz' },
-      { section: '§8 Lighting/power', value: '3 generators: Audio/Video 200kVA, Lighting 150kVA, Spare 200kVA' },
+      { section: 'Â§4 Stage specs', value: '2 generators, 1800A across 3 phases at 110-125V/60Hz' },
+      { section: 'Â§8 Lighting/power', value: '3 generators: Audio/Video 200kVA, Lighting 150kVA, Spare 200kVA' },
     ],
-    suggestedResolution: 'Confirm with Manuel González (PM) — §8 is the more recent and detailed spec. Likely §8 supersedes §4.',
+    suggestedResolution: 'Confirm with Manuel GonzÃ¡lez (PM) â€” Â§8 is the more recent and detailed spec. Likely Â§8 supersedes Â§4.',
   },
   {
     id: 'cf_ch24',
@@ -730,18 +730,18 @@ const conflicts: Conflict[] = [
     severity: 'medium',
     description: 'Channel 24 has a DI assigned (Radial PRO DI) but no source name in the input list.',
     sectionsInvolved: ['input_list'],
-    values: [{ section: '§6 Input list', value: 'CH 24 source = (blank)' }],
-    suggestedResolution: 'Confirm with FOH engineer — likely an additional keys or playback channel.',
+    values: [{ section: 'Â§6 Input list', value: 'CH 24 source = (blank)' }],
+    suggestedResolution: 'Confirm with FOH engineer â€” likely an additional keys or playback channel.',
   },
   {
     id: 'cf_gtr_dup',
     type: 'duplicate',
     severity: 'medium',
-    description: 'Channels 26 and 27 are both labeled "GTR L" — likely an L/R typo.',
+    description: 'Channels 26 and 27 are both labeled "GTR L" â€” likely an L/R typo.',
     sectionsInvolved: ['input_list'],
     values: [
-      { section: '§6 Input list', value: 'CH 26 = "GTR L"' },
-      { section: '§6 Input list', value: 'CH 27 = "GTR L"' },
+      { section: 'Â§6 Input list', value: 'CH 26 = "GTR L"' },
+      { section: 'Â§6 Input list', value: 'CH 27 = "GTR L"' },
     ],
     suggestedResolution: 'CH 27 should likely be "GTR R". Confirm with FOH.',
   },
@@ -749,23 +749,23 @@ const conflicts: Conflict[] = [
     id: 'cf_room_count',
     type: 'count_mismatch',
     severity: 'medium',
-    description: 'Rider §12 header says 11 occupants but rooming-list rows total 13 (1 JR + 6 singles + 1 single with 2 sharing + 2 doubles).',
+    description: 'Rider Â§12 header says 11 occupants but rooming-list rows total 13 (1 JR + 6 singles + 1 single with 2 sharing + 2 doubles).',
     sectionsInvolved: ['lodging'],
     values: [
-      { section: '§12 Lodging header', value: 'Stated: 11 occupants' },
-      { section: '§12 Lodging rooming list', value: 'Counted: 13 occupants' },
+      { section: 'Â§12 Lodging header', value: 'Stated: 11 occupants' },
+      { section: 'Â§12 Lodging rooming list', value: 'Counted: 13 occupants' },
     ],
-    suggestedResolution: 'Confirm with the TM. Room #7 is labeled "Single" but lists "MUA + Personal" — two people sharing a single room. Either the room type should be Double, or one of the two is unbooked.',
+    suggestedResolution: 'Confirm with the TM. Room #7 is labeled "Single" but lists "MUA + Personal" â€” two people sharing a single room. Either the room type should be Double, or one of the two is unbooked.',
   },
   {
     id: 'cf_flight_count',
     type: 'count_mismatch',
     severity: 'medium',
-    description: 'Air transport (§11) requests 8 tickets but rooming list (§12) totals 11-12 people.',
+    description: 'Air transport (Â§11) requests 8 tickets but rooming list (Â§12) totals 11-12 people.',
     sectionsInvolved: ['air_transport', 'lodging'],
     values: [
-      { section: '§11 Air transport', value: '8 tickets' },
-      { section: '§12 Lodging', value: '11-12 occupants' },
+      { section: 'Â§11 Air transport', value: '8 tickets' },
+      { section: 'Â§12 Lodging', value: '11-12 occupants' },
     ],
     suggestedResolution: 'Local hires (staff?) may not fly. Confirm with travel agent + TM.',
   },
@@ -773,7 +773,7 @@ const conflicts: Conflict[] = [
 
 // --- Rider sections assembled ---
 const riderSections: RiderSection[] = [
-  // §1 Cover & contacts
+  // Â§1 Cover & contacts
   {
     type: 'cover_and_contacts',
     pages: [1],
@@ -781,11 +781,11 @@ const riderSections: RiderSection[] = [
     confidence: 0.98,
     language: 'es',
     freeText:
-      'TECH RIDER | Full Band 2025. Updated: September 2025. FAVOR OMITIR VERSIONES ANTERIORES (please ignore previous versions). PM: Manuel González · magcs81@gmail.com · +52 55 54 74 70 48',
+      'TECH RIDER | Full Band 2025. Updated: September 2025. FAVOR OMITIR VERSIONES ANTERIORES (please ignore previous versions). PM: Manuel GonzÃ¡lez Â· magcs81@gmail.com Â· +52 55 54 74 70 48',
     freeTextEn:
-      'TECH RIDER | Full Band 2025. Updated: September 2025. PLEASE IGNORE PREVIOUS VERSIONS. PM: Manuel González · magcs81@gmail.com · +52 55 54 74 70 48',
+      'TECH RIDER | Full Band 2025. Updated: September 2025. PLEASE IGNORE PREVIOUS VERSIONS. PM: Manuel GonzÃ¡lez Â· magcs81@gmail.com Â· +52 55 54 74 70 48',
   },
-  // §2 Production control — verbatim from rider p.3
+  // Â§2 Production control â€” verbatim from rider p.3
   {
     type: 'production_control',
     pages: [3],
@@ -793,11 +793,11 @@ const riderSections: RiderSection[] = [
     confidence: 0.96,
     language: 'es',
     freeText:
-      '2- NOTAS\nCONTROL DE PRODUCCIÓN\nEl promotor/empresario acepta que la producción de ELSA Y ELMAR tenga el control total y puede tomar decisiones sobre todos los temas relacionados con el show: horarios, escenario, vallas, acceso al venue, bandas abridoras, anuncios de cualquier tipo, publicidad en el venue, control de las luces de casa, aire acondicionado, calefacción, fotógrafos, video, circuito cerrado, acreditaciones, etc.',
+      '2- NOTAS\nCONTROL DE PRODUCCIÃ“N\nEl promotor/empresario acepta que la producciÃ³n de ELSA Y ELMAR tenga el control total y puede tomar decisiones sobre todos los temas relacionados con el show: horarios, escenario, vallas, acceso al venue, bandas abridoras, anuncios de cualquier tipo, publicidad en el venue, control de las luces de casa, aire acondicionado, calefacciÃ³n, fotÃ³grafos, video, circuito cerrado, acreditaciones, etc.',
     freeTextEn:
-      '2 — NOTES\nPRODUCTION CONTROL\nThe promoter agrees that ELSA Y ELMAR\'s production team has full control and can make decisions on all matters related to the show: schedule, stage, barricades, venue access, opening acts, announcements of any kind, in-venue advertising, house-light control, A/C, heating, photographers, video, closed-circuit, credentials, etc.',
+      '2 â€” NOTES\nPRODUCTION CONTROL\nThe promoter agrees that ELSA Y ELMAR\'s production team has full control and can make decisions on all matters related to the show: schedule, stage, barricades, venue access, opening acts, announcements of any kind, in-venue advertising, house-light control, A/C, heating, photographers, video, closed-circuit, credentials, etc.',
   },
-  // §3 Permits — verbatim from rider p.3
+  // Â§3 Permits â€” verbatim from rider p.3
   {
     type: 'permits',
     pages: [3],
@@ -805,11 +805,11 @@ const riderSections: RiderSection[] = [
     confidence: 0.95,
     language: 'es',
     freeText:
-      '3- PERMISOS\nPERMISOS, LICENCIAS Y CERTIFICADOS\nEn caso de ser necesario obtener y/o pagar cualquier tipo de licencias, permisos, seguros, certificados, visas y/o cualquier trámite requerido por cualquier sindicato, autoridad local o nacional, sociedad de autores y/o similares que tengan jurisdicción sobre las actuaciones, estos trámites y cargos serán responsabilidad del Promotor o Contratante.',
+      '3- PERMISOS\nPERMISOS, LICENCIAS Y CERTIFICADOS\nEn caso de ser necesario obtener y/o pagar cualquier tipo de licencias, permisos, seguros, certificados, visas y/o cualquier trÃ¡mite requerido por cualquier sindicato, autoridad local o nacional, sociedad de autores y/o similares que tengan jurisdicciÃ³n sobre las actuaciones, estos trÃ¡mites y cargos serÃ¡n responsabilidad del Promotor o Contratante.',
     freeTextEn:
-      '3 — PERMITS\nPERMITS, LICENSES AND CERTIFICATES\nIf any licenses, permits, insurance, certificates, visas or any other paperwork is required by any union, local or national authority, performance-rights society or similar body with jurisdiction over the performances, the responsibility for obtaining and paying for them falls on the Promoter or Contractor.',
+      '3 â€” PERMITS\nPERMITS, LICENSES AND CERTIFICATES\nIf any licenses, permits, insurance, certificates, visas or any other paperwork is required by any union, local or national authority, performance-rights society or similar body with jurisdiction over the performances, the responsibility for obtaining and paying for them falls on the Promoter or Contractor.',
   },
-  // §4 Stage specs
+  // Â§4 Stage specs
   {
     type: 'stage_specs',
     pages: [4],
@@ -817,11 +817,11 @@ const riderSections: RiderSection[] = [
     confidence: 0.92,
     language: 'es',
     freeText:
-      'Ground support 12m × 9m × 10m, techado. Escenario 14m × 10m a 1.50m de altura. Áreas de trabajo: 3.66m × 10m SL, 4.88m × 6.10m SR. 6 ventiladores (1 guitarra, 1 bajo, 1 batería, 3 frente). Negro o gris, liso, nivelado. 3 escaleras (USC, SL, SR). Mojo-type barricade reforzado. SIN risers. 2 generadores mínimo, 1800A en 3 fases a 110-125V/60Hz. Ambulancia desde load-in hasta load-out.',
+      'Ground support 12m Ã— 9m Ã— 10m, techado. Escenario 14m Ã— 10m a 1.50m de altura. Ãreas de trabajo: 3.66m Ã— 10m SL, 4.88m Ã— 6.10m SR. 6 ventiladores (1 guitarra, 1 bajo, 1 baterÃ­a, 3 frente). Negro o gris, liso, nivelado. 3 escaleras (USC, SL, SR). Mojo-type barricade reforzado. SIN risers. 2 generadores mÃ­nimo, 1800A en 3 fases a 110-125V/60Hz. Ambulancia desde load-in hasta load-out.',
     freeTextEn:
-      'Ground support 12m × 9m × 10m, covered. Stage 14m × 10m at 1.50m height. Work areas: 3.66m × 10m SL, 4.88m × 6.10m SR. 6 fans (1 guitar, 1 bass, 1 drums, 3 front). Black or grey, smooth, level. 3 staircases (USC, SL, SR). HEAVY Mojo-type barricade. NO risers. 2 generators minimum, 1800A across 3 phases at 110-125V/60Hz. Ambulance from load-in to load-out.',
+      'Ground support 12m Ã— 9m Ã— 10m, covered. Stage 14m Ã— 10m at 1.50m height. Work areas: 3.66m Ã— 10m SL, 4.88m Ã— 6.10m SR. 6 fans (1 guitar, 1 bass, 1 drums, 3 front). Black or grey, smooth, level. 3 staircases (USC, SL, SR). HEAVY Mojo-type barricade. NO risers. 2 generators minimum, 1800A across 3 phases at 110-125V/60Hz. Ambulance from load-in to load-out.',
   },
-  // §5 Audio PA
+  // Â§5 Audio PA
   {
     type: 'audio_pa',
     pages: [5],
@@ -829,11 +829,11 @@ const riderSections: RiderSection[] = [
     confidence: 0.93,
     language: 'es',
     freeText:
-      'PA estéreo 4-way, 105-110 dB(C), mín 110dB SPL. ±3dB de 25Hz-18kHz, 120dB headroom. L+R+Subs+Frontfill (NO mono). Marcas: L-Acoustics / Meyer / JBL VTX V. Específicos: D&B J8/J · L\'Acoustics V-DOSC/SB218 · Adamson Y18/T21 · Nexo GEOD/CD18. Front fill 4-6 cabinets misma marca. FOH centrado, nivel de suelo preferido, máx 50cm riser, máx 30m del escenario, cubierto, intercom a monitores. Consola FOH: tour trae propia. Alternativas: Yamaha CL5 / Avid S6L 32d / Waves LV1 (48ch). Monitores: 8× Shure PSM 1000 IEM + 6 bodypacks extra, 8× SE215, 2× 8ch combiners, 2× antenas helicoidales. Wireless mics tour trae: 2× Sennheiser EW300 G4, vocal principal+spare Sennheiser 470-558 MHz. Técnico RF requerido desde load-in hasta fin del show. Local provee: 2× cables Cat 6 96m FOH → SL.',
+      'PA estÃ©reo 4-way, 105-110 dB(C), mÃ­n 110dB SPL. Â±3dB de 25Hz-18kHz, 120dB headroom. L+R+Subs+Frontfill (NO mono). Marcas: L-Acoustics / Meyer / JBL VTX V. EspecÃ­ficos: D&B J8/J Â· L\'Acoustics V-DOSC/SB218 Â· Adamson Y18/T21 Â· Nexo GEOD/CD18. Front fill 4-6 cabinets misma marca. FOH centrado, nivel de suelo preferido, mÃ¡x 50cm riser, mÃ¡x 30m del escenario, cubierto, intercom a monitores. Consola FOH: tour trae propia. Alternativas: Yamaha CL5 / Avid S6L 32d / Waves LV1 (48ch). Monitores: 8Ã— Shure PSM 1000 IEM + 6 bodypacks extra, 8Ã— SE215, 2Ã— 8ch combiners, 2Ã— antenas helicoidales. Wireless mics tour trae: 2Ã— Sennheiser EW300 G4, vocal principal+spare Sennheiser 470-558 MHz. TÃ©cnico RF requerido desde load-in hasta fin del show. Local provee: 2Ã— cables Cat 6 96m FOH â†’ SL.',
     freeTextEn:
-      '4-way stereo PA, 105-110 dB(C), min 110dB SPL. ±3dB from 25Hz-18kHz, 120dB headroom. L+R+Subs+Frontfill (NOT mono). Brand options: L-Acoustics / Meyer / JBL VTX V. Specifics: D&B J8/J · L-Acoustics V-DOSC/SB218 · Adamson Y18/T21 · Nexo GEOD/CD18. Front fill 4-6 cabinets same brand. FOH centered, ground level preferred, max 50cm riser, max 30m from stage, covered, intercom to monitors. FOH console: tour brings own. Alternates: Yamaha CL5 / Avid S6L 32d / Waves LV1 (48ch). Monitors: 8× Shure PSM 1000 IEM + 6 extra bodypacks, 8× SE215, 2× 8-ch combiners, 2× helical antennas. Wireless mics tour-provided: 2× Sennheiser EW300 G4, main+spare vocal Sennheiser 470-558 MHz. RF tech required load-in to end of show. Local provides: 2× 96m Cat 6 cables FOH → SL.',
+      '4-way stereo PA, 105-110 dB(C), min 110dB SPL. Â±3dB from 25Hz-18kHz, 120dB headroom. L+R+Subs+Frontfill (NOT mono). Brand options: L-Acoustics / Meyer / JBL VTX V. Specifics: D&B J8/J Â· L-Acoustics V-DOSC/SB218 Â· Adamson Y18/T21 Â· Nexo GEOD/CD18. Front fill 4-6 cabinets same brand. FOH centered, ground level preferred, max 50cm riser, max 30m from stage, covered, intercom to monitors. FOH console: tour brings own. Alternates: Yamaha CL5 / Avid S6L 32d / Waves LV1 (48ch). Monitors: 8Ã— Shure PSM 1000 IEM + 6 extra bodypacks, 8Ã— SE215, 2Ã— 8-ch combiners, 2Ã— helical antennas. Wireless mics tour-provided: 2Ã— Sennheiser EW300 G4, main+spare vocal Sennheiser 470-558 MHz. RF tech required load-in to end of show. Local provides: 2Ã— 96m Cat 6 cables FOH â†’ SL.',
   },
-  // §6 Input list (44 ch)
+  // Â§6 Input list (44 ch)
   {
     type: 'input_list',
     pages: [6],
@@ -842,7 +842,7 @@ const riderSections: RiderSection[] = [
     language: 'es',
     inputList: inputList44,
   },
-  // §6 Monitor mix (8 stereo)
+  // Â§6 Monitor mix (8 stereo)
   {
     type: 'audio_monitors',
     pages: [6, 7],
@@ -851,7 +851,7 @@ const riderSections: RiderSection[] = [
     language: 'es',
     monitorMix: monitorMix8,
   },
-  // §6 FOH output patch
+  // Â§6 FOH output patch
   {
     type: 'output_patch',
     pages: [7],
@@ -860,17 +860,17 @@ const riderSections: RiderSection[] = [
     language: 'es',
     fohOutputs: fohOutputs8,
   },
-  // §7 Stage plot
+  // Â§7 Stage plot
   {
     type: 'stage_plot',
     pages: [8],
     status: 'pending',
     confidence: 0.78,
     language: 'es',
-    freeText: 'Diagrama del escenario — Elsa center, Julian SR, Daniel SL, Juan upstage center. 4 wedges + IEMs. Power drops marked.',
-    freeTextEn: 'Stage diagram — Elsa downstage center, Julian SR, Daniel SL, Juan upstage center. 4 wedges + IEMs. Power drops marked.',
+    freeText: 'Diagrama del escenario â€” Elsa center, Julian SR, Daniel SL, Juan upstage center. 4 wedges + IEMs. Power drops marked.',
+    freeTextEn: 'Stage diagram â€” Elsa downstage center, Julian SR, Daniel SL, Juan upstage center. 4 wedges + IEMs. Power drops marked.',
   },
-  // §8 Lighting equipment
+  // Â§8 Lighting equipment
   {
     type: 'lighting_equipment',
     pages: [9, 10],
@@ -878,21 +878,21 @@ const riderSections: RiderSection[] = [
     confidence: 0.95,
     language: 'es',
     freeText:
-      '43× Robe MegaPointe · 10× Color Strike M · 61× Elation Chorus Line 16 · 8× Robe Spider · 18× motores 1-ton · Truss: 8× Tomcat LD 12×12 10ft, 4× GT Tyler 10ft, 2× sideboom 1.5m, 2× sideboom 1m · 2× GrandMA 3 Full Size · 6× AM Haze Stadium o DF-50 · 2× Low Fog Machine · Generadores: 3 (Audio/Video 200kVA, Lighting 150kVA, Spare 200kVA), 3 fases + neutro + tierra (varilla 2m) por generador. Cam-Lock. Edison 110-127V en escenario.',
+      '43Ã— Robe MegaPointe Â· 10Ã— Color Strike M Â· 61Ã— Elation Chorus Line 16 Â· 8Ã— Robe Spider Â· 18Ã— motores 1-ton Â· Truss: 8Ã— Tomcat LD 12Ã—12 10ft, 4Ã— GT Tyler 10ft, 2Ã— sideboom 1.5m, 2Ã— sideboom 1m Â· 2Ã— GrandMA 3 Full Size Â· 6Ã— AM Haze Stadium o DF-50 Â· 2Ã— Low Fog Machine Â· Generadores: 3 (Audio/Video 200kVA, Lighting 150kVA, Spare 200kVA), 3 fases + neutro + tierra (varilla 2m) por generador. Cam-Lock. Edison 110-127V en escenario.',
     freeTextEn:
-      '43× Robe MegaPointe · 10× Color Strike M · 61× Elation Chorus Line 16 · 8× Robe Spider · 18× 1-ton hoist motors · Truss: 8× Tomcat LD 12×12 10ft, 4× GT Tyler 10ft, 2× sideboom 1.5m, 2× sideboom 1m · 2× GrandMA 3 Full Size · 6× AM Haze Stadium or DF-50 · 2× Low Fog Machine · 3 generators: Audio/Video 200kVA, Lighting 150kVA, Spare 200kVA. 3 phases + neutral + ground (2m rod) per generator. Cam-Lock. Edison 110-127V at stage.',
+      '43Ã— Robe MegaPointe Â· 10Ã— Color Strike M Â· 61Ã— Elation Chorus Line 16 Â· 8Ã— Robe Spider Â· 18Ã— 1-ton hoist motors Â· Truss: 8Ã— Tomcat LD 12Ã—12 10ft, 4Ã— GT Tyler 10ft, 2Ã— sideboom 1.5m, 2Ã— sideboom 1m Â· 2Ã— GrandMA 3 Full Size Â· 6Ã— AM Haze Stadium or DF-50 Â· 2Ã— Low Fog Machine Â· 3 generators: Audio/Video 200kVA, Lighting 150kVA, Spare 200kVA. 3 phases + neutral + ground (2m rod) per generator. Cam-Lock. Edison 110-127V at stage.',
   },
-  // §8 Lighting plot (CAD pages — stored, not extracted)
+  // Â§8 Lighting plot (CAD pages â€” stored, not extracted)
   {
     type: 'lighting_plot',
     pages: [11, 12, 13, 14, 15, 16, 17, 18],
     status: 'pending',
     confidence: 0.6,
     language: 'es',
-    freeText: '8 páginas de planos CAD del lightplot. Almacenadas como referencia; v1 no extrae estructura de dibujos.',
+    freeText: '8 pÃ¡ginas de planos CAD del lightplot. Almacenadas como referencia; v1 no extrae estructura de dibujos.',
     freeTextEn: '8 CAD pages of the light plot. Stored as reference attachments; v1 does not extract structure from drawings.',
   },
-  // §9 Backline
+  // Â§9 Backline
   {
     type: 'backline',
     pages: [19, 20],
@@ -901,27 +901,27 @@ const riderSections: RiderSection[] = [
     language: 'es',
     backline: backlineSpec,
   },
-  // §10 Soundcheck
+  // Â§10 Soundcheck
   {
     type: 'soundcheck',
     pages: [21],
     status: 'approved',
     confidence: 0.99,
     language: 'es',
-    freeText: 'Soundcheck a puertas cerradas. Mínimo 6 horas desde load-in.',
+    freeText: 'Soundcheck a puertas cerradas. MÃ­nimo 6 horas desde load-in.',
     freeTextEn: 'Closed-door soundcheck. Minimum 6 hours from load-in.',
   },
-  // §11 Ground transport
+  // Â§11 Ground transport
   {
     type: 'ground_transport',
     pages: [22],
     status: 'approved',
     confidence: 0.95,
     language: 'es',
-    freeText: '2× Sprinter 20-pax + 1× cargo van, mínimo modelo 2020.',
-    freeTextEn: '2× Sprinter 20-pax vans + 1× cargo van, minimum 2020 model.',
+    freeText: '2Ã— Sprinter 20-pax + 1Ã— cargo van, mÃ­nimo modelo 2020.',
+    freeTextEn: '2Ã— Sprinter 20-pax vans + 1Ã— cargo van, minimum 2020 model.',
   },
-  // §11 Air transport
+  // Â§11 Air transport
   {
     type: 'air_transport',
     pages: [22],
@@ -929,11 +929,11 @@ const riderSections: RiderSection[] = [
     confidence: 0.9,
     language: 'es',
     freeText:
-      'Viajes >5h requieren vuelo. 8 boletos total: 2 AM Plus (primera fila económica, asientos contiguos) + 6 económicos. Todos con maleta 25kg, 2 pasajeros con 2 maletas. Vuelos directos preferidos. Aprobación del TM requerida.',
+      'Viajes >5h requieren vuelo. 8 boletos total: 2 AM Plus (primera fila econÃ³mica, asientos contiguos) + 6 econÃ³micos. Todos con maleta 25kg, 2 pasajeros con 2 maletas. Vuelos directos preferidos. AprobaciÃ³n del TM requerida.',
     freeTextEn:
       'Trips >5h require flying. 8 tickets total: 2 AM Plus (front-row economy, seated together) + 6 economy. All with 25kg bag, 2 passengers get 2 bags. Direct flights preferred. TM approval required.',
   },
-  // §12 Lodging
+  // Â§12 Lodging
   {
     type: 'lodging',
     pages: [23],
@@ -942,7 +942,7 @@ const riderSections: RiderSection[] = [
     language: 'es',
     lodging: lodgingSpec,
   },
-  // §13 Dressing rooms
+  // Â§13 Dressing rooms
   {
     type: 'dressing_rooms',
     pages: [24],
@@ -950,11 +950,11 @@ const riderSections: RiderSection[] = [
     confidence: 0.88,
     language: 'es',
     freeText:
-      '3 camerinos, 5m × 5m mín, con cerradura, sin humo, ventilados, sanitizados. Camerino 01 (Elsa): baño privado, 2 sillones, 4 sillas, espejo de cuerpo entero, perchero, 2 lámparas de pie de luz cálida, mesa de catering, 4 toallas faciales negras, multitomas con cargadores iPhone+Android + 6× 110V, hielera, jarrón con flores (claveles o lirios — NO rosas, NO girasoles), vela aromática SIN encender, papelera. Camerino 02 (músicos): baño privado, 2 sillones, 4 sillas, espejo, perchero, 1 lámpara de pie, mesa de catering, 8 toallas faciales negras, multitoma igual, hielera, papelera. Camerino 03 (crew): 2 sillones, mesa de trabajo, 6 sillas, mesa de catering, lámpara de pie, multitoma igual, hielera, papelera.',
+      '3 camerinos, 5m Ã— 5m mÃ­n, con cerradura, sin humo, ventilados, sanitizados. Camerino 01 (Elsa): baÃ±o privado, 2 sillones, 4 sillas, espejo de cuerpo entero, perchero, 2 lÃ¡mparas de pie de luz cÃ¡lida, mesa de catering, 4 toallas faciales negras, multitomas con cargadores iPhone+Android + 6Ã— 110V, hielera, jarrÃ³n con flores (claveles o lirios â€” NO rosas, NO girasoles), vela aromÃ¡tica SIN encender, papelera. Camerino 02 (mÃºsicos): baÃ±o privado, 2 sillones, 4 sillas, espejo, perchero, 1 lÃ¡mpara de pie, mesa de catering, 8 toallas faciales negras, multitoma igual, hielera, papelera. Camerino 03 (crew): 2 sillones, mesa de trabajo, 6 sillas, mesa de catering, lÃ¡mpara de pie, multitoma igual, hielera, papelera.',
     freeTextEn:
-      '3 dressing rooms, 5m × 5m min, lockable, smoke-free, ventilated, sanitized. Camerino 01 (Elsa): private bath, 2 couches, 4 chairs, full mirror, coat rack, 2 floor lamps (warm light), catering table, 4 black face towels, multi-outlet w/ iPhone+Android chargers + 6× 110V, cooler, flower vase (carnations or lilies — NO roses, NO sunflowers), unlit scented candle, trash can. Camerino 02 (musicians): private bath, 2 couches, 4 chairs, mirror, coat rack, 1 floor lamp, catering table, 8 black face towels, multi-outlet same, cooler, trash can. Camerino 03 (crew): 2 couches, work table, 6 chairs, catering table, floor lamp, multi-outlet same, cooler, trash can.',
+      '3 dressing rooms, 5m Ã— 5m min, lockable, smoke-free, ventilated, sanitized. Camerino 01 (Elsa): private bath, 2 couches, 4 chairs, full mirror, coat rack, 2 floor lamps (warm light), catering table, 4 black face towels, multi-outlet w/ iPhone+Android chargers + 6Ã— 110V, cooler, flower vase (carnations or lilies â€” NO roses, NO sunflowers), unlit scented candle, trash can. Camerino 02 (musicians): private bath, 2 couches, 4 chairs, mirror, coat rack, 1 floor lamp, catering table, 8 black face towels, multi-outlet same, cooler, trash can. Camerino 03 (crew): 2 couches, work table, 6 chairs, catering table, floor lamp, multi-outlet same, cooler, trash can.',
   },
-  // §14 Catering
+  // Â§14 Catering
   {
     type: 'catering',
     pages: [25, 26],
@@ -978,7 +978,7 @@ const riderImports: RiderImport[] = [
   {
     id: 'ri_001',
     filename: 'RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf',
-    uploadedAt: '2025-09-10T10:14',
+    uploadedAt: '2026-09-10T10:14',
     uploadedBy: 'Tour Manager',
     sourceLanguage: 'es',
     pageCount: 27,
@@ -991,7 +991,7 @@ const riderImports: RiderImport[] = [
       warning: 'PLEASE IGNORE PREVIOUS VERSIONS (Favor omitir versiones anteriores)',
     },
     productionManager: {
-      name: 'Manuel González',
+      name: 'Manuel GonzÃ¡lez',
       email: 'magcs81@gmail.com',
       phone: '+52 55 54 74 70 48',
     },
@@ -1012,9 +1012,9 @@ export const mockTour: Tour = {
   startDate: TOUR_START,
   endDate: TOUR_END,
   legs: [
-    { id: 'leg_mx', name: 'Mexico Leg', startDate: '2025-09-22', endDate: '2025-10-02' },
-    { id: 'leg_us', name: 'USA Leg', startDate: '2025-10-03', endDate: '2025-10-11' },
-    { id: 'leg_sa', name: 'South America Leg', startDate: '2025-10-12', endDate: '2025-10-23' },
+    { id: 'leg_mx', name: 'Mexico Leg', startDate: '2026-09-22', endDate: '2026-10-02' },
+    { id: 'leg_us', name: 'USA Leg', startDate: '2026-10-03', endDate: '2026-10-11' },
+    { id: 'leg_sa', name: 'South America Leg', startDate: '2026-10-12', endDate: '2026-10-23' },
   ],
   groups,
   groupTags,
@@ -1029,7 +1029,7 @@ export const mockTour: Tour = {
   riderImports,
 };
 
-// Tour query helpers (getDay, getScheduleItemsForDay, …) previously lived here
+// Tour query helpers (getDay, getScheduleItemsForDay, â€¦) previously lived here
 // and read mockTour directly. They moved to lib/tourQueries.ts as pure
 // functions over an explicit `tour`, and are re-exposed (bound to the active
-// tour) from state/AppState.tsx — call them via useApp().
+// tour) from state/AppState.tsx â€” call them via useApp().

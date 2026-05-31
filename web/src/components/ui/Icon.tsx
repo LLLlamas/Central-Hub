@@ -216,4 +216,16 @@ export const Icon = {
       <path d="M10.5 11l3-3-3-3M13.5 8H6" />
     </S>
   ),
+  Inbox: (p: IconProps) => (
+    <S {...p}>
+      <path d="M2 9.5L4 3h8l2 6.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" />
+      <path d="M2 9.5h3l1 2h4l1-2h3" />
+    </S>
+  ),
+  User: (p: IconProps) => (
+    <S {...p}>
+      <circle cx="8" cy="5.5" r="2.8" />
+      <path d="M3 13.5c0-2.5 2.2-4 5-4s5 1.5 5 4" />
+    </S>
+  ),
 };

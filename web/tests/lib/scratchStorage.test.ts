@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { loadScratchTour, saveScratchTour, clearScratchTour } from '@/lib/scratchStorage';
 import { createScratchTour } from '@/data/scratchTour';
 
@@ -45,7 +45,7 @@ describe('scratchStorage round-trip', () => {
   });
 
   it('discards valid JSON that is not Tour-shaped', () => {
-    // Valid JSON, wrong shape — would crash callers doing `tour.days.length`.
+    // Valid JSON, wrong shape â€” would crash callers doing `tour.days.length`.
     for (const payload of ['"a string"', '42', '[]', '{"id":"x"}']) {
       window.localStorage.setItem('tour-hub:scratch-tour', payload);
       expect(loadScratchTour()).toBeNull();

@@ -37,10 +37,32 @@ type Note = UploadNote | null;
  * travel to those days. Two collapsible sections keep it from overwhelming.
  */
 export function FlightIngest() {
-  const { tour } = useApp();
+  const { tour, user } = useApp();
   const { step } = useTour();
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const routeLoaded = tour.days.length > 0;
   const activeStepId = step?.id;
+
+  // Importing is a manager-only power tool. Crew contribute documents via /me
+  // (the Submissions inbox surfaces what they send for review).
+  if (!managerView) {
+    return (
+      <div>
+        <PageHeader eyebrow="Import route & travel" title="Route &amp; travel import" />
+        <Card>
+          <EmptyState
+            title="Managers only"
+            hint="Importing the route and travel is done by the TM/PM. Need to share a flight or document? Use My Travel & Info to submit it for review."
+            action={
+              <Link to="/me">
+                <Button variant="primary" size="sm">Go to My Travel &amp; Info</Button>
+              </Link>
+            }
+          />
+        </Card>
+      </div>
+    );
+  }
 
   return (
     // pb-[40vh] gives the walkthrough room to scroll a bottom-of-page target

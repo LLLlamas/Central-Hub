@@ -14,12 +14,12 @@
 
 import type { Tour, Person, TourPerson, CurrentUser } from '@/types';
 import { groups } from '@/data/mockTour';
-import { MOCK_TODAY } from '@/lib/today';
+import { getTodayIso } from '@/lib/today';
 import { buildScheduleTypeDefaults } from '@/lib/visibilityDefaults';
 
 export const SCRATCH_TOUR_ID = 'tour_scratch';
 export const SCRATCH_ORG_ID = 'org_scratch';
-export const SCRATCH_TOUR_NAME = 'My Tour 2025';
+export const SCRATCH_TOUR_NAME = 'My Tour 2026';
 export const SCRATCH_TM_TP_ID = 'tp_scratch_tm';
 const SCRATCH_TM_PERSON_ID = 'p_scratch_tm';
 
@@ -49,8 +49,8 @@ export function createScratchTour(): Tour {
     status: 'announced',
     // Placeholder span until a route is imported (applyRouteToScratch sets the
     // real dates). Kept valid so date formatters never see an empty string.
-    startDate: MOCK_TODAY,
-    endDate: MOCK_TODAY,
+    startDate: getTodayIso(),
+    endDate: getTodayIso(),
     legs: [],
     groups,
     groupTags: [],

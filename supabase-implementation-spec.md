@@ -55,9 +55,31 @@ without an assigned role:
 - Verified: `typecheck` clean · `npm test` 89/89 · `build` succeeds.
 - *Build-validated only* — run the migration + bootstrap seed (§8) then test live.
 
+**Crew document submissions — DONE & build-validated (Milestone 2).** Crew
+contribute documents without being able to silently change the tour:
+- `supabase/migrations/0003_submissions.sql` (new): `submissions` table; RLS
+  read = own (`user_id=auth.uid()`) OR `is_manager`, update = managers only,
+  no delete; `propose_submission()` SECURITY DEFINER RPC is the ONLY crew write
+  (forces `status='pending'` + own uid/email — no self-approve/escalate); storage
+  policies documented for `{tourId}/submissions/{uid}/{id}.pdf` (read = manager OR
+  own-uid folder, write = own-uid folder). **Re-runnable** (drop-if-exists).
+- Backend seam: `proposeSubmission`/`listSubmissions`/`approveSubmission`/
+  `rejectSubmission` + `savePdf` scope `'submissions'`. AppState: `submissions`,
+  `proposeSubmission`, `approve/rejectSubmission`, `loadSubmissionFileUrl`,
+  `addDocument` (+ local overlay persistence; all gated on `isSupabase`).
+- UI: `/me` `MyTravelInfo` (all members) + `/submissions` `SubmissionsInbox`
+  (manager-only). `/ingest/flights` + `/ingest/riders` now manager-gated (crew
+  contribute via `/me`). Nav wired into Sidebar/More/Cmd+K (manager-gated).
+- Approve attaches the file as a tour `Document`; flight/hotel types route through
+  the existing parse→duplicate→merge→commit / hotel-import path so the day sheet
+  updates. `local` byte-identical (synthetic TM sees `/me` + an empty inbox).
+- Verified: `typecheck` clean · `npm test` 89/89 · `build` succeeds.
+- *Build-validated only* — run `0003_submissions.sql` + its storage policies (§8) then test live.
+
 **Still to do:**
-- **Run** `0002_members.sql` + the bootstrap seed (§8) against the live project;
-  set the tour-scoped storage RLS; smoke-test the role-gate end to end.
+- **Run** `0002_members.sql` + `0003_submissions.sql` + the bootstrap seed (§8)
+  against the live project; set the tour-scoped + submission storage RLS;
+  smoke-test the role-gate + submission approve/reject end to end.
 - **PWA** (`vite-plugin-pwa` + manifest/icons) for "Add to Home Screen".
 - **Phase B** — server-side per-row privacy: run the decomposed `migrations/0001_init.sql`,
   switch the backend to assemble from typed tables + realtime, RLS-enforced ABAC.

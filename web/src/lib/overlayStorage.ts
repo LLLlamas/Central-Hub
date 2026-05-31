@@ -21,6 +21,7 @@ import type {
   ScheduleItemEditRecord,
   FlightPassengerResolution,
   GearItem,
+  DocumentSubmission,
 } from '@/types';
 import type {
   ConflictResolution,
@@ -46,6 +47,10 @@ export interface OverlayBundle {
   scheduleItemEditHistory: [ID, ScheduleItemEditRecord[]][];
   flightPassengerResolutions: [string, FlightPassengerResolution][];
   gearItems?: GearItem[];
+  /** Crew document submissions (Milestone 2). On `local` this is the persistence
+   *  store for the submission flow so it's testable; on `supabase` submissions
+   *  live in the DB and this stays empty (managers/crew read via the backend). */
+  submissions?: DocumentSubmission[];
   userKey?: string;
 }
 

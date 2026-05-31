@@ -750,6 +750,36 @@ export interface TourGroupSummary {
   color: string;
 }
 
+// ─── Document submissions (crew → manager review, Supabase backend) ──────────
+// A member submits any document (a boarding pass, an updated flight, a set list,
+// an image) for manager review. Always lands as `pending`; only a manager can
+// approve (attach it to the tour) or reject. Crew see only their own; managers
+// see all. Read = own OR is_manager; insert via propose_submission() RPC only.
+// See supabase/migrations/0003_submissions.sql.
+
+export type SubmissionType = 'flight' | 'hotel' | 'document' | 'other';
+export type SubmissionStatus = 'pending' | 'approved' | 'rejected';
+
+export interface DocumentSubmission {
+  id: ID;
+  tourId: ID;
+  /** Submitter's auth uid (empty on the local synthetic path). */
+  uid: string;
+  email: string;
+  displayName: string;
+  type: SubmissionType;
+  title: string;
+  description: string;
+  status: SubmissionStatus;
+  /** Storage path `{tourId}/submissions/{uid}/{id}.pdf` — null until uploaded. */
+  storagePath?: string;
+  filename?: string;
+  submittedAt: ISODateTime;
+  reviewedAt?: ISODateTime;
+  reviewedBy?: string;
+  reviewNote?: string;
+}
+
 export interface UserProfile {
   uid: string;
   email?: string;

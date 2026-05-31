@@ -1,37 +1,33 @@
 import { Link } from 'react-router-dom';
+import { useApp } from '@/state/AppState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Icon } from '@/components/ui/Icon';
-import { Chip } from '@/components/ui/Chip';
-import { MOCK_TODAY } from '@/lib/today';
-import { fmtDate } from '@/lib/format';
 
 const tools = [
+  { to: '/me', label: 'My Travel & Info', hint: 'Your flights, hotel, schedule, and plots — and submit a document for review.', icon: Icon.User },
   { to: '/daysheet', label: 'Day sheets', hint: 'Edit, personalize, print, and publish daily sheets.', icon: Icon.Document },
   { to: '/gear', label: 'Supplies & Costs', hint: 'Rider supplies, flight costs, and hotel costs — status, cost estimates, and links to source documents.', icon: Icon.Package },
   { to: '/plots', label: 'Plots', hint: 'Stage plot and lightplot pages pulled out of the rider.', icon: Icon.Image },
-  { to: '/schedule', label: 'Schedule Permissions', hint: 'Control who sees or owns each call time. TM and PM only.', icon: Icon.Layers },
-  { to: '/access', label: 'App User Permissions', hint: 'Manage who can open the app, assign roles and groups, revoke access. TM and PM only.', icon: Icon.Lock },
-  { to: '/ingest/riders', label: 'Import rider', hint: 'Review the extracted rider sections and conflicts.', icon: Icon.Sparkle },
-  { to: '/ingest/flights', label: 'Import route & travel', hint: 'Import the tour route, then review parsed flight confirmations.', icon: Icon.Plane },
+  { to: '/submissions', label: 'Submissions', hint: 'Review documents your crew sent in — approve or reject. TM and PM only.', icon: Icon.Inbox, managerOnly: true },
+  { to: '/schedule', label: 'Schedule Permissions', hint: 'Control who sees or owns each call time. TM and PM only.', icon: Icon.Layers, managerOnly: true },
+  { to: '/access', label: 'App User Permissions', hint: 'Manage who can open the app, assign roles and groups, revoke access. TM and PM only.', icon: Icon.Lock, managerOnly: true },
+  { to: '/ingest/riders', label: 'Import rider', hint: 'Review the extracted rider sections and conflicts.', icon: Icon.Sparkle, managerOnly: true },
+  { to: '/ingest/flights', label: 'Import route & travel', hint: 'Import the tour route, then review parsed flight confirmations.', icon: Icon.Plane, managerOnly: true },
 ];
 
 export function More() {
+  const { user } = useApp();
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
+  const visible = tools.filter((t) => !t.managerOnly || managerView);
   return (
     <div>
       <PageHeader
         title="More"
         description="Power tools and settings live here so mobile can stay focused on the day."
-        meta={
-          <div className="flex flex-wrap items-center gap-2">
-            <Chip tone="mock" variant="outline">
-              Demo date: {fmtDate(MOCK_TODAY, 'MMM d, yyyy')}
-            </Chip>
-          </div>
-        }
       />
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {tools.map((tool) => {
+        {visible.map((tool) => {
           const I = tool.icon;
           return (
             <Link

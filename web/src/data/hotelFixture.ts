@@ -58,7 +58,7 @@ const RAW_BLOCKS: RawHotelBlock[] = [
   {
     fixtureId: 'hotel_cdmx_nh_reforma',
     id: 'ho_cdmx',
-    dayId: 'day_2025-09-22',
+    dayId: 'day_2026-09-22',
     name: 'NH Collection Mexico City Reforma',
     address: 'Paseo de la Reforma 122, Juárez, 06600 Ciudad de México',
     phone: '+52 55 1167 1900',
@@ -68,18 +68,18 @@ const RAW_BLOCKS: RawHotelBlock[] = [
     nightlyRate: 218,
     currency: 'USD',
     taxRate: 0.16,
-    sourceFilename: 'Hotel_CDMX_NH_Reforma_2025-09-22.pdf',
+    sourceFilename: 'Hotel_CDMX_NH_Reforma_2026-09-22.pdf',
     rooms: CDMX_ROOMS,
     tasks: [
       {
         id: 'tk_hotel_rooming_cdmx',
-        dayId: 'day_2025-09-22',
+        dayId: 'day_2026-09-22',
         title: 'Send the final rooming list to NH Collection Reforma',
         status: 'done',
       },
       {
         id: 'tk_hotel_checkout',
-        dayId: 'day_2025-09-25',
+        dayId: 'day_2026-09-25',
         title: 'Confirm the 12:00 checkout for the Monterrey travel day',
         status: 'todo',
       },
@@ -88,7 +88,7 @@ const RAW_BLOCKS: RawHotelBlock[] = [
   {
     fixtureId: 'hotel_mty_fiesta_americana',
     id: 'ho_mty',
-    dayId: 'day_2025-09-27',
+    dayId: 'day_2026-09-27',
     name: 'Fiesta Americana Monterrey Valle',
     address: 'Av. Lázaro Cárdenas 2305, Valle Oriente, 66260 Monterrey',
     phone: '+52 81 8133 8000',
@@ -98,12 +98,12 @@ const RAW_BLOCKS: RawHotelBlock[] = [
     nightlyRate: 196,
     currency: 'USD',
     taxRate: 0.16,
-    sourceFilename: 'Hotel_MTY_Fiesta_Americana_2025-09-27.pdf',
+    sourceFilename: 'Hotel_MTY_Fiesta_Americana_2026-09-27.pdf',
     rooms: MTY_ROOMS,
     tasks: [
       {
         id: 'tk_hotel_rooming_mty',
-        dayId: 'day_2025-09-27',
+        dayId: 'day_2026-09-27',
         title: 'Email the rooming list to Fiesta Americana Monterrey',
         status: 'todo',
       },

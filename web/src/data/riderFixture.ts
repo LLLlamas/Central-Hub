@@ -7,7 +7,7 @@
 // titles + tocIndex + endPage fields the parser would otherwise produce.
 
 import { mockTour } from '@/data/mockTour';
-import { MOCK_NOW } from '@/lib/today';
+import { getNowIso } from '@/lib/today';
 import { RIDER_PDF_PATH } from '@/lib/riderSections';
 import { renderPlotImagesFromUrl } from '@/lib/pdfParser';
 import type { PlotImage, RiderImport, RiderSection, TourPerson } from '@/types';
@@ -147,7 +147,7 @@ function buildTocSections(): RiderSection[] {
 export function buildScratchRiderImport(): RiderImport {
   const ri = clone(mockTour.riderImports[0]);
   ri.uploadedBy = 'Tour Manager';
-  ri.uploadedAt = MOCK_NOW;
+  ri.uploadedAt = getNowIso();
   ri.sections = buildTocSections();
   return ri;
 }

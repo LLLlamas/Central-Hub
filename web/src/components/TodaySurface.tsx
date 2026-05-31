@@ -7,7 +7,7 @@ import { MockTag } from '@/components/provenance/MockTag';
 import { SourceTag } from '@/components/provenance/SourceTag';
 import { LastUpdated } from '@/components/LastUpdated';
 import { getMockVenue } from '@/data/mockVenues';
-import { MOCK_TODAY, MOCK_NOW } from '@/lib/today';
+import { getTodayIso, getNowIso } from '@/lib/today';
 import { cn } from '@/lib/cn';
 import {
   dayTypeLabel,
@@ -29,7 +29,7 @@ export function TodaySurface({ className }: { className?: string }) {
     getTravelForDay,
     getHotelsForDay,
   } = useApp();
-  const day = getDay(MOCK_TODAY);
+  const day = getDay(getTodayIso());
 
   if (!day) return null;
 
@@ -41,7 +41,7 @@ export function TodaySurface({ className }: { className?: string }) {
     ? allSchedule
     : allSchedule.filter((it) => resolveVisibility(it.visibility, user) !== 'blocked');
   const scheduleToShow = visibleSchedule;
-  const currentClock = MOCK_NOW.slice(11, 16);
+  const currentClock = getNowIso().slice(11, 16);
   const nextItem = visibleSchedule.find((it) => it.startTime >= currentClock) ?? visibleSchedule[0];
   const travel = getTravelForDay(day.id).filter((t) => managerView || resolveVisibility(t.visibility, user) !== 'blocked');
   const hotels = getHotelsForDay(day.id).filter((h) => managerView || resolveVisibility(h.visibility, user) !== 'blocked');
@@ -53,10 +53,7 @@ export function TodaySurface({ className }: { className?: string }) {
         <div className="p-5 sm:p-7">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="min-w-0">
-              <div className="eyebrow inline-flex items-center gap-1">
-                Today
-                <MockTag source="tour_route" field="Pinned demo date" />
-              </div>
+              <div className="eyebrow">Today</div>
               <h2 className="mt-2 font-display text-[34px] sm:text-[46px] leading-[0.95] font-bold text-[var(--color-ink)]">
                 {fmtDate(day.date, 'EEEE, MMMM d')}
               </h2>

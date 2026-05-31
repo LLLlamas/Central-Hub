@@ -12,10 +12,18 @@
 // The Supabase SDK + client are imported lazily so selecting this backend with
 // no config (or never reaching the supabase path) doesn't pull the SDK in.
 
-import type { ID, Tour, Membership, MemberRole, TourGroupSummary } from '@/types';
-import type { Backend, PdfScope, Unsub } from './types';
+import type {
+  ID,
+  Tour,
+  Membership,
+  MemberRole,
+  TourGroupSummary,
+  DocumentSubmission,
+} from '@/types';
+import type { Backend, PdfScope, Unsub, ProposeSubmissionInit } from './types';
 import type { OverlayBundle } from '@/lib/overlayStorage';
 import { stripForPersistence } from '@/lib/scratchStorage';
+import { getNowIso } from '@/lib/today';
 
 const PDF_BUCKET = 'tour-pdfs';
 
@@ -43,8 +51,49 @@ async function currentUid(): Promise<string | null> {
   }
 }
 
+// Submission files are scoped to the submitter's folder so storage RLS can
+// gate writes to own-uid. For 'submissions' the caller passes `${uid}/${id}`
+// as the id so the path resolves to {tourId}/submissions/{uid}/{id}.pdf.
 function pdfPath(tourId: ID, scope: PdfScope, id: string): string {
   return `${tourId}/${scope}/${id}.pdf`;
+}
+
+type SubmissionRow = {
+  id: string;
+  tour_id: string;
+  user_id: string | null;
+  email: string;
+  display_name: string;
+  type: DocumentSubmission['type'];
+  title: string;
+  description: string;
+  status: DocumentSubmission['status'];
+  storage_path: string | null;
+  filename: string | null;
+  submitted_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
+};
+
+function rowToSubmission(r: SubmissionRow): DocumentSubmission {
+  return {
+    id: r.id,
+    tourId: r.tour_id,
+    uid: r.user_id ?? '',
+    email: r.email,
+    displayName: r.display_name,
+    type: r.type,
+    title: r.title,
+    description: r.description,
+    status: r.status,
+    storagePath: r.storage_path ?? undefined,
+    filename: r.filename ?? undefined,
+    submittedAt: r.submitted_at,
+    reviewedAt: r.reviewed_at ?? undefined,
+    reviewedBy: r.reviewed_by ?? undefined,
+    reviewNote: r.review_note ?? undefined,
+  };
 }
 
 // Map a tour_members DB row to the app Membership shape.
@@ -187,10 +236,12 @@ export const supabaseBackend: Backend = {
     const uid = await currentUid();
     if (!uid || !tourId) return;
     const sb = await client();
-    // Shared, manager-authored overlay. `userKey` is per-user — strip it before
-    // writing so one user's viewer choice doesn't overwrite everyone's.
-    const { userKey: _drop, ...shared } = bundle;
+    // Shared, manager-authored overlay. `userKey` is per-user and `submissions`
+    // live in the DB (per-user RLS view) — strip both so one user's local cache
+    // never overwrites everyone's shared overlay row.
+    const { userKey: _drop, submissions: _subs, ...shared } = bundle;
     void _drop;
+    void _subs;
     await sb.from('overlays').upsert({
       tour_id: tourId,
       user_id: SHARED_OVERLAY_USER_ID,
@@ -234,7 +285,10 @@ export const supabaseBackend: Backend = {
     if (tid) {
       await sb.from('tours').delete().eq('id', tid);
       await sb.from('overlays').delete().eq('tour_id', tid);
-      // Remove every PDF under the tour's folder (rider + doc scopes).
+      // submissions: best-effort (RLS lets managers delete? no — no delete policy,
+      // submissions are a permanent audit trail. Leave rows; only managers reset
+      // and the audit trail surviving a reset is acceptable). Storage files for
+      // rider + doc scopes are removed below; submission files are per-uid folders.
       for (const scope of ['rider', 'doc'] as PdfScope[]) {
         const { data: files } = await sb.storage.from(PDF_BUCKET).list(`${tid}/${scope}`);
         if (files && files.length) {
@@ -344,5 +398,52 @@ export const supabaseBackend: Backend = {
       name: g.name,
       color: g.color,
     }));
+  },
+
+  // ── Document submissions ──
+
+  async proposeSubmission(init: ProposeSubmissionInit): Promise<DocumentSubmission | null> {
+    const uid = await currentUid();
+    if (!uid) return null;
+    const sb = await client();
+    const id = `sub_${uid}_${Date.now()}`;
+    // {tourId}/submissions/{uid}/{id}.pdf — matches the storage policy folders.
+    const storagePath = `${init.tourId}/submissions/${uid}/${id}.pdf`;
+    const { data, error } = await sb.rpc('propose_submission', {
+      p_id: id,
+      p_tour_id: init.tourId,
+      p_type: init.type,
+      p_title: init.title,
+      p_description: init.description ?? '',
+      p_storage_path: init.filename ? storagePath : null,
+      p_filename: init.filename ?? null,
+    });
+    if (error || !data) return null;
+    return rowToSubmission(data as SubmissionRow);
+  },
+
+  async listSubmissions(tourId: ID): Promise<DocumentSubmission[]> {
+    const sb = await client();
+    // RLS returns own rows (everyone) + all rows (managers) — no extra filter
+    // needed, the policy is the guard.
+    const { data } = await sb
+      .from('submissions')
+      .select('*')
+      .eq('tour_id', tourId)
+      .order('submitted_at', { ascending: false });
+    return (data ?? []).map((r) => rowToSubmission(r as SubmissionRow));
+  },
+
+  // approve/reject go through review_submission() — a SECURITY DEFINER RPC that
+  // mutates only status + audit columns (no direct UPDATE policy exists) and
+  // resolves the reviewer from the JWT, so `reviewedBy` is ignored on supabase.
+  async approveSubmission(id: ID, _reviewedBy: string, note?: string): Promise<void> {
+    const sb = await client();
+    await sb.rpc('review_submission', { p_id: id, p_status: 'approved', p_note: note ?? null });
+  },
+
+  async rejectSubmission(id: ID, _reviewedBy: string, reason: string): Promise<void> {
+    const sb = await client();
+    await sb.rpc('review_submission', { p_id: id, p_status: 'rejected', p_note: reason });
   },
 };

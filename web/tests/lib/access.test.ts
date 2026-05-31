@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { computeReadableBy, groupForMember, membershipToCurrentUser } from '@/lib/access';
 import type { Membership, Visibility } from '@/types';
 
@@ -13,7 +13,7 @@ function member(over: Partial<Membership> = {}): Membership {
     displayName: over.displayName ?? 'Crew One',
     groupId: over.groupId ?? 'grp_audio',
     tagIds: over.tagIds ?? [],
-    joinedAt: '2025-09-22T09:00',
+    joinedAt: '2026-09-22T09:00',
     ...over,
   };
 }
@@ -50,7 +50,7 @@ describe('computeReadableBy', () => {
   });
 
   it('honors tag overrides above the group level (more specific wins)', () => {
-    // group blocks audio, but the FOH tag re-grants sees → tagged member sees.
+    // group blocks audio, but the FOH tag re-grants sees â†’ tagged member sees.
     const vis: Visibility = {
       default: 'blocked',
       groups: { grp_audio: 'blocked' },

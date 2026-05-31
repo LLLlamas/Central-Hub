@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { extractPageText, findNextHeadingY } from '@/lib/pdfCore.mjs';
 import type { PPage } from '@/lib/pdfCore.mjs';
 
 // Synthesize an item at (x, y) with a given height. PDF y=0 is bottom-left,
 // so higher y = higher on the page. A typical page height in our fixtures is
-// y up to ~800 — we match that here so header/footer fractions behave realistically.
+// y up to ~800 â€” we match that here so header/footer fractions behave realistically.
 const item = (text: string, x = 70, y = 400, h = 11) => ({ text, x, y, w: text.length * 6, h });
 
 describe('extractPageText', () => {
@@ -13,8 +13,8 @@ describe('extractPageText', () => {
       num: 3,
       items: [
         item('RIDER ELSA Y ELMAR 2025', 60, 790, 9),        // header band
-        item('CONTROL DE PRODUCCION', 70, 600, 13),         // body — keep
-        item('El promotor acepta lo siguiente.', 70, 580),  // body — keep
+        item('CONTROL DE PRODUCCION', 70, 600, 13),         // body â€” keep
+        item('El promotor acepta lo siguiente.', 70, 580),  // body â€” keep
         item('3 / 27', 280, 20),                            // footer page number
         item('3', 290, 12),                                 // bare page number
       ],
@@ -31,16 +31,16 @@ describe('extractPageText', () => {
     const page: PPage = {
       num: 3,
       items: [
-        item('2- NOTAS', 70, 700, 14),                       // §2 heading
-        item('Body paragraph for §2.', 70, 680),             // §2 body
-        item('3- PERMISOS', 70, 500, 14),                    // §3 heading (next section)
-        item('Permit body paragraph.', 70, 480),             // §3 body
+        item('2- NOTAS', 70, 700, 14),                       // Â§2 heading
+        item('Body paragraph for Â§2.', 70, 680),             // Â§2 body
+        item('3- PERMISOS', 70, 500, 14),                    // Â§3 heading (next section)
+        item('Permit body paragraph.', 70, 480),             // Â§3 body
       ],
     };
-    // §2's clip: keep only items ABOVE §3's heading (y > 500).
+    // Â§2's clip: keep only items ABOVE Â§3's heading (y > 500).
     const out = extractPageText(page, { clipAboveY: 500 });
     expect(out).toContain('2- NOTAS');
-    expect(out).toContain('Body paragraph for §2.');
+    expect(out).toContain('Body paragraph for Â§2.');
     expect(out).not.toContain('3- PERMISOS');
     expect(out).not.toContain('Permit body paragraph.');
   });

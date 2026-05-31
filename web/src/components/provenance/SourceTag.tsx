@@ -32,6 +32,16 @@ export function SourceTag({ source, field, className }: SourceTagProps) {
   const src = getRealSource(source);
   const artifactUrl = resolveProvenanceUrl(src.artifactUrl, tour);
 
+  // Rider-linked sources are meaningless before a rider is imported — hide entirely.
+  const isRiderLinked = src.artifactUrl != null && typeof src.artifactUrl === 'object' && src.artifactUrl.kind === 'active_rider_pdf';
+  const activeRider = tour.riderImports[0];
+  if (isRiderLinked && !activeRider) return null;
+
+  // Use the actual uploaded filename rather than the hardcoded fixture label.
+  const documentLabel = isRiderLinked && activeRider
+    ? `Rider PDF · ${activeRider.filename}`
+    : src.document;
+
   return (
     <>
       <button
@@ -69,7 +79,7 @@ export function SourceTag({ source, field, className }: SourceTagProps) {
               Document
             </div>
             <div className="text-[13px] font-semibold text-[var(--color-ink)] leading-tight">
-              {src.document}
+              {documentLabel}
             </div>
           </div>
 

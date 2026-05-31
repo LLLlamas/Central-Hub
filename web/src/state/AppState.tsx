@@ -11,7 +11,7 @@ import { isOwnerFloorRole } from '@/lib/access';
 import * as tourQueries from '@/lib/tourQueries';
 import type { ParsedRoute } from '@/lib/routeCsv';
 import { vis } from '@/lib/visibility';
-import { MOCK_NOW } from '@/lib/today';
+import { getNowIso } from '@/lib/today';
 import { FLIGHT_COST_BY_LEG } from '@/data/flightFixture';
 import type {
   Tour,
@@ -41,6 +41,9 @@ import type {
   ScheduleItemType,
   Conflict,
   GearItem,
+  DocumentSubmission,
+  SubmissionType,
+  DocumentKind,
 } from '@/types';
 import { defaultVisibilityForType } from '@/lib/visibilityDefaults';
 import { scheduleItemLabel } from '@/lib/format';
@@ -241,6 +244,30 @@ interface AppState {
   // Supplies & Costs page. Mutate the tour directly.
   updateHotelCost: (id: ID, patch: Partial<Pick<Hotel, 'nightlyRate' | 'currency' | 'taxRate'>>) => void;
   updateTravelCost: (id: ID, patch: Partial<Pick<Travel, 'costPerPassenger' | 'currency'>>) => void;
+
+  // ── Document submissions (Milestone 2) ──
+  // Crew submit any document for manager review; it lands as `pending` and only
+  // a manager approves (attaches it to the tour) or rejects. On `local` these
+  // live in the overlay bundle so the flow is testable; on `supabase` they go
+  // through the backend (RLS-enforced: crew see only their own).
+  submissions: DocumentSubmission[];
+  /** Re-fetch submissions from the backend (supabase only; no-op on local). */
+  refreshSubmissions: () => Promise<void>;
+  /** Submit a document for review. Stores the file (if any), then records the
+   *  pending submission. Returns the created submission or null. */
+  proposeSubmission: (
+    init: { type: SubmissionType; title: string; description?: string },
+    file?: File,
+  ) => Promise<DocumentSubmission | null>;
+  /** Manager approves — flips status, stamps reviewer, and records the note. */
+  approveSubmission: (id: ID, note?: string) => Promise<void>;
+  /** Manager rejects with a reason. */
+  rejectSubmission: (id: ID, reason: string) => Promise<void>;
+  /** Object URL for a submission's stored file, or null if none. Caller revokes. */
+  loadSubmissionFileUrl: (sub: DocumentSubmission) => Promise<string | null>;
+  /** Append a Document to the tour (used when approving a document submission).
+   *  Returns the new document id. */
+  addDocument: (init: { kind: DocumentKind; title: string; liveLink: string }) => ID;
 }
 
 export interface TourPersonInit {
@@ -442,6 +469,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [gearItems, setGearItems] = useState<GearItem[]>(
     () => initialOverlays?.gearItems ?? [],
   );
+  // Document submissions. On `local` this is the source of truth (persisted in
+  // the overlay bundle); on `supabase` it's a cache refreshed from the backend.
+  const [submissions, setSubmissions] = useState<DocumentSubmission[]>(
+    () => initialOverlays?.submissions ?? [],
+  );
 
   // Persist the tour so a reload resumes where the user left off. On `local`
   // this is the synchronous localStorage write as before; on `supabase` writes
@@ -546,6 +578,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tour.riderImports[0]?.id]);
 
+  // On supabase, pull the submissions the caller is allowed to see (own +,
+  // for managers, all) once the tour is loaded. No-op on local (the overlay
+  // array is already the source of truth). Re-runs when membership/tour change.
+  useEffect(() => {
+    if (!isSupabase || booting) return;
+    if (auth.status !== 'signed-in' || membership?.status !== 'active') return;
+    let cancelled = false;
+    void backend.listSubmissions?.(tour.id).then((rows) => {
+      if (!cancelled && rows) setSubmissions(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSupabase, booting, auth.status, membership?.status, membership?.uid, tour.id]);
+
   // The overlay bundle — every Map/Set above serialised to entry arrays.
   const overlayBundle = useMemo<OverlayBundle>(
     () => ({
@@ -564,6 +612,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       scheduleItemEditHistory: [...scheduleItemEditHistory.entries()],
       flightPassengerResolutions: [...flightPassengerResolutions.entries()],
       gearItems,
+      submissions,
       userKey,
     }),
     [
@@ -582,6 +631,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       scheduleItemEditHistory,
       flightPassengerResolutions,
       gearItems,
+      submissions,
       userKey,
     ],
   );
@@ -606,6 +656,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setScheduleItemEditHistory(new Map(b.scheduleItemEditHistory ?? []));
     setFlightPassengerResolutionsMap(new Map(b.flightPassengerResolutions ?? []));
     if (b.gearItems) setGearItems(b.gearItems);
+    if (b.submissions) setSubmissions(b.submissions);
     if (b.userKey) setUserKey(b.userKey);
   }, []);
 
@@ -732,6 +783,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setScheduleItemEditHistory(new Map());
     setFlightPassengerResolutionsMap(new Map());
     setGearItems([]);
+    setSubmissions([]);
     if (isSupabase) {
       // Wipe the cloud tour + overlays + PDFs, then re-seed the fresh shell.
       void backend.clearAll(prevTourId).then(() => backend.saveTour(t));
@@ -761,7 +813,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           ...(t.routeImport ? [t.routeImport] : []),
         ],
         routeImport: {
-          at: MOCK_NOW,
+          at: getNowIso(),
           by: currentName,
           updates: (t.routeImport?.updates ?? 0) + (t.routeImport ? 1 : 0),
           filename: filename ?? t.routeImport?.filename,
@@ -957,7 +1009,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             ...(t.hotelImport ? [t.hotelImport] : []),
           ],
           hotelImport: {
-            at: MOCK_NOW,
+            at: getNowIso(),
             by: currentName,
             updates: (t.hotelImport?.updates ?? 0) + (t.hotelImport ? 1 : 0),
             filename: filename ?? t.hotelImport?.filename,
@@ -1100,7 +1152,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           unmatchedNames: merged.flatMap((pf) =>
             pf.passengers.filter((p) => !p.matchedTourPersonId).map((p) => p.name),
           ),
-          uploadedAt: MOCK_NOW,
+          uploadedAt: getNowIso(),
           uploadedBy: currentName,
           updates: (existing.updates ?? 0) + 1,
           status: isAdditiveOnly ? 'imported' : wasImported ? 'review' : existing.status,
@@ -1274,7 +1326,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             patch: template,
             changes: computeVisibilityChanges(before, template),
             status: 'direct',
-            resolvedAt: { at: MOCK_NOW, by: currentName },
+            resolvedAt: { at: getNowIso(), by: currentName },
           };
           next.set(item.id, [...(prev.get(item.id) ?? []), record]);
         }
@@ -1304,7 +1356,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             patch,
             changes: computeVisibilityChanges(before, patch),
             status: 'direct',
-            resolvedAt: { at: MOCK_NOW, by: currentName },
+            resolvedAt: { at: getNowIso(), by: currentName },
           };
           next.set(item.id, [...(prev.get(item.id) ?? []), record]);
         }
@@ -1381,7 +1433,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     (dayId: ID) => {
       setDayUpdates((prev) => {
         const next = new Map(prev);
-        next.set(dayId, { at: MOCK_NOW, by: currentName });
+        next.set(dayId, { at: getNowIso(), by: currentName });
         return next;
       });
     },
@@ -1400,7 +1452,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         const record: DayLockRecord = {
           locked,
           reason,
-          stamp: { at: MOCK_NOW, by: currentName },
+          stamp: { at: getNowIso(), by: currentName },
         };
         next.set(dayId, [...(prev.get(dayId) ?? []), record]);
         return next;
@@ -1457,7 +1509,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         const next = new Map(prev);
         next.set(id, {
           ...resolution,
-          resolvedAt: MOCK_NOW,
+          resolvedAt: getNowIso(),
           resolvedBy: currentName,
         });
         return next;
@@ -1486,7 +1538,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     (key: string) => {
       setSectionApprovals((prev) => {
         const next = new Map(prev);
-        next.set(key, { at: MOCK_NOW, by: currentName });
+        next.set(key, { at: getNowIso(), by: currentName });
         return next;
       });
     },
@@ -1519,7 +1571,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           patch,
           changes,
           status: 'direct',
-          resolvedAt: { at: MOCK_NOW, by: currentName },
+          resolvedAt: { at: getNowIso(), by: currentName },
         };
         next.set(key, [...(prev.get(key) ?? []), record]);
         return next;
@@ -1540,7 +1592,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         key,
         patch: { ...existing?.patch, ...patch },
         before,
-        proposedAt: { at: MOCK_NOW, by: currentName },
+        proposedAt: { at: getNowIso(), by: currentName },
       });
       return next;
     });
@@ -1562,7 +1614,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           changes,
           proposedAt: pending.proposedAt,
           status: 'approved',
-          resolvedAt: { at: MOCK_NOW, by: currentName },
+          resolvedAt: { at: getNowIso(), by: currentName },
         };
         const next = new Map(hPrev);
         next.set(key, [...(hPrev.get(key) ?? []), record]);
@@ -1585,7 +1637,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           changes,
           proposedAt: pending.proposedAt,
           status: 'rejected',
-          resolvedAt: { at: MOCK_NOW, by: currentName },
+          resolvedAt: { at: getNowIso(), by: currentName },
         };
         const next = new Map(hPrev);
         next.set(key, [...(hPrev.get(key) ?? []), record]);
@@ -1618,7 +1670,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           patch,
           changes: computeVisibilityChanges(before, patch),
           status: 'direct',
-          resolvedAt: { at: MOCK_NOW, by: currentName },
+          resolvedAt: { at: getNowIso(), by: currentName },
         };
         const next = new Map(prev);
         next.set(itemId, [...(prev.get(itemId) ?? []), record]);
@@ -1640,7 +1692,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           itemId,
           patch,
           before: prev.get(itemId)?.before ?? before,
-          proposedAt: { at: MOCK_NOW, by: currentName },
+          proposedAt: { at: getNowIso(), by: currentName },
         });
         return next;
       });
@@ -1662,7 +1714,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           changes: computeVisibilityChanges(pending.before, pending.patch),
           proposedAt: pending.proposedAt,
           status: 'approved',
-          resolvedAt: { at: MOCK_NOW, by: currentName },
+          resolvedAt: { at: getNowIso(), by: currentName },
         };
         const next = new Map(hPrev);
         next.set(itemId, [...(hPrev.get(itemId) ?? []), record]);
@@ -1683,7 +1735,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           changes: computeVisibilityChanges(pending.before, pending.patch),
           proposedAt: pending.proposedAt,
           status: 'rejected',
-          resolvedAt: { at: MOCK_NOW, by: currentName },
+          resolvedAt: { at: getNowIso(), by: currentName },
         };
         const next = new Map(hPrev);
         next.set(itemId, [...(hPrev.get(itemId) ?? []), record]);
@@ -1717,7 +1769,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           patch,
           changes,
           status: 'direct',
-          resolvedAt: { at: MOCK_NOW, by: currentName },
+          resolvedAt: { at: getNowIso(), by: currentName },
         };
         next.set(itemId, [...(prev.get(itemId) ?? []), record]);
         return next;
@@ -1754,7 +1806,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           patch: { startTime: newItem.startTime, title: newItem.title, type },
           changes: [{ rowLabel: newItem.title, field: 'created', before: '', after: `${newItem.startTime} ${newItem.title}` }],
           status: 'created',
-          resolvedAt: { at: MOCK_NOW, by: currentName },
+          resolvedAt: { at: getNowIso(), by: currentName },
         };
         next.set(id, [record]);
         return next;
@@ -1792,7 +1844,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           patch: {},
           changes: [{ rowLabel: item.title, field: 'deleted', before: `${item.startTime} ${item.title}`, after: '' }],
           status: 'deleted',
-          resolvedAt: { at: MOCK_NOW, by: currentName },
+          resolvedAt: { at: getNowIso(), by: currentName },
         };
         next.set(itemId, [...(prev.get(itemId) ?? []), record]);
         return next;
@@ -1893,6 +1945,146 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // ---- Document submissions (Milestone 2) ---------------------------------
+  // On `local`: the overlay array is the source of truth; file bytes go to the
+  // IndexedDB documents store via savePdf('submissions', id). On `supabase`:
+  // the backend RPC + submissions table + tour-pdfs storage, refreshed into the
+  // `submissions` cache. Everything is gated on `isSupabase` so local behaves
+  // identically to before (the array just stays empty until something is added).
+  const refreshSubmissions = useCallback(async () => {
+    if (!isSupabase) return;
+    try {
+      const rows = await backend.listSubmissions?.(tour.id);
+      if (rows) setSubmissions(rows);
+    } catch {
+      /* non-fatal — keep the last cache */
+    }
+  }, [isSupabase, tour.id]);
+
+  const proposeSubmission = useCallback(
+    async (
+      init: { type: SubmissionType; title: string; description?: string },
+      file?: File,
+    ): Promise<DocumentSubmission | null> => {
+      if (isSupabase) {
+        const created = await backend.proposeSubmission?.({
+          tourId: tour.id,
+          type: init.type,
+          title: init.title,
+          description: init.description,
+          filename: file?.name,
+        });
+        if (created && file) {
+          // Path segment {uid}/{id} → {tourId}/submissions/{uid}/{id}.pdf.
+          const seg = `${created.uid}/${created.id}`;
+          await backend.savePdf('submissions', seg, await file.arrayBuffer());
+        }
+        if (created) setSubmissions((prev) => [created, ...prev]);
+        return created ?? null;
+      }
+      // Local: synthesize the row and store bytes keyed by id.
+      const id = `sub_local_${Date.now()}`;
+      if (file) await backend.savePdf('submissions', id, await file.arrayBuffer());
+      const sub: DocumentSubmission = {
+        id,
+        tourId: tour.id,
+        uid: membership?.uid ?? 'local-user',
+        email: membership?.email ?? '',
+        displayName: currentName,
+        type: init.type,
+        title: init.title,
+        description: init.description ?? '',
+        status: 'pending',
+        filename: file?.name,
+        storagePath: file ? id : undefined,
+        submittedAt: getNowIso(),
+      };
+      setSubmissions((prev) => [sub, ...prev]);
+      return sub;
+    },
+    [isSupabase, tour.id, membership, currentName],
+  );
+
+  const approveSubmission = useCallback(
+    async (id: ID, note?: string) => {
+      if (isSupabase) {
+        await backend.approveSubmission?.(id, currentName, note);
+        await refreshSubmissions();
+        return;
+      }
+      setSubmissions((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? { ...s, status: 'approved', reviewedAt: getNowIso(), reviewedBy: currentName, reviewNote: note }
+            : s,
+        ),
+      );
+    },
+    [isSupabase, currentName, refreshSubmissions],
+  );
+
+  const rejectSubmission = useCallback(
+    async (id: ID, reason: string) => {
+      if (isSupabase) {
+        await backend.rejectSubmission?.(id, currentName, reason);
+        await refreshSubmissions();
+        return;
+      }
+      setSubmissions((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? { ...s, status: 'rejected', reviewedAt: getNowIso(), reviewedBy: currentName, reviewNote: reason }
+            : s,
+        ),
+      );
+    },
+    [isSupabase, currentName, refreshSubmissions],
+  );
+
+  const loadSubmissionFileUrl = useCallback(
+    async (sub: DocumentSubmission): Promise<string | null> => {
+      if (!sub.storagePath && !sub.filename) return null;
+      // Local stores bytes keyed by the submission id; supabase under {uid}/{id}.
+      const key = isSupabase ? `${sub.uid}/${sub.id}` : sub.id;
+      const bytes = await backend.loadPdf('submissions', key);
+      if (!bytes) return null;
+      const type = sub.filename?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream';
+      return URL.createObjectURL(new Blob([bytes], { type }));
+    },
+    [isSupabase],
+  );
+
+  const addDocument = useCallback(
+    (init: { kind: DocumentKind; title: string; liveLink: string }): ID => {
+      const id = `doc_${Date.now()}`;
+      updateScratchTour((t) => ({
+        ...t,
+        documents: [
+          ...t.documents,
+          {
+            id,
+            kind: init.kind,
+            title: init.title,
+            liveLink: init.liveLink,
+            currentRevision: 1,
+            revisions: [
+              {
+                id: `${id}_r1`,
+                revision: 1,
+                uploadedAt: getNowIso(),
+                uploadedBy: currentName,
+                sourceUrl: init.liveLink,
+              },
+            ],
+            visibility: vis.everyone('sees'),
+          },
+        ],
+      }));
+      return id;
+    },
+    [updateScratchTour, currentName],
+  );
+
   // ---- Travel / Hotel cost edits ------------------------------------------
   // Inline edits from the Supplies & Costs page. Mutate the tour directly
   // (rebuild + persist), the same shape as updateScheduleItem — every read
@@ -1939,7 +2131,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     (id: ID, resolution: Omit<PendingConflictResolution, 'conflictId' | 'proposedAt'>) => {
       setPendingConflictResolutions((prev) => {
         const next = new Map(prev);
-        next.set(id, { conflictId: id, ...resolution, proposedAt: { at: MOCK_NOW, by: currentName } });
+        next.set(id, { conflictId: id, ...resolution, proposedAt: { at: getNowIso(), by: currentName } });
         return next;
       });
     },
@@ -2065,8 +2257,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       deleteGearItem,
       updateHotelCost,
       updateTravelCost,
+      submissions,
+      refreshSubmissions,
+      proposeSubmission,
+      approveSubmission,
+      rejectSubmission,
+      loadSubmissionFileUrl,
+      addDocument,
     }),
-    [tour, booting, user, userKey, allUsers, resetScratchTour, applyRouteToScratch, addRiderImportToScratch, setActiveRider, addFlightImportToScratch, commitFlightImportToScratch, editFlightImportPassenger, removeFlightImportPassenger, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory, addTourPerson, updateTourPerson, addGroup, gearItems, updateGearItem, addGearItem, deleteGearItem, updateHotelCost, updateTravelCost],
+    [tour, booting, user, userKey, allUsers, resetScratchTour, applyRouteToScratch, addRiderImportToScratch, setActiveRider, addFlightImportToScratch, commitFlightImportToScratch, editFlightImportPassenger, removeFlightImportPassenger, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory, addTourPerson, updateTourPerson, addGroup, gearItems, updateGearItem, addGearItem, deleteGearItem, updateHotelCost, updateTravelCost, submissions, refreshSubmissions, proposeSubmission, approveSubmission, rejectSubmission, loadSubmissionFileUrl, addDocument],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

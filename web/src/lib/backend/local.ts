@@ -48,6 +48,9 @@ export const localBackend: Backend = {
     saveOverlaysRaw(bundle);
   },
 
+  // 'rider' bytes live in the rider-pdf store; 'doc' + 'submissions' bytes both
+  // live in the general documents store (keyed by id) — a submission file is
+  // just another binary attachment locally.
   async loadPdf(scope: PdfScope, id: string): Promise<ArrayBuffer | null> {
     return scope === 'rider' ? loadRiderPdf(id) : loadDocument(id);
   },

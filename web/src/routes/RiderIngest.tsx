@@ -4,9 +4,9 @@ import { Link } from 'react-router-dom';
 import { Modal } from '@/components/ui/Modal';
 import { useApp } from '@/state/AppState';
 import type { PendingEdit } from '@/state/AppState';
-import { MOCK_NOW } from '@/lib/today';
+import { getNowIso } from '@/lib/today';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card, SectionCard } from '@/components/ui/Card';
+import { Card, SectionCard, EmptyState } from '@/components/ui/Card';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
@@ -168,6 +168,27 @@ export function RiderIngest() {
   });
   const [isReuploading, setIsReuploading] = useState(false);
   const [approvedExpanded, setApprovedExpanded] = useState(false);
+
+  // Rider import + review is a manager-only power tool. Crew share documents via
+  // /me, which the Submissions inbox surfaces for manager review.
+  if (!managerView) {
+    return (
+      <div>
+        <PageHeader eyebrow="Import rider" title="Rider import" />
+        <Card>
+          <EmptyState
+            title="Managers only"
+            hint="Reviewing and approving the rider is done by the TM/PM. Need to share a document? Use My Travel & Info to submit it for review."
+            action={
+              <Link to="/me">
+                <Button variant="primary" size="sm">Go to My Travel &amp; Info</Button>
+              </Link>
+            }
+          />
+        </Card>
+      </div>
+    );
+  }
 
   if (!imp || isReuploading) {
     return (
@@ -1674,7 +1695,7 @@ function InputListReview({
   const [editedFilter, setEditedFilter] = useState<'all' | 'edited' | 'unedited'>('all');
 
   const update = (i: number, patch: Partial<InputChannel>) => {
-    const updated = channels.map((c, idx) => idx === i ? { ...c, ...patch, lastEditedAt: { at: MOCK_NOW, by: userName } } : c);
+    const updated = channels.map((c, idx) => idx === i ? { ...c, ...patch, lastEditedAt: { at: getNowIso(), by: userName } } : c);
     onChange(updated);
   };
 
@@ -1837,7 +1858,7 @@ function MonitorMixReview({
   const [editedFilter, setEditedFilter] = useState<'all' | 'edited' | 'unedited'>('all');
 
   const update = (i: number, patch: Partial<MonitorMix>) => {
-    const updated = mixes.map((m, idx) => idx === i ? { ...m, ...patch, lastEditedAt: { at: MOCK_NOW, by: userName } } : m);
+    const updated = mixes.map((m, idx) => idx === i ? { ...m, ...patch, lastEditedAt: { at: getNowIso(), by: userName } } : m);
     onChange(updated);
   };
 
@@ -1920,7 +1941,7 @@ function FOHOutputsReview({
   const [editedFilter, setEditedFilter] = useState<'all' | 'edited' | 'unedited'>('all');
 
   const update = (i: number, patch: Partial<FOHOutput>) => {
-    const updated = outputs.map((o, idx) => idx === i ? { ...o, ...patch, lastEditedAt: { at: MOCK_NOW, by: userName } } : o);
+    const updated = outputs.map((o, idx) => idx === i ? { ...o, ...patch, lastEditedAt: { at: getNowIso(), by: userName } } : o);
     onChange(updated);
   };
 

@@ -1,8 +1,8 @@
 date,leg,day_type,city,country,venue,venue_address,capacity,guarantee_usd,doors_local,set_time_local,curfew_local,promoter,promoter_rep,notes
-2025-09-22,leg_mx,travel,LAX → CDMX,MX,,,,,,,,,,Tour kickoff. Group flight AM 19.
-2025-09-23,leg_mx,rehearsal,Mexico City,MX,Foro Indie Rocks (rented),"Calle Zacatecas 39, Roma Norte, 06700 CDMX",,,,,,Self,,Production rehearsal.
-2025-09-24,leg_mx,rehearsal,Mexico City,MX,Foro Indie Rocks (rented),"Calle Zacatecas 39, Roma Norte, 06700 CDMX",,,,,,Self,,Production rehearsal.
-2025-09-25,leg_mx,show,Mexico City,MX,Auditorio Nacional,"Paseo de la Reforma 50, Bosque de Chapultepec I Secc, 11580 CDMX",9683,65000,20:00,21:30,23:30,OCESA,Pablo Espinosa,Tier A. Carnet checkpoint clear.
-2025-09-26,leg_mx,off,Mexico City,MX,,,,,,,,,,Day off.
-2025-09-27,leg_mx,travel,CDMX → MTY,MX,,,,,,,,,,VivaAerobus VB 1014.
-2025-09-28,leg_mx,show,Monterrey,MX,Auditorio Banamex,"Av. Fundadores S/N, La Estanzuela, 64988 Monterrey",8500,45000,20:00,21:30,23:30,OCESA,Pablo Espinosa,
+2026-09-22,leg_mx,travel,LAX → CDMX,MX,,,,,,,,,,Tour kickoff. Group flight AM 19.
+2026-09-23,leg_mx,rehearsal,Mexico City,MX,Foro Indie Rocks (rented),"Calle Zacatecas 39, Roma Norte, 06700 CDMX",,,,,,Self,,Production rehearsal.
+2026-09-24,leg_mx,rehearsal,Mexico City,MX,Foro Indie Rocks (rented),"Calle Zacatecas 39, Roma Norte, 06700 CDMX",,,,,,Self,,Production rehearsal.
+2026-09-25,leg_mx,show,Mexico City,MX,Auditorio Nacional,"Paseo de la Reforma 50, Bosque de Chapultepec I Secc, 11580 CDMX",9683,65000,20:00,21:30,23:30,OCESA,Pablo Espinosa,Tier A. Carnet checkpoint clear.
+2026-09-26,leg_mx,off,Mexico City,MX,,,,,,,,,,Day off.
+2026-09-27,leg_mx,travel,CDMX → MTY,MX,,,,,,,,,,VivaAerobus VB 1014.
+2026-09-28,leg_mx,show,Monterrey,MX,Auditorio Banamex,"Av. Fundadores S/N, La Estanzuela, 64988 Monterrey",8500,45000,20:00,21:30,23:30,OCESA,Pablo Espinosa,

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import {
   getDay,
   getDayById,
@@ -18,9 +18,9 @@ import type { Tour } from '@/types';
 function makeTour(): Tour {
   const t = createScratchTour();
   t.days = [
-    { id: 'day_a', date: '2025-09-23', dayType: 'rehearsal', published: false },
-    { id: 'day_b', date: '2025-09-25', dayType: 'show', published: false },
-    { id: 'day_c', date: '2025-09-26', dayType: 'off', published: false },
+    { id: 'day_a', date: '2026-09-23', dayType: 'rehearsal', published: false },
+    { id: 'day_b', date: '2026-09-25', dayType: 'show', published: false },
+    { id: 'day_c', date: '2026-09-26', dayType: 'off', published: false },
   ];
   t.scheduleItems = [
     { id: 'si1', dayId: 'day_a', type: 'rehearsal', title: 'Rehearsal', startTime: '11:00', visibility: vis.everyone() },
@@ -42,7 +42,7 @@ function makeTour(): Tour {
   t.groupTags = [{ id: 'tag_foh', groupId: 'grp_audio', name: 'FOH' }];
   t.riderImports = [
     {
-      id: 'ri1', filename: 'r.pdf', uploadedAt: '2025-09-01T10:00', uploadedBy: 'TM',
+      id: 'ri1', filename: 'r.pdf', uploadedAt: '2026-09-01T10:00', uploadedBy: 'TM',
       sourceLanguage: 'es', pageCount: 1, status: 'review', revision: 1,
       sections: [
         {
@@ -59,18 +59,18 @@ function makeTour(): Tour {
   return t;
 }
 
-describe('tourQueries — day lookups', () => {
+describe('tourQueries â€” day lookups', () => {
   const t = makeTour();
   it('getDay finds by date', () => {
-    expect(getDay(t, '2025-09-25')?.id).toBe('day_b');
+    expect(getDay(t, '2026-09-25')?.id).toBe('day_b');
     expect(getDay(t, '2099-01-01')).toBeUndefined();
   });
   it('getDayById finds by id', () => {
-    expect(getDayById(t, 'day_a')?.date).toBe('2025-09-23');
+    expect(getDayById(t, 'day_a')?.date).toBe('2026-09-23');
   });
 });
 
-describe('tourQueries — per-day collections', () => {
+describe('tourQueries â€” per-day collections', () => {
   const t = makeTour();
   it('getScheduleItemsForDay filters by dayId', () => {
     expect(getScheduleItemsForDay(t, 'day_a').map((s) => s.id)).toEqual(['si1']);
@@ -85,7 +85,7 @@ describe('tourQueries — per-day collections', () => {
   });
 });
 
-describe('tourQueries — getHotelsForDay multi-night coverage', () => {
+describe('tourQueries â€” getHotelsForDay multi-night coverage', () => {
   const t = makeTour();
   it('includes the hotel on its check-in day', () => {
     expect(getHotelsForDay(t, 'day_a').map((h) => h.id)).toEqual(['h1']);
@@ -98,7 +98,7 @@ describe('tourQueries — getHotelsForDay multi-night coverage', () => {
   });
 });
 
-describe('tourQueries — entity lookups', () => {
+describe('tourQueries â€” entity lookups', () => {
   const t = makeTour();
   it('getTourPersonById finds the seeded TM', () => {
     expect(getTourPersonById(t, 'tp_scratch_tm')?.role).toBe('Tour Manager');
@@ -110,7 +110,7 @@ describe('tourQueries — entity lookups', () => {
   });
 });
 
-describe('tourQueries — getAllConflicts', () => {
+describe('tourQueries â€” getAllConflicts', () => {
   it('flattens conflicts across rider sections', () => {
     const ids = getAllConflicts(makeTour()).map((c) => c.id);
     expect(ids).toEqual(['c1', 'c2']);

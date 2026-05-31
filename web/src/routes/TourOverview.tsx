@@ -14,13 +14,13 @@ import { TodaySurface } from '@/components/TodaySurface';
 import { useTour } from '@/components/tour/TourProvider';
 import type { RealSourceKey } from '@/data/realSources';
 import { fixturesOfKind } from '@/lib/fixtureMatcher';
-import { fmtFullDate, fmtDate, dayTypeLabel } from '@/lib/format';
-import { MOCK_TODAY } from '@/lib/today';
+import { fmtDate, dayTypeLabel } from '@/lib/format';
+import { getTodayIso } from '@/lib/today';
 
 export function TourOverview() {
   const { tour, lockedDays, resolvedConflicts, getAllConflicts } = useApp();
   const scratchEmpty = tour.days.length === 0;
-  const today = MOCK_TODAY;
+  const today = getTodayIso();
 
   const dayCounts = tour.days.reduce<Record<string, number>>((acc, d) => {
     acc[d.dayType] = (acc[d.dayType] || 0) + 1;
@@ -51,17 +51,14 @@ export function TourOverview() {
           </Link>
         }
         meta={
-          <div className="flex flex-wrap items-center gap-2">
-            <Chip tone="critical" variant="outline">On the road</Chip>
-            <span className="inline-flex items-center gap-1.5 text-[12px] text-[var(--color-ink-2)]">
-              Demo date: {fmtFullDate(today)}
-              <MockTag source="tour_route" field="Pinned demo date" />
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-[12px] text-[var(--color-ink-2)]">
-              {fmtDate(tour.startDate, 'MMM d')} - {fmtDate(tour.endDate, 'MMM d, yyyy')}
-              <MockTag source="tour_route" field="Tour dates" />
-            </span>
-          </div>
+          !scratchEmpty ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 text-[12px] text-[var(--color-ink-2)]">
+                {fmtDate(tour.startDate, 'MMM d')} - {fmtDate(tour.endDate, 'MMM d, yyyy')}
+                <MockTag source="tour_route" field="Tour dates" />
+              </span>
+            </div>
+          ) : undefined
         }
       />
 

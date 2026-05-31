@@ -6,7 +6,7 @@ import { MockTag } from '@/components/provenance/MockTag';
 import { SourceTag } from '@/components/provenance/SourceTag';
 import { cn } from '@/lib/cn';
 import { fmtDate, daysBetween } from '@/lib/format';
-import { MOCK_TODAY } from '@/lib/today';
+import { getTodayIso } from '@/lib/today';
 
 type NavEntry = {
   to: string;
@@ -18,15 +18,21 @@ type NavEntry = {
 const nav: NavEntry[] = [
   { to: '/', label: 'Today', icon: 'Home', group: 'tour' },
   { to: '/calendar', label: 'Calendar', icon: 'Calendar', group: 'tour' },
+  { to: '/me', label: 'My Travel & Info', icon: 'User', group: 'tour' },
   { to: '/personnel', label: 'People', icon: 'Users', group: 'tour' },
   { to: '/plots', label: 'Plots', icon: 'Image', group: 'tour' },
   { to: '/gear', label: 'Supplies & Costs', icon: 'Package', group: 'tour' },
   { to: '/schedule', label: 'Schedule Permissions', icon: 'Layers', group: 'ops' },
   { to: '/access', label: 'App User Permissions', icon: 'Lock', group: 'ops' },
+  { to: '/submissions', label: 'Submissions', icon: 'Inbox', group: 'ops' },
   { to: '/daysheet', label: 'Day Sheets', icon: 'Document', group: 'ops' },
   { to: '/ingest/flights', label: 'Import route & travel', icon: 'Plane', group: 'ingest' },
   { to: '/ingest/riders', label: 'Import rider', icon: 'Sparkle', group: 'ingest' },
 ];
+
+// Routes only managers (TM/PM) see in the nav. Crew contribute via /me, not
+// the import tools or the manager-only ops screens.
+const MANAGER_ONLY = new Set(['/schedule', '/access', '/submissions', '/ingest/flights', '/ingest/riders']);
 
 const groupLabels: Record<NavEntry['group'], string> = {
   tour: 'Tour',
@@ -62,7 +68,7 @@ export function Sidebar() {
   const { tour, user, lockedDays, isSectionApproved } = useApp();
   const ingest = useIngestStatus(tour, isSectionApproved);
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
-  const today = MOCK_TODAY;
+  const today = getTodayIso();
   const dToStart = daysBetween(today, tour.startDate);
   const dToEnd = daysBetween(today, tour.endDate);
   const lockedCount = tour.days.filter((d) => lockedDays.has(d.id)).length;
@@ -90,39 +96,41 @@ export function Sidebar() {
           {tour.artistName}
           <SourceTag source="rider_artist" field="Artist name" />
         </div>
-        <div className="mt-3 flex items-center gap-1.5">
-          <Chip tone="critical" variant="outline">
-            {stateLabel}
-          </Chip>
-        </div>
-        <div className="mt-2.5 font-mono text-[10.5px] text-[var(--color-ink-4)] tabular inline-flex items-center gap-1">
-          {fmtDate(tour.startDate, 'MMM d')} - {fmtDate(tour.endDate, 'MMM d, yyyy')}
-          <MockTag source="tour_route" field="Tour dates" />
-        </div>
-        <div className="mt-1.5 text-[11px] font-semibold text-[var(--color-ink-3)] inline-flex items-center gap-1">
-          Demo date: {fmtDate(today, 'MMM d, yyyy')}
-          <MockTag source="tour_route" field="Pinned demo date" />
-        </div>
-
-        <div className="mt-3 pt-3 border-t border-[var(--color-rule-soft)] flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <div
-            className="inline-flex items-center gap-1 text-[10.5px] font-mono tabular text-[var(--color-ink-3)]"
-            title={`${lockedCount} of ${tour.days.length} days locked / closed out`}
-          >
-            <Icon.Lock size={10} className="text-[var(--color-accent)]" />
-            <span>{lockedCount}/{tour.days.length} locked</span>
-          </div>
-        </div>
+        {tour.days.length > 0 && (
+          <>
+            <div className="mt-3 flex items-center gap-1.5">
+              <Chip tone="critical" variant="outline">
+                {stateLabel}
+              </Chip>
+            </div>
+            <div className="mt-2.5 font-mono text-[10.5px] text-[var(--color-ink-4)] tabular inline-flex items-center gap-1">
+              {fmtDate(tour.startDate, 'MMM d')} - {fmtDate(tour.endDate, 'MMM d, yyyy')}
+              <MockTag source="tour_route" field="Tour dates" />
+            </div>
+            <div className="mt-3 pt-3 border-t border-[var(--color-rule-soft)] flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <div
+                className="inline-flex items-center gap-1 text-[10.5px] font-mono tabular text-[var(--color-ink-3)]"
+                title={`${lockedCount} of ${tour.days.length} days locked / closed out`}
+              >
+                <Icon.Lock size={10} className="text-[var(--color-accent)]" />
+                <span>{lockedCount}/{tour.days.length} locked</span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto py-3">
-        {(['tour', 'ops', 'ingest'] as const).map((groupKey) => (
+        {(['tour', 'ops', 'ingest'] as const).map((groupKey) => {
+          const entries = nav.filter((n) => n.group === groupKey && (!MANAGER_ONLY.has(n.to) || managerView));
+          if (entries.length === 0) return null;
+          return (
           <div key={groupKey} className="px-3 mb-4">
             <div className="px-2 mb-1.5 font-mono text-[9.5px] font-semibold tracking-[0.18em] uppercase text-[var(--color-ink-4)]">
               {groupLabels[groupKey]}
             </div>
             <ul className="space-y-0.5">
-              {nav.filter((n) => n.group === groupKey && ((n.to !== '/schedule' && n.to !== '/access') || managerView)).map((entry) => {
+              {entries.map((entry) => {
                 const I = Icon[entry.icon];
                 const dot =
                   entry.to === '/ingest/flights'
@@ -165,7 +173,8 @@ export function Sidebar() {
               })}
             </ul>
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="px-5 py-4 border-t border-[var(--color-rule-soft)] text-[11px] text-[var(--color-ink-4)] leading-relaxed">

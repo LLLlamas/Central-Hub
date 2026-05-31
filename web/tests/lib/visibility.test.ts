@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { resolveVisibility, canSee, canEdit, vis } from '@/lib/visibility';
 import type { CurrentUser } from '@/types';
 
@@ -10,7 +10,7 @@ const user: CurrentUser = {
   tagIds: ['t_foh'],
 };
 
-describe('resolveVisibility — most specific wins', () => {
+describe('resolveVisibility â€” most specific wins', () => {
   it('falls back to the default level', () => {
     expect(resolveVisibility({ default: 'sees' }, user)).toBe('sees');
   });

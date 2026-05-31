@@ -277,6 +277,24 @@ Features not in the gap analysis spec that represent meaningful differentiation:
 
 ---
 
+## Demo data vs real-data readiness
+
+These items are hardcoded for demo purposes. Each one needs a path to real-data intake before the app can support actual tours.
+
+| Item | Status | Real-data path |
+|------|--------|---------------|
+| `MOCK_TODAY` in `lib/today.ts` | Pinned to `2026-09-25` for demo | Once multi-tour org lands, resolve to the current show day from the live tour — remove the constant entirely |
+| `SCRATCH_TOUR_NAME = 'My Tour 2026'` in `scratchTour.ts` | Hardcoded placeholder | Replace with a user-entered tour name at setup (a name/artist/dates form before the walkthrough starts) |
+| Route CSV format (`mock-tour-route-mexico-7day.csv`) | Specific column names expected by `routeCsv.ts` | Parser already handles any valid CSV — column mapping just needs to be flexible/documented for travel agents |
+| Fixture fallback in `fixtureMatcher.ts` | Matches uploads by filename; unknown files get "Sample only" | The live parsers (`parseRiderPdf`, `parseFlightPdf`, `parseHotelPdf`) already handle arbitrary real files — fixture matching is a fallback, not a gate. Non-fixture uploads already flow through the real parser first. |
+| `mockVenues.ts` | 5 hardcoded venue records | Promote to real `Venue` entity in `types/index.ts` and a persistent DB table (see gap 7.1) |
+| `mockTour.ts` rider/personnel fixture data | Used as fallback when parser fails on the Elsa y Elmar PDF | Survives as a fallback fixture; for any other rider, the live parser is primary — this file can shrink to pure fixture data once the parser coverage is comprehensive |
+| Hotel/flight fixture PDFs | Generated with fixed dates + passenger names | Already re-generatable via `scripts/gen-flight-pdfs.mjs`; dates updated to 2026-09 |
+
+**Key point for implementers:** the real-data parsers are already in place and primary. `fixtureMatcher.ts` is a fallback, not a router — real files from real TMs will flow through `parseRiderPdf`/`parseFlightPdf`/`parseHotelPdf` without touching the fixture system. The main gaps for real-data readiness are the tour setup form (tour name, artist, dates from user input) and removing `MOCK_TODAY` in favor of live date resolution.
+
+---
+
 ## Suggested Next 3 PRs
 
 ### PR 1 — Error Tracking + Analytics

@@ -5,7 +5,7 @@
 // `FlightImport`s — one per (airline, flightNumber, date) — so each leg goes
 // through the same review surface as a boarding-pass upload.
 
-import { MOCK_NOW } from '@/lib/today';
+import { getNowIso } from '@/lib/today';
 import type { FlightImport, ParsedFlight, TourPerson } from '@/types';
 
 export interface TravelGridRow {
@@ -147,7 +147,7 @@ export function buildFlightImportsFromGrid(
     return {
       id: `fi_grid_${slug}`,
       filename,
-      uploadedAt: MOCK_NOW,
+      uploadedAt: getNowIso(),
       status: 'review',
       parsedFlights: [parsed],
       unmatchedNames: passengers.filter((p) => !p.matchedTourPersonId).map((p) => p.name),

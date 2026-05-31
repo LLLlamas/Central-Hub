@@ -13,6 +13,8 @@ import { RiderIngest } from '@/routes/RiderIngest';
 import { Plots } from '@/routes/Plots';
 import { Gear } from '@/routes/Gear';
 import { AppUserPermissions } from '@/routes/AppUserPermissions';
+import { MyTravelInfo } from '@/routes/MyTravelInfo';
+import { SubmissionsInbox } from '@/routes/SubmissionsInbox';
 import { More } from '@/routes/More';
 
 export const router = createBrowserRouter([
@@ -28,6 +30,8 @@ export const router = createBrowserRouter([
       { path: 'gear', element: <Gear /> },
       { path: 'schedule', element: <ScheduleAndVisibility /> },
       { path: 'access', element: <AppUserPermissions /> },
+      { path: 'me', element: <MyTravelInfo /> },
+      { path: 'submissions', element: <SubmissionsInbox /> },
       { path: 'daysheet', element: <DaySheets /> },
       { path: 'daysheet/:date', element: <DaySheets /> },
       { path: 'ingest/flights', element: <FlightIngest /> },
