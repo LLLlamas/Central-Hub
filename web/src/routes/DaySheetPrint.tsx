@@ -1,6 +1,7 @@
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useState } from 'react';
 import { useApp } from '@/state/AppState';
+import { canSee } from '@/lib/visibility';
 import { Icon } from '@/components/ui/Icon';
 import { Chip } from '@/components/ui/Chip';
 import { MockTag } from '@/components/provenance/MockTag';
@@ -44,6 +45,7 @@ export function DaySheetPrint() {
 
   const {
     tour,
+    user,
     isDayLocked,
     getDayLastUpdated,
     getDay,
@@ -56,11 +58,13 @@ export function DaySheetPrint() {
   const day = getDay(date);
   if (!day) return <NotFoundView />;
 
-  const items = getScheduleItemsForDay(day.id).sort((a, b) =>
-    a.startTime.localeCompare(b.startTime),
-  );
-  const travel = getTravelForDay(day.id);
-  const hotels = getHotelsForDay(day.id);
+  // The print/share sheet renders from the viewer's perspective — never dump
+  // schedule/travel/hotel rows a member's role isn't allowed to see.
+  const items = getScheduleItemsForDay(day.id)
+    .filter((it) => canSee(it.visibility, user))
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const travel = getTravelForDay(day.id).filter((t) => canSee(t.visibility, user));
+  const hotels = getHotelsForDay(day.id).filter((h) => canSee(h.visibility, user));
   const venue = getMockVenue(day.venueId);
   const dayIndex = tour.days.findIndex((d) => d.id === day.id);
   const pm = tour.riderImports[0]?.productionManager;

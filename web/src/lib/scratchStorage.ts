@@ -50,7 +50,7 @@ export function loadScratchTour(): Tour | null {
  * 5-10 MB). They're re-derived from the source PDF on app boot — see
  * `hydrateRiderPlotImages` in `data/riderFixture.ts`.
  */
-function stripForPersistence(tour: Tour): Tour {
+export function stripForPersistence(tour: Tour): Tour {
   return {
     ...tour,
     riderImports: tour.riderImports.map((ri) => {

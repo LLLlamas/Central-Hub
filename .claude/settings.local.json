@@ -16,7 +16,13 @@
       "Bash(node web/scripts/parse-rider.mjs \"RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf\")",
       "Bash(node -e \"const d = require\\('./web/src/data/riderExtracted.json'\\); const gt = d.sections.find\\(s => s.type === 'ground_transport'\\); console.log\\('GROUND TRANSPORT pages:', gt?.pages\\); console.log\\('---'\\); console.log\\(gt?.freeText?.slice\\(0, 3000\\)\\);\")",
       "Bash(node -e \"const j=require\\('./web/src/data/riderExtracted.json'\\); const s = j.sections.find\\(x=>x.tocIndex===6\\); console.log\\('---SEC6 free---'\\); console.log\\(s.freeText ? s.freeText.slice\\(-400\\) : 'no text'\\); console.log\\('---SEC2---'\\); const s2 = j.sections.find\\(x=>x.tocIndex===2\\); console.log\\(s2.title, '|', s2.pages, '|', s2.endPage\\); console.log\\(s2.freeText\\); console.log\\('---SEC3---'\\); const s3 = j.sections.find\\(x=>x.tocIndex===3\\); console.log\\(s3.title, '|', s3.pages, '|', s3.endPage\\); console.log\\(s3.freeText\\);\")",
-      "Bash(node -e \"const j=require\\('./web/src/data/riderExtracted.json'\\); for \\(const s of j.sections\\) { console.log\\('§'+s.tocIndex, '|', s.type, '|', s.title, '|', s.pages, '|end:', s.endPage, '| ftLen:', s.freeText? s.freeText.length : 0\\); }\")"
+      "Bash(node -e \"const j=require\\('./web/src/data/riderExtracted.json'\\); for \\(const s of j.sections\\) { console.log\\('§'+s.tocIndex, '|', s.type, '|', s.title, '|', s.pages, '|end:', s.endPage, '| ftLen:', s.freeText? s.freeText.length : 0\\); }\")",
+      "Bash(\\\\.json)",
+      "Bash(\\\\.ics)",
+      "Bash(worker)",
+      "Bash(sw\")",
+      "Bash(xargs grep -l \"export.*ical\\\\|export.*calendar\\\\|export.*ics\")",
+      "Bash(xargs ls)"
     ]
   }
 }

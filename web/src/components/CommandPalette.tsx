@@ -13,7 +13,8 @@ import { useApp } from '@/state/AppState';
 import { Icon } from '@/components/ui/Icon';
 import { mockVenues } from '@/data/mockVenues';
 import { fmtDate, dayTypeLabel } from '@/lib/format';
-import type { Tour } from '@/types';
+import type { Tour, CurrentUser } from '@/types';
+import { resolveVisibility } from '@/lib/visibility';
 import { cn } from '@/lib/cn';
 
 // ============================================================
@@ -72,7 +73,7 @@ interface PaletteItem {
   keywords: string[];
 }
 
-function buildIndex(tour: Tour): PaletteItem[] {
+function buildIndex(tour: Tour, user: CurrentUser): PaletteItem[] {
   const items: PaletteItem[] = [];
 
   // Top-level pages.
@@ -83,6 +84,7 @@ function buildIndex(tour: Tour): PaletteItem[] {
     { type: 'page', label: 'Plots', to: '/plots', keywords: ['plot', 'plots', 'stage plot', 'lightplot', 'cad', 'rider images', 'drawings'] },
     { type: 'page', label: 'Supplies & Costs', to: '/gear', keywords: ['gear', 'equipment', 'supplies', 'backline', 'mics', 'catering', 'dressing room', 'cost', 'budget', 'inventory', 'flights', 'travel', 'hotel', 'rooms'] },
     { type: 'page', label: 'Schedule Permissions', to: '/schedule', keywords: ['visibility', 'abac', 'permissions', 'schedule'] },
+    { type: 'page', label: 'App User Permissions', to: '/access', keywords: ['access', 'members', 'roles', 'invite', 'crew', 'revoke', 'team', 'users'] },
     { type: 'page', label: 'Day Sheets', to: '/daysheet', keywords: ['day sheet'] },
     { type: 'page', label: 'More', to: '/more', keywords: ['tools', 'settings'] },
     { type: 'page', label: 'Import route & travel', to: '/ingest/flights', keywords: ['flight', 'route', 'travel', 'csv', 'ingest'] },
@@ -113,8 +115,10 @@ function buildIndex(tour: Tour): PaletteItem[] {
     });
   }
 
-  // Schedule items.
+  // Schedule items — only those the current viewer is allowed to see (otherwise
+  // hidden items leak via search title/time/location).
   for (const si of tour.scheduleItems) {
+    if (resolveVisibility(si.visibility, user) === 'blocked') continue;
     const day = tour.days.find((d) => d.id === si.dayId);
     if (!day) continue;
     items.push({
@@ -185,10 +189,10 @@ function CommandPalette() {
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
-  const { tour } = useApp();
+  const { tour, user } = useApp();
   const navigate = useNavigate();
 
-  const items = useMemo(() => buildIndex(tour), [tour]);
+  const items = useMemo(() => buildIndex(tour, user), [tour, user]);
   const results = useMemo(() => filter(items, query), [items, query]);
 
   // Reset state every time the palette opens.

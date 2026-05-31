@@ -22,6 +22,7 @@ const nav: NavEntry[] = [
   { to: '/plots', label: 'Plots', icon: 'Image', group: 'tour' },
   { to: '/gear', label: 'Supplies & Costs', icon: 'Package', group: 'tour' },
   { to: '/schedule', label: 'Schedule Permissions', icon: 'Layers', group: 'ops' },
+  { to: '/access', label: 'App User Permissions', icon: 'Lock', group: 'ops' },
   { to: '/daysheet', label: 'Day Sheets', icon: 'Document', group: 'ops' },
   { to: '/ingest/flights', label: 'Import route & travel', icon: 'Plane', group: 'ingest' },
   { to: '/ingest/riders', label: 'Import rider', icon: 'Sparkle', group: 'ingest' },
@@ -121,7 +122,7 @@ export function Sidebar() {
               {groupLabels[groupKey]}
             </div>
             <ul className="space-y-0.5">
-              {nav.filter((n) => n.group === groupKey && (n.to !== '/schedule' || managerView)).map((entry) => {
+              {nav.filter((n) => n.group === groupKey && ((n.to !== '/schedule' && n.to !== '/access') || managerView)).map((entry) => {
                 const I = Icon[entry.icon];
                 const dot =
                   entry.to === '/ingest/flights'

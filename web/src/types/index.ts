@@ -721,3 +721,51 @@ export interface CurrentUser {
   groupId: ID;
   tagIds: ID[];
 }
+
+// ─── Auth / membership (Supabase backend) ────────────────────────────────────
+
+export type MemberRole = 'owner' | 'manager' | 'production' | 'crew' | 'viewer';
+
+export type MembershipStatus = 'none' | 'pending' | 'active';
+
+export interface Membership {
+  uid: string;
+  tourId: ID;
+  email: string;
+  role: MemberRole;
+  status: 'pending' | 'active' | 'revoked';
+  tourPersonId: ID;
+  displayName: string;
+  groupId: ID;
+  tagIds: ID[];
+  requestedGroupId?: ID;
+  nudgedAt?: ISODateTime;
+  joinedAt: ISODateTime;
+}
+
+/** A group as exposed to a pending user by the list_active_tour_groups RPC. */
+export interface TourGroupSummary {
+  id: ID;
+  name: string;
+  color: string;
+}
+
+export interface UserProfile {
+  uid: string;
+  email?: string;
+  displayName: string;
+  photoURL?: string;
+  defaultTourId?: ID;
+}
+
+export interface Invite {
+  id: ID;
+  tourId: ID;
+  email: string;
+  role: MemberRole;
+  groupId: ID;
+  tagIds: ID[];
+  invitedBy: string;
+  status: 'pending' | 'accepted' | 'revoked';
+  createdAt: ISODateTime;
+}

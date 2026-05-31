@@ -210,4 +210,10 @@ export const Icon = {
       <path d="M5 4l6 3" />
     </S>
   ),
+  Logout: (p: IconProps) => (
+    <S {...p}>
+      <path d="M6 2.5H3.5A1.5 1.5 0 0 0 2 4v8a1.5 1.5 0 0 0 1.5 1.5H6" />
+      <path d="M10.5 11l3-3-3-3M13.5 8H6" />
+    </S>
+  ),
 };

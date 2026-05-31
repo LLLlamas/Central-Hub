@@ -6,9 +6,22 @@ import { BottomNav } from './BottomNav';
 import { ScratchBanner } from './ScratchBanner';
 import { TourProvider } from '@/components/tour/TourProvider';
 import { CoachMark } from '@/components/tour/CoachMark';
+import { useApp } from '@/state/AppState';
 
 export function Layout() {
   const loc = useLocation();
+  const { booting } = useApp();
+  if (booting) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--color-paper)]">
+        <div
+          className="w-6 h-6 rounded-full border-2 border-[var(--color-rule)] border-t-[var(--color-ink)] animate-spin"
+          role="status"
+          aria-label="Loading your tour"
+        />
+      </div>
+    );
+  }
   return (
     <CommandPaletteProvider>
       <TourProvider>

@@ -69,7 +69,9 @@ export function DayDetail() {
   const items = managerView ? allItems : allItems.filter((it) => resolveVisibility(it.visibility, user) !== 'blocked');
   const travel = getTravelForDay(day.id);
   const hotels = getHotelsForDay(day.id);
-  const tasks = getTasksForDay(day.id);
+  const tasks = getTasksForDay(day.id).filter(
+    (t) => managerView || resolveVisibility(t.visibility, user) !== 'blocked',
+  );
   const venue = getMockVenue(day.venueId);
 
   return (

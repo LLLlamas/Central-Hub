@@ -35,16 +35,18 @@ export const SCHEDULE_TYPE_OWNER: Record<ScheduleItemType, string> = {
 };
 
 /**
- * The seed Visibility for an item of this type — everyone is **blocked** by
- * default; only Management and Production start with `owns`. The TM is
- * expected to open the type-defaults editor and grant visibility outward
- * (audio for soundcheck, artist for set, etc.), then **Sync to all** to push
- * the template down. Sensitive items still get manually flagged via
- * `ScheduleItem.sensitive`, which the resolver / UI handle separately.
+ * The seed Visibility for an item of this type. NEAR-TERM POLICY: every active
+ * member can **see** the schedule (and thus Calendar / Today / Day Sheets);
+ * only Management + Production **own** it (the only editors). So `default: 'sees'`
+ * with mgmt/production `owns`. The TM can still lock specific types/items down
+ * later via the type-defaults editor (`default: 'blocked'`) — the resolver +
+ * per-item overrides are unchanged; this just flips the starting point from
+ * "hidden until granted" to "visible, manager-editable". Sensitive items are
+ * still flagged via `ScheduleItem.sensitive`.
  */
 export function defaultVisibilityForType(_type: ScheduleItemType): Visibility {
   return {
-    default: 'blocked',
+    default: 'sees',
     groups: {
       grp_mgmt: 'owns',
       grp_production: 'owns',

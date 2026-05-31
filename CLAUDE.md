@@ -4,7 +4,7 @@ Operational notes for Claude sessions working on this repo. README.md is the hum
 
 ## What this is
 
-A prototype tour-ops hub for one tour manager (not the industry). React + Vite + TypeScript + Tailwind v4 frontend in `web/`. **No backend yet — everything is mocked.**
+A prototype tour-ops hub for one tour manager (not the industry). React + Vite + TypeScript + Tailwind v4 frontend in `web/`. **Default backend is `local`** (localStorage + IndexedDB, no login — everything mocked). A Phase-A **Supabase** backend (auth + single-user cloud sync) is implemented behind `VITE_BACKEND=supabase` — see "Backend seam" below.
 
 ## Current focus — the Start-From-Scratch experience
 
@@ -25,6 +25,7 @@ Source-of-truth docs in repo root:
 - `redesign-plan.md` — active plan for the clarity + mobile redesign (read before UI work)
 - `pdf-highlighter.md` — the in-app PDF viewer's design + the (unbuilt) text-highlighting plan
 - `PDF-Parser-In-House.md` — design notes for the in-house pdfjs-based parser (`lib/pdfParser.ts`)
+- `supabase-implementation-spec.md` — single source-of-truth for the backend + deployment: the **Supabase** (Postgres + Auth + Storage + Realtime + RLS) multi-user, live-updating, RLS-enforced-privacy build sheet. Read with `users-in-prod.md` (architecture rationale). (Firebase was evaluated then retired.)
 - `RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf` — canonical rider test fixture
 - `web/public/` holds the uploadable scratch fixtures: the rider PDF, the route CSV, the travel-agent grid CSV, two flight-confirmation PDFs, and **two per-hotel booking-confirmation PDFs (one per hotel)** — see "Flights & hotels: many docs in, one queue" below
 - `outdated/` (gitignored) — prototype-era artifacts moved out of the build: the old 32-day route CSV, the booking-agent deal memo, and the orphan AV flight PDF
@@ -315,6 +316,14 @@ and add a step to `scratchTourSteps.ts`. Keep step copy short and warm.
 
 ## Provenance system (load-bearing)
 
+> **Mock provenance flags were REMOVED app-wide.** `MockTag`, `MockBadge`, and
+> `DataSourcesPanel` now early-`return null` (call sites kept, zero layout risk,
+> reversible via git history) — there is no more grey "(mock)" text or
+> "where this data comes from" panel. The blue real-source **`SourceTag`** `(i)`
+> citation is **kept**. `data/sources.ts` stays (only the 3 null'd components
+> imported it). The text below describes the original paired system for context;
+> only the `SourceTag` half is live today.
+
 Two registries + two visual components, **always paired**:
 
 | Kind | Registry | Component | Visual | Click result |
@@ -343,7 +352,7 @@ Display rule: **don't show `§N` in the visible UI** (it's industry jargon). Use
 
 ABAC. Each schedule item / travel / hotel / task / doc carries a `Visibility` blob with `default + groups + tags + persons` overrides. **Most specific wins.** Levels: `blocked < sees < needs < owns`. The resolver lives in `lib/visibility.ts`.
 
-**Type defaults — locked by default** (`lib/visibilityDefaults.ts`): `SCHEDULE_TYPE_OWNER` maps each `ScheduleItemType` → its *suggested* owning group (`load_in/doors/curfew/load_out → grp_production`, `soundcheck → grp_audio`, `set/rehearsal → grp_artist`, `bus_call/lobby_call/meals/press/meet_greet → grp_mgmt`). This is a hint only — `defaultVisibilityForType` no longer reads it. The seed Visibility is `{ default: 'blocked', groups: { grp_mgmt: 'owns', grp_production: 'owns' } }` for every type: nobody outside Management/Production can see anything until the TM grants them explicitly. The owner group renders as a "Suggested owner" chip in the type-defaults editor so the TM knows who *would* normally edit each kind of item. **localStorage caveat:** an existing scratch tour has its `visibilityDefaultsByType` baked in at creation, so flipping `defaultVisibilityForType` only affects tours created after the change — Reset from the scratch banner to pick up the new locked-by-default seed.
+**Type defaults — everyone-sees, managers-edit (near-term policy)** (`lib/visibilityDefaults.ts`): the seed Visibility is `{ default: 'sees', groups: { grp_mgmt: 'owns', grp_production: 'owns' } }` for every type — **every active member can SEE the schedule** (so Calendar / Today / Day Sheets are populated for crew), and **only TM/PM `own` (edit)**. This is the current multi-user policy: members view, managers edit. (It replaced the earlier locked-by-default seed `{ default: 'blocked', … }`; the TM can still lock specific types/items back down to `blocked` via the type-defaults editor — the resolver + per-item overrides are unchanged, only the starting point flipped.) `SCHEDULE_TYPE_OWNER` maps each type → a *suggested* owning group, shown as a "Suggested owner" chip in the editor (a hint only — `defaultVisibilityForType` doesn't read it). **localStorage caveat:** an existing scratch/stored tour has its `visibilityDefaultsByType` baked in at creation, so changing `defaultVisibilityForType` only affects tours created after the change — Reset (or a fresh shared tour) picks up the new seed.
 
 **Schedule grouping — Save cascades by type.** On `/schedule`, a manager's Save does not edit just the selected item: `saveVisibilityForType(type, patch)` writes the same visibility into every existing schedule item of that type AND bumps `Tour.visibilityDefaultsByType[type]` so future items of the type inherit it. One save configures every `lobby_call` / `lunch` / `dinner` etc. The Save button label reflects the scope (`Save (× N)` when N > 1), and the eyebrow above the editor reads "Visibility is grouped by item type. Edit one … the same permissions apply to all N." Non-managers still propose per-item via `proposeVisibilityEdit` — only manager direct saves cascade. Per-item drift is not currently expressible from this surface; rare exceptions need an "override for this item only" escape hatch (not built). Sidebar visual cues: (a) the active row uses the ink-black background, OR a **dark forest green `#2d4a2a`** (via inline style — Tailwind's arbitrary-hex scanner skipped it) when the active row is also edited; (b) every other item with a saved visibility edit gets a **soft `#5a8a55/15` green tint** so the manager sees configured types at a glance; (c) every other item of the same type as the selected one gets a tan `paper-2/70` tint to preview the cascade scope. The bottom-right `PermissionsStatus` card tracks `configured / total` types — when not all done it lists remaining types with their item counts; clicking a type jumps the editor to its first item so the manager can configure-and-cascade with one Save. The item-header card above the visibility editor is a `<Link to="/daysheet/:date">` showing the eyebrow `{type} · {time} · {EEE MMM d}` with a "Day sheet ›" affordance — one click jumps to that day's day sheet. `Tour.visibilityDefaultsByType` holds the editable template (seeded by `buildScheduleTypeDefaults()` on a fresh scratch tour); `getScheduleTypeDefault` / `setScheduleTypeDefault` on `AppState` read/write it. `routeCsv.ts` uses the static defaults when seeding ScheduleItems from the route CSV. UI: "Defaults by type" button on `/schedule` opens `TypeDefaultsEditor` modal — pick a type on the left, edit its Visibility on the right; per-item edits still override. The modal also exposes **"Sync to all N existing items"** — pushes the edited template down into every existing schedule item of that type via the `applyTypeTemplateToAllItems(type)` mutator. It writes through the same `visibilityEdits` Map a manual edit would, so each affected item gets a history entry and the "live" effective visibility flips immediately. Future items still pick up the template at creation; existing items only sync on demand.
 
@@ -353,7 +362,7 @@ The TopBar viewer switcher (Tour Manager / Manuel / Audio / Elsa / Julian / MUA)
 
 ## State (AppState)
 
-Lives in React Context (`state/AppState.tsx`). The single provider is mounted **in `main.tsx`** so it wraps both `Layout` and `PrintLayout` — that's why locking a day in `/daysheet` updates `/print/daysheet` instantly.
+Lives in React Context (`state/AppState.tsx`). The single provider is mounted **in `main.tsx`** (inside `AuthProvider` → `AuthGate`) so it wraps both `Layout` and `PrintLayout` — that's why locking a day in `/daysheet` updates `/print/daysheet` instantly.
 
 Currently exposes:
 - `tour`, `user`, `userKey`, `setUserKey`, `allUsers` — `tour` is the build-from-scratch tour (restored from localStorage, or a fresh shell); `allUsers` is derived from the tour's personnel. `userKey` is a plain `string` (scratch keys aren't compile-time known)
@@ -368,6 +377,84 @@ Currently exposes:
 - `getSectionEdit(key)` / `updateSectionEdit(key, patch)` — inline corrections (`RiderSectionEdit`) layered over the AI extraction
 
 When backend lands, replace with TanStack Query + Zustand or similar; the context shape is intentionally stable so callers don't have to change.
+
+## Backend seam (auth + cloud sync)
+
+All persistence routes through one interface, `lib/backend/types.ts` → `Backend`
+(`subscribeTour`/`saveTour`/`loadOverlays`/`saveOverlays`/`loadPdf`/`savePdf`/
+`deletePdf`/`clearAll`, plus optional **membership** methods — see below).
+`lib/backend/index.ts` selects the impl from `VITE_BACKEND` (default **`local`**):
+`local.ts` wraps today's localStorage + IndexedDB modules verbatim; `supabase.ts`
+persists the **shared** `Tour` + shared overlays as JSONB rows (`tours`/`overlays`)
+and PDF bytes to the `tour-pdfs` Storage bucket. **Storage is now tour-scoped:**
+path `{tourId}/{scope}/{id}.pdf` (`scope = rider|doc`) so shared-tour crew can open
+the TM's rider PDF — the supabase backend caches the active tour id from
+`subscribeTour` and threads it into `savePdf/loadPdf`. See
+`supabase-implementation-spec.md` + `supabase/schema.sql` + the membership
+migration `supabase/migrations/0002_members.sql`. **The `local` path is
+byte-for-byte unchanged** — every supabase behavior is gated on
+`BACKEND_KIND === 'supabase'`, and the Supabase SDK only loads via dynamic import.
+
+### Shared tour + role-gated membership (`tour_members`)
+
+The supabase model is **one shared tour per tour**, set up by the TM/PM, that crew
+join and view filtered to their role. Implemented in `0002_members.sql`:
+- **`tour_members`** (PK `(tour_id, email)`) carries `role`, `status`
+  (`pending|active|revoked`), `group_id`, `tour_person_id`, `requested_group_id`,
+  `nudged_at`. **Email-seedable**: a manager grants access by email before the
+  person ever logs in. Helpers `is_active_member(tour_id)` / `is_manager(tour_id)`
+  back every RLS policy. `tours`/`overlays` RLS = active members read, managers write.
+- **Bootstrap by email, no Edge Function:** pre-seed `tour_members` rows (TM/PM,
+  status active) via the SQL at the bottom of `0002_members.sql`. On login the
+  `SECURITY DEFINER` RPC `claim_membership()` links `user_id = auth.uid()` to the
+  row matching `auth.email()` (idempotent; links **only the caller's own** email).
+  `list_active_tour_groups()` (SECURITY DEFINER, callable by pending users) feeds
+  the Waiting screen's group dropdown without exposing the rest of the tour.
+- **Auth flow:** `AuthProvider` resolves `membership` + `membershipStatus`
+  (`none|pending|active`) after sign-in (claim → getMyMembership). `AuthGate` →
+  app when `active`; `WaitingForAccess` (group-guess dropdown + Nudge) when
+  `none|pending`. `local` reports a synthetic **active TM** membership, so the gate
+  is always open and behavior is unchanged.
+- **CurrentUser from membership (supabase):** managers may preview-as via the
+  TopBar switcher (like local); **non-managers are pinned** to their membership
+  identity (switcher hidden). `AppState` derives this; `isManagerMember` (reuses
+  `isOwnerFloorRole` from `lib/access.ts`) also gates the shared tour/overlay
+  *writes* so non-managers never attempt a manager-only write.
+- **Permissions UI:** `/access` → `AppUserPermissions` (manager-only): roster of
+  active+pending+revoked, **assign role+group** (creates a linked `TourPerson` via
+  `addTourPerson` if the membership has none — the people↔group↔role↔calendar join),
+  **add by email**, **revoke** (status→revoked). **TM/PM cannot be revoked** — the UI
+  hides the control AND a DB trigger (`trg_protect_owner_roles`) rejects revoking/
+  deleting any owner-floor role. Personnel's edit modal has a manager-only "Remove
+  from tour" (`removeTourPerson`); auth revoke lives on `/access`.
+- **Overlays are tour-shared** (manager-authored, identical for everyone); only the
+  per-user viewer choice (`userKey`) stays client-side and is stripped before the
+  shared overlay write.
+
+**⚠️ Client-side privacy caveat (accepted this milestone):** privacy *between active
+members* is **UI-only** — the full Tour JSONB reaches every active member's browser
+and `lib/visibility.ts` hides parts in the UI, so a determined member could read
+hidden fields via devtools. Safe for a **trusted-crew demo**. Before untrusted
+members, do the Phase B per-row `readable_by` RLS decomposition already drafted in
+`supabase/migrations/0001_init.sql`.
+
+- **AppState wiring:** boot/persist effects route through `backend`. On `local`,
+  the synchronous `useState` initializers read localStorage as before. On
+  `supabase`, the tour starts as a fresh `createScratchTour()` shell with
+  `booting = true`; a cloud-boot effect waits for sign-in, `subscribeTour`s, and
+  either `setTour(cloudTour)` + `loadOverlays` or seeds + saves a fresh tour,
+  then clears `booting`. Supabase tour/overlay writes are debounced ~500ms.
+  `booting` is exposed on `useApp()`; `Layout` shows a spinner until it clears.
+  `resetScratchTour` calls `backend.clearAll` on supabase.
+- **Auth:** `AuthProvider` (mounted above `AppStateProvider` in `main.tsx`) is a
+  synthetic no-op "Tour Manager" on `local`; on `supabase` it subscribes to
+  Supabase auth (`lib/supabase/auth.ts` — Google OAuth + email magic-link).
+  `AuthGate` (between them) gates only on `supabase`: spinner while `loading` (or
+  membership resolving), `LoginScreen` when `signed-out`, `WaitingForAccess` when
+  signed-in without an active membership, app when `membershipStatus === 'active'`.
+  `local` is never gated. `TopBar` shows the signed-in email + sign-out only on
+  `supabase`; the viewer/role-switcher shows for **managers** (preview-as) and is
+  hidden/pinned for non-managers.
 
 ## Routing
 

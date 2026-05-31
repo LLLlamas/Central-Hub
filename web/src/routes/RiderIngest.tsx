@@ -24,7 +24,7 @@ import { RIDER_PDF_PATH } from '@/lib/riderSections';
 import { matchFixture } from '@/lib/fixtureMatcher';
 import { buildScratchRiderImport, buildScratchRiderPersonnel, hydrateRiderPlotImages } from '@/data/riderFixture';
 import { parseRiderPdf } from '@/lib/pdfParser';
-import { saveRiderPdf } from '@/lib/riderPdfStore';
+import { backend } from '@/lib/backend';
 import { cn } from '@/lib/cn';
 import type {
   RiderImport,
@@ -2246,7 +2246,7 @@ function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
       // Persist the raw bytes so a refresh can rehydrate the Blob URL — the
       // parser already detached its copy into the worker, so re-read from the
       // File (multiple reads are allowed).
-      await saveRiderPdf(parsed.id, await file.arrayBuffer());
+      await backend.savePdf('rider', parsed.id, await file.arrayBuffer());
       addRiderImportToScratch(parsed, buildScratchRiderPersonnel());
       onDone?.();
     } catch (err) {
@@ -2264,7 +2264,7 @@ function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
           const resp = await fetch(RIDER_PDF_PATH);
           if (resp.ok) {
             const bytes = await resp.arrayBuffer();
-            await saveRiderPdf(fixtureImport.id, bytes);
+            await backend.savePdf('rider', fixtureImport.id, bytes);
             blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
           }
         } catch (fetchErr) {

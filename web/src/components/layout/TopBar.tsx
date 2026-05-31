@@ -1,15 +1,23 @@
 import { useState } from 'react';
 import { useApp } from '@/state/AppState';
+import { useAuth } from '@/state/AuthProvider';
 import { useCommandPalette } from '@/components/CommandPalette';
 import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
+import { BACKEND_KIND } from '@/lib/backend';
 
 export function TopBar() {
   const { user, userKey, setUserKey, allUsers, tour } = useApp();
+  const auth = useAuth();
   const [open, setOpen] = useState(false);
   const palette = useCommandPalette();
   const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+  const showAccount = BACKEND_KIND === 'supabase';
+  // Managers preview-as via the switcher; non-managers are pinned to their own
+  // identity (no switcher). On `local` the viewer is the TM → switcher shows,
+  // exactly as before.
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
 
   return (
     <header className="sticky top-0 z-30 bg-[var(--color-paper)]/95 backdrop-blur border-b border-[var(--color-rule)]">
@@ -38,9 +46,10 @@ export function TopBar() {
             <button
               type="button"
               data-tour="viewer-switcher"
-              onClick={() => setOpen((v) => !v)}
-              className="flex items-center gap-2.5 h-11 md:h-9 pl-1.5 pr-2.5 rounded-[4px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] transition-colors bg-[var(--color-card)]"
-              title="Switch viewer"
+              onClick={() => managerView && setOpen((v) => !v)}
+              className="flex items-center gap-2.5 h-11 md:h-9 pl-1.5 pr-2.5 rounded-[4px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] transition-colors bg-[var(--color-card)] disabled:cursor-default"
+              title={managerView ? 'Switch viewer' : undefined}
+              disabled={!managerView}
             >
               <span
                 className="inline-flex items-center justify-center w-7 h-7 md:w-6 md:h-6 rounded-full text-[10px] font-mono font-bold text-[var(--color-paper)]"
@@ -52,10 +61,10 @@ export function TopBar() {
                 <div className="text-[12px] font-semibold text-[var(--color-ink)]">{user.name}</div>
                 <div className="text-[10.5px] text-[var(--color-ink-3)]">{user.role}</div>
               </div>
-              <Icon.ChevronDown size={14} className="text-[var(--color-ink-4)]" />
+              {managerView && <Icon.ChevronDown size={14} className="text-[var(--color-ink-4)]" />}
             </button>
 
-            {open && (
+            {managerView && open && (
               <div className="absolute right-0 top-full mt-1.5 w-[min(280px,calc(100vw-1.5rem))] rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] shadow-lg overflow-hidden">
                 <div className="px-3 pt-3 pb-2 border-b border-[var(--color-rule-soft)]">
                   <div className="font-mono text-[10px] font-semibold tracking-[0.14em] uppercase text-[var(--color-ink-3)]">
@@ -98,6 +107,26 @@ export function TopBar() {
               </div>
             )}
           </div>
+
+          {showAccount && (
+            <div className="flex items-center gap-2 pl-2 ml-1 border-l border-[var(--color-rule-soft)]">
+              <span
+                className="hidden lg:block text-[11px] text-[var(--color-ink-3)] max-w-[160px] truncate"
+                title={auth.user?.email ?? auth.user?.displayName ?? undefined}
+              >
+                {auth.user?.displayName ?? auth.user?.email}
+              </span>
+              <button
+                type="button"
+                onClick={() => void auth.signOut()}
+                className="inline-flex items-center justify-center h-9 w-9 md:h-8 md:w-8 rounded-[4px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] transition-colors bg-[var(--color-card)] text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <Icon.Logout size={15} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

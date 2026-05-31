@@ -124,7 +124,7 @@ function ItemModal({ item, onSave, onClose }: ItemModalProps) {
   const labelCls = 'block text-[11px] font-semibold text-[var(--color-ink-3)] mb-1';
 
   return (
-    <Modal title={isNew ? 'Add item' : 'Edit item'} size="md" onClose={onClose}>
+    <Modal open title={isNew ? 'Add item' : 'Edit item'} size="md" onClose={onClose}>
       <div className="space-y-3 p-1">
         <div>
           <label className={labelCls}>Item name *</label>
@@ -192,7 +192,7 @@ function ItemModal({ item, onSave, onClose }: ItemModalProps) {
 
 function DeleteModal({ item, onConfirm, onClose }: { item: GearItem; onConfirm: () => void; onClose: () => void }) {
   return (
-    <Modal title="Remove item?" size="sm" onClose={onClose}>
+    <Modal open title="Remove item?" size="sm" onClose={onClose}>
       <p className="text-[13px] text-[var(--color-ink-2)] mb-4">
         Remove <strong>{item.name}</strong> from the gear list? This cannot be undone.
       </p>

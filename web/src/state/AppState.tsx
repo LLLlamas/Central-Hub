@@ -1,10 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createScratchTour, scratchUsers, scratchDefaultUserKey } from '@/data/scratchTour';
-import { loadScratchTour, saveScratchTour } from '@/lib/scratchStorage';
-import { loadOverlays, saveOverlays, clearOverlays } from '@/lib/overlayStorage';
-import { clearAllRiderPdfs, deleteRiderPdf, loadRiderPdf } from '@/lib/riderPdfStore';
+import { loadScratchTour } from '@/lib/scratchStorage';
+import { loadOverlays, clearOverlays, type OverlayBundle } from '@/lib/overlayStorage';
+import { clearAllRiderPdfs } from '@/lib/riderPdfStore';
 import { clearAllDocuments } from '@/lib/documentStore';
+import { backend, BACKEND_KIND } from '@/lib/backend';
+import { useAuth } from '@/state/AuthProvider';
+import { isOwnerFloorRole } from '@/lib/access';
 import * as tourQueries from '@/lib/tourQueries';
 import type { ParsedRoute } from '@/lib/routeCsv';
 import { vis } from '@/lib/visibility';
@@ -75,6 +78,9 @@ export interface PendingConflictResolution {
 
 interface AppState {
   tour: Tour;
+  // True only on the supabase backend while the cloud tour is loading; always
+  // false on local. A render gate (AuthGate) shows a spinner until it clears.
+  booting: boolean;
   user: CurrentUser;
   userKey: string;
   setUserKey: (k: string) => void;
@@ -257,6 +263,9 @@ export interface TourPersonPatch {
 
 const Ctx = createContext<AppState | null>(null);
 
+// On the supabase backend, coalesce rapid tour/overlay edits into one DB write.
+const SUPABASE_WRITE_DEBOUNCE_MS = 500;
+
 // Stamp used when the rider import seeds approvals for sections the rider
 // marks already-approved — dated to when the PM reviewed revision 2.
 const SEED_SECTION_APPROVAL: UpdateStamp = { at: '2025-09-11T10:00', by: 'Manuel González' };
@@ -360,15 +369,31 @@ function computeScheduleItemChanges(before: ScheduleItem, patch: ScheduleItemPat
 }
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
-  // Read persisted scratch state once, lazily. Scratch is the default mode, so
-  // a scratch shell is created up front when none was restored.
-  // The tour is restored from localStorage, or a fresh empty shell when none
-  // was stored — the build-from-scratch onboarding starts from the shell.
-  const [tour, setTour] = useState<Tour>(() => loadScratchTour() ?? createScratchTour());
+  const auth = useAuth();
+  const isSupabase = BACKEND_KIND === 'supabase';
+
+  // Whether the signed-in user is a manager (owner/manager/production). On
+  // `local` membership is the synthetic active TM, so this is always true and
+  // every manager-gated path stays byte-identical to today.
+  const membership = auth.membership;
+  const isManagerMember = !membership || isOwnerFloorRole(membership.role);
+
+  // On `local`: read persisted scratch state once, synchronously — behavior is
+  // unchanged. On `supabase`: start from a fresh shell + `booting` flag and let
+  // the cloud-boot effect below pull the real tour/overlays from the backend
+  // once auth is signed-in. The synchronous local reads return null on
+  // supabase (no localStorage), so the shell is the harmless starting point.
+  const [tour, setTour] = useState<Tour>(() =>
+    isSupabase ? createScratchTour() : loadScratchTour() ?? createScratchTour(),
+  );
+  const [booting, setBooting] = useState<boolean>(isSupabase);
   // Restore the overlay bundle (visibility edits, lock state, section
   // approvals / history, conflict resolutions, viewer choice). One read,
   // distributed into each state slot below.
-  const initialOverlays = useMemo(() => loadOverlays(), []);
+  const initialOverlays = useMemo(() => (isSupabase ? null : loadOverlays()), [isSupabase]);
+  // Debounce timers for supabase writes (no-op on local).
+  const tourSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overlaySaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [userKey, setUserKey] = useState<string>(
     () => initialOverlays?.userKey ?? scratchDefaultUserKey(tour),
   );
@@ -418,10 +443,25 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     () => initialOverlays?.gearItems ?? [],
   );
 
-  // Persist the tour so a reload resumes where the user left off.
+  // Persist the tour so a reload resumes where the user left off. On `local`
+  // this is the synchronous localStorage write as before; on `supabase` writes
+  // are debounced (see the debounce ref below) to avoid a DB round-trip on
+  // every keystroke. While booting on supabase we skip writes so the cloud
+  // tour isn't clobbered by the initial shell.
   useEffect(() => {
-    saveScratchTour(tour);
-  }, [tour]);
+    if (booting) return;
+    if (!isSupabase) {
+      void backend.saveTour(tour);
+      return;
+    }
+    // The shared tour is manager-writable only (RLS-enforced). Non-managers
+    // read it live via the realtime subscription and never write it back.
+    if (!isManagerMember) return;
+    if (tourSaveTimer.current) clearTimeout(tourSaveTimer.current);
+    tourSaveTimer.current = setTimeout(() => {
+      void backend.saveTour(tour);
+    }, SUPABASE_WRITE_DEBOUNCE_MS);
+  }, [tour, booting, isSupabase, isManagerMember]);
 
   // Rehydrate every rider PDF's Blob URL after a reload. `scratchStorage` strips
   // `pdfObjectUrl` on save; the raw bytes live in IndexedDB keyed by import id.
@@ -436,7 +476,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     Promise.all(
       needsUrl.map(async (ri) => {
-        const bytes = await loadRiderPdf(ri.id);
+        const bytes = await backend.loadPdf('rider', ri.id);
         if (cancelled || !bytes) return null;
         const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
         return { id: ri.id, url };
@@ -506,10 +546,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tour.riderImports[0]?.id]);
 
-  // Persist the overlay bundle — every Map/Set above. Each write replaces the
-  // whole bundle (small payload — entry arrays of typed records).
-  useEffect(() => {
-    saveOverlays({
+  // The overlay bundle — every Map/Set above serialised to entry arrays.
+  const overlayBundle = useMemo<OverlayBundle>(
+    () => ({
       lockedDays: [...lockedDays],
       resolvedConflicts: [...resolvedConflicts.entries()],
       dayUpdates: [...dayUpdates.entries()],
@@ -526,37 +565,156 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       flightPassengerResolutions: [...flightPassengerResolutions.entries()],
       gearItems,
       userKey,
+    }),
+    [
+      lockedDays,
+      resolvedConflicts,
+      dayUpdates,
+      sectionApprovals,
+      sectionEdits,
+      pendingEdits,
+      pendingConflictResolutions,
+      sectionEditHistory,
+      dayLockHistory,
+      visibilityEdits,
+      pendingVisibilityEdits,
+      visibilityEditHistory,
+      scheduleItemEditHistory,
+      flightPassengerResolutions,
+      gearItems,
+      userKey,
+    ],
+  );
+
+  // Distribute a restored overlay bundle into every state slot. Used by the
+  // supabase cloud-boot effect; `local` distributes via the synchronous
+  // initializers above instead.
+  const distributeOverlays = useCallback((b: OverlayBundle | null) => {
+    if (!b) return;
+    setLockedDays(new Set(b.lockedDays ?? []));
+    setResolvedConflicts(new Map(b.resolvedConflicts ?? []));
+    setDayUpdates(new Map(b.dayUpdates ?? []));
+    setSectionApprovals(new Map(b.sectionApprovals ?? []));
+    setSectionEdits(new Map(b.sectionEdits ?? []));
+    setPendingEdits(new Map(b.pendingEdits ?? []));
+    setPendingConflictResolutions(new Map(b.pendingConflictResolutions ?? []));
+    setSectionEditHistory(new Map(b.sectionEditHistory ?? []));
+    setDayLockHistory(new Map(b.dayLockHistory ?? []));
+    setVisibilityEdits(new Map(b.visibilityEdits ?? []));
+    setPendingVisibilityEdits(new Map(b.pendingVisibilityEdits ?? []));
+    setVisibilityEditHistory(new Map(b.visibilityEditHistory ?? []));
+    setScheduleItemEditHistory(new Map(b.scheduleItemEditHistory ?? []));
+    setFlightPassengerResolutionsMap(new Map(b.flightPassengerResolutions ?? []));
+    if (b.gearItems) setGearItems(b.gearItems);
+    if (b.userKey) setUserKey(b.userKey);
+  }, []);
+
+  // Persist the overlay bundle. `local` writes synchronously to localStorage
+  // (unchanged); `supabase` debounces a JSONB upsert. Skipped while booting so
+  // the initial empty bundle doesn't clobber the cloud overlays.
+  useEffect(() => {
+    if (booting) return;
+    if (!isSupabase) {
+      void backend.saveOverlays(tour.id, overlayBundle);
+      return;
+    }
+    // Overlays are tour-shared + manager-authored on supabase. Non-managers
+    // never write them (RLS would reject anyway) — skip to avoid noisy failed
+    // round-trips. Their userKey choice is the only per-user state, and that
+    // isn't persisted server-side (stripped in saveOverlays).
+    if (!isManagerMember) return;
+    if (overlaySaveTimer.current) clearTimeout(overlaySaveTimer.current);
+    overlaySaveTimer.current = setTimeout(() => {
+      void backend.saveOverlays(tour.id, overlayBundle);
+    }, SUPABASE_WRITE_DEBOUNCE_MS);
+  }, [overlayBundle, booting, isSupabase, isManagerMember, tour.id]);
+
+  // Cloud boot (supabase only): wait for sign-in, pull the tour + overlays from
+  // the backend, seed a fresh scratch tour on first use, then clear `booting`.
+  useEffect(() => {
+    if (!isSupabase) return;
+    if (auth.status !== 'signed-in') return;
+    let cancelled = false;
+    // First-emission guard: load overlays / seed exactly once. Later emissions
+    // are realtime tour updates and only refresh `tour`.
+    let firstHandled = false;
+    const unsub = backend.subscribeTour(null, (cloudTour) => {
+      if (cancelled) return;
+      if (cloudTour) {
+        setTour(cloudTour);
+        if (!firstHandled) {
+          firstHandled = true;
+          void backend.loadOverlays(cloudTour.id).then((b) => {
+            if (!cancelled) distributeOverlays(b);
+          });
+          setBooting(false);
+        }
+        return;
+      }
+      // No tour yet — the bootstrap manager creates + persists the shared shell
+      // once. Use the membership's tour_id so the row matches what is_manager()
+      // checks against (and so crew joining the same tour load the same row).
+      // Falls back to a per-user id if no membership tour is known.
+      if (!firstHandled) {
+        firstHandled = true;
+        const fresh = createScratchTour();
+        const tid = auth.membership?.tourId || (auth.user?.uid ? `tour_${auth.user.uid}` : fresh.id);
+        fresh.id = tid;
+        setTour(fresh);
+        setUserKey(scratchDefaultUserKey(fresh));
+        void backend.saveTour(fresh);
+        setBooting(false);
+      }
     });
-  }, [
-    lockedDays,
-    resolvedConflicts,
-    dayUpdates,
-    sectionApprovals,
-    sectionEdits,
-    pendingEdits,
-    pendingConflictResolutions,
-    sectionEditHistory,
-    dayLockHistory,
-    visibilityEdits,
-    pendingVisibilityEdits,
-    visibilityEditHistory,
-    scheduleItemEditHistory,
-    flightPassengerResolutions,
-    gearItems,
-    userKey,
-  ]);
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSupabase, auth.status]);
 
   // Viewer-switcher options — derived from the tour's own personnel, so the
   // list grows as imports add crew.
   const allUsers = useMemo<Record<string, CurrentUser>>(() => scratchUsers(tour), [tour]);
-  const user = allUsers[userKey] ?? Object.values(allUsers)[0];
+
+  // On supabase, the viewer is anchored to the signed-in user's membership:
+  // managers may preview-as anyone (the TopBar switcher stays live, exactly
+  // like local); non-managers are PINNED to their own identity (the switcher is
+  // hidden for them — see TopBar). On `local`, membership is the synthetic
+  // active TM (a manager), so this is a no-op and behavior is byte-identical.
+  const membershipUser = useMemo<CurrentUser | null>(() => {
+    if (!isSupabase || !membership) return null;
+    // Prefer the linked TourPerson if it exists in the roster; otherwise fall
+    // back to the membership's own fields so a not-yet-linked crew member still
+    // resolves a sensible identity.
+    const linked = membership.tourPersonId ? allUsers[membership.tourPersonId] : undefined;
+    return (
+      linked ?? {
+        tourPersonId: membership.tourPersonId || `member_${membership.uid}`,
+        name: membership.displayName,
+        role: membership.role,
+        groupId: membership.groupId || 'grp_mgmt',
+        tagIds: membership.tagIds,
+      }
+    );
+  }, [isSupabase, membership, allUsers]);
+
+  // Effective viewer: a non-manager on supabase is pinned to their membership
+  // identity regardless of userKey; everyone else uses the userKey selection.
+  const user =
+    isSupabase && membershipUser && !isManagerMember
+      ? membershipUser
+      : allUsers[userKey] ?? Object.values(allUsers)[0];
   const currentName = user.name;
 
   // Reset wipes the tour back to the empty onboarding shell AND clears every
   // overlay (lock state, visibility edits, section approvals, history, …) so
   // the user truly starts from scratch.
   const resetScratchTour = useCallback(() => {
+    const prevTourId = tour.id;
     const t = createScratchTour();
+    // Keep the per-user tour id on supabase so reset re-seeds the same row.
+    if (isSupabase) t.id = prevTourId;
     setTour(t);
     setUserKey(scratchDefaultUserKey(t));
     setLockedDays(new Set());
@@ -574,10 +732,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setScheduleItemEditHistory(new Map());
     setFlightPassengerResolutionsMap(new Map());
     setGearItems([]);
-    clearOverlays();
-    void clearAllRiderPdfs();
-    void clearAllDocuments();
-  }, []);
+    if (isSupabase) {
+      // Wipe the cloud tour + overlays + PDFs, then re-seed the fresh shell.
+      void backend.clearAll(prevTourId).then(() => backend.saveTour(t));
+    } else {
+      clearOverlays();
+      void clearAllRiderPdfs();
+      void clearAllDocuments();
+    }
+  }, [tour.id, isSupabase]);
 
   // ---- Tour mutators -------------------------------------------------------
   const updateScratchTour = useCallback((updater: (t: Tour) => Tour) => {
@@ -831,7 +994,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         ...t,
         riderImports: t.riderImports.filter((r) => r.id !== id),
       }));
-      void deleteRiderPdf(id);
+      void backend.deletePdf('rider', id);
       // Clear gear items seeded from this rider so re-import gets a fresh list.
       setGearItems([]);
     },
@@ -1816,6 +1979,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppState>(
     () => ({
       tour,
+      booting,
       user,
       userKey,
       setUserKey,
@@ -1902,7 +2066,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       updateHotelCost,
       updateTravelCost,
     }),
-    [tour, user, userKey, allUsers, resetScratchTour, applyRouteToScratch, addRiderImportToScratch, setActiveRider, addFlightImportToScratch, commitFlightImportToScratch, editFlightImportPassenger, removeFlightImportPassenger, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory, addTourPerson, updateTourPerson, addGroup, gearItems, updateGearItem, addGearItem, deleteGearItem, updateHotelCost, updateTravelCost],
+    [tour, booting, user, userKey, allUsers, resetScratchTour, applyRouteToScratch, addRiderImportToScratch, setActiveRider, addFlightImportToScratch, commitFlightImportToScratch, editFlightImportPassenger, removeFlightImportPassenger, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory, addTourPerson, updateTourPerson, addGroup, gearItems, updateGearItem, addGearItem, deleteGearItem, updateHotelCost, updateTravelCost],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

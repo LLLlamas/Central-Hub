@@ -78,9 +78,6 @@ export function Personnel() {
         actions={
           managerView && (
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="md" leading={<Icon.Document size={14} />}>
-                Copy from prior tour
-              </Button>
               <Button variant="outline" size="md" leading={<Icon.Plus size={14} />}>
                 CSV import
               </Button>
@@ -379,7 +376,8 @@ function FieldLabel({ children }: { children: ReactNode }) {
 
 /** Add (member undefined) or edit a TourPerson. */
 function PersonModal({ member, onClose }: { member?: TourPerson; onClose: () => void }) {
-  const { tour, addTourPerson, updateTourPerson } = useApp();
+  const { tour, addTourPerson, updateTourPerson, removeTourPerson } = useApp();
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [name, setName] = useState(member?.person.name ?? '');
   const [role, setRole] = useState(member?.role ?? '');
   const [groupId, setGroupId] = useState(member?.groupId ?? tour.groups[0]?.id ?? '');
@@ -497,13 +495,47 @@ function PersonModal({ member, onClose }: { member?: TourPerson; onClose: () => 
             />
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={save} disabled={!canSave}>
-            {member ? 'Save' : 'Add person'}
-          </Button>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          {member ? (
+            confirmRemove ? (
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] text-[var(--color-accent)] font-semibold">Remove?</span>
+                <button
+                  onClick={() => {
+                    removeTourPerson(member.id);
+                    onClose();
+                  }}
+                  className="text-[12px] font-semibold text-[var(--color-accent)] hover:underline"
+                >
+                  Yes, remove
+                </button>
+                <button
+                  onClick={() => setConfirmRemove(false)}
+                  className="text-[12px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+                >
+                  Keep
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmRemove(true)}
+                className="text-[12px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-accent)]"
+                title="Remove from this tour. To revoke app sign-in access, use App User Permissions."
+              >
+                Remove from tour
+              </button>
+            )
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={save} disabled={!canSave}>
+              {member ? 'Save' : 'Add person'}
+            </Button>
+          </div>
         </div>
       </div>
     </Modal>
