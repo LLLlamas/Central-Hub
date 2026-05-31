@@ -184,7 +184,14 @@ function MemberTable({
   return (
     <Card padded={false}>
       <div className="px-5 py-3 border-b border-[var(--color-rule-soft)] eyebrow">{title}</div>
-      <table className="w-full text-[13px]">
+      <table className="w-full table-fixed text-[13px]">
+        <colgroup>
+          <col className="w-[38%]" />
+          <col className="w-[14%]" />
+          <col className="w-[16%]" />
+          <col className="w-[14%]" />
+          <col className="w-[18%]" />
+        </colgroup>
         <thead>
           <tr className="text-left text-[10.5px] font-mono uppercase tracking-[0.14em] text-[var(--color-ink-3)] border-b border-[var(--color-rule-soft)]">
             <th className="py-2 px-5">Email</th>
