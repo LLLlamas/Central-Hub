@@ -178,10 +178,7 @@ export function Sidebar() {
       </nav>
 
       <div className="px-5 py-4 border-t border-[var(--color-rule-soft)] text-[11px] text-[var(--color-ink-4)] leading-relaxed">
-        <div className="font-semibold text-[var(--color-ink-3)] mb-1">
-          Calm by default. Detail on demand.
-        </div>
-        Pro keeps every tool close; Simple tucks secondary panels away.
+        Calm by default. Detail on demand.
       </div>
     </aside>
   );

@@ -734,7 +734,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // hidden for them — see TopBar). On `local`, membership is the synthetic
   // active TM (a manager), so this is a no-op and behavior is byte-identical.
   const membershipUser = useMemo<CurrentUser | null>(() => {
-    if (!isSupabase || !membership) return null;
+    if (!isSupabase) return null;
+    if (!membership) {
+      // Migrations not yet run — synthesize from the signed-in Google user so
+      // the viewer chip shows the real name instead of the placeholder.
+      if (!auth.user) return null;
+      const fallback = Object.values(allUsers)[0];
+      if (!fallback) return null;
+      return { ...fallback, name: auth.user.displayName ?? auth.user.email ?? fallback.name };
+    }
     // Prefer the linked TourPerson if it exists in the roster; otherwise fall
     // back to the membership's own fields so a not-yet-linked crew member still
     // resolves a sensible identity.
@@ -748,14 +756,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         tagIds: membership.tagIds,
       }
     );
-  }, [isSupabase, membership, allUsers]);
+  }, [isSupabase, membership, allUsers, auth.user]);
 
   // Effective viewer: a non-manager on supabase is pinned to their membership
   // identity regardless of userKey; everyone else uses the userKey selection.
+  // For managers: overlay their real identity onto the TM chip when it's selected.
+  const _selected = allUsers[userKey] ?? Object.values(allUsers)[0];
   const user =
     isSupabase && membershipUser && !isManagerMember
       ? membershipUser
-      : allUsers[userKey] ?? Object.values(allUsers)[0];
+      : isSupabase && membershipUser && _selected?.tourPersonId === membershipUser.tourPersonId
+        ? membershipUser
+        : _selected;
   const currentName = user.name;
 
   // Reset wipes the tour back to the empty onboarding shell AND clears every

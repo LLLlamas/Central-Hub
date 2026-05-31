@@ -260,8 +260,8 @@ grant execute on function request_access(text)       to authenticated;
 --
 -- insert into tour_members (tour_id, email, role, status, group_id, display_name)
 -- values
---   ('REPLACE_WITH_TOUR_ID', 'tm@example.com', 'owner',      'active', 'grp_mgmt',       'Tour Manager'),
---   ('REPLACE_WITH_TOUR_ID', 'pm@example.com', 'production', 'active', 'grp_production', 'Production Manager')
+--   ('REPLACE_WITH_TOUR_ID', 'lorenzoleollamas@gmail.com', 'owner',      'active', 'grp_mgmt',       'Tour Manager'),
+--   ('REPLACE_WITH_TOUR_ID', 'magcs81@gmail.com',          'production', 'active', 'grp_production', 'Manuel González')
 -- on conflict (tour_id, email) do update
 --   set role = excluded.role, status = excluded.status,
 --       group_id = excluded.group_id, display_name = excluded.display_name;
