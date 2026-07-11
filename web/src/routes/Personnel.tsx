@@ -15,6 +15,10 @@ import { initials } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { TourPerson, Group } from '@/types';
 
+// Render fallback for a person whose group id no longer resolves — a missing
+// group must never white-screen the roster.
+const UNKNOWN_GROUP: Group = { id: 'grp_unknown', name: 'Unassigned', color: 'var(--color-ink-4)' };
+
 // Preset palette for new groups — picked to read well as the small dot/avatar
 // fills in the roster. Same family as the seeded group colors.
 const GROUP_COLORS = [
@@ -78,9 +82,6 @@ export function Personnel() {
         actions={
           managerView && (
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="md" leading={<Icon.Plus size={14} />}>
-                CSV import
-              </Button>
               <Button
                 variant="primary"
                 size="md"
@@ -167,7 +168,7 @@ export function Personnel() {
                 <PersonRow
                   key={m.id}
                   member={m}
-                  group={tour.groups.find((g) => g.id === m.groupId)!}
+                  group={tour.groups.find((g) => g.id === m.groupId) ?? UNKNOWN_GROUP}
                   tags={tour.groupTags.filter((t) => m.tagIds.includes(t.id))}
                   zebra={idx % 2 === 1}
                   onEdit={managerView ? () => setPersonModal({ id: m.id }) : undefined}
@@ -180,7 +181,7 @@ export function Personnel() {
               <PersonCardRow
                 key={m.id}
                 member={m}
-                group={tour.groups.find((g) => g.id === m.groupId)!}
+                group={tour.groups.find((g) => g.id === m.groupId) ?? UNKNOWN_GROUP}
                 tags={tour.groupTags.filter((t) => m.tagIds.includes(t.id))}
                 onEdit={managerView ? () => setPersonModal({ id: m.id }) : undefined}
               />
@@ -388,6 +389,15 @@ function PersonModal({ member, onClose }: { member?: TourPerson; onClose: () => 
   const groupTags = tour.groupTags.filter((t) => t.groupId === groupId);
   const canSave = name.trim().length > 0;
 
+  // The last person and the last manager can't be removed — the tour would be
+  // left with no viewer / no one able to manage it (AppState refuses too).
+  const isManagerGroup = (g: string) => g === 'grp_mgmt' || g === 'grp_production';
+  const canRemoveMember =
+    !!member &&
+    tour.personnel.length > 1 &&
+    (!isManagerGroup(member.groupId) ||
+      tour.personnel.some((tp) => tp.id !== member.id && isManagerGroup(tp.groupId)));
+
   const onChangeGroup = (gid: string) => {
     setGroupId(gid);
     // Tags belong to a group — drop any that aren't valid under the new one.
@@ -496,7 +506,7 @@ function PersonModal({ member, onClose }: { member?: TourPerson; onClose: () => 
           </div>
         </div>
         <div className="flex items-center justify-between gap-2 pt-1">
-          {member ? (
+          {member && canRemoveMember ? (
             confirmRemove ? (
               <div className="flex items-center gap-2">
                 <span className="text-[12px] text-[var(--color-accent)] font-semibold">Remove?</span>

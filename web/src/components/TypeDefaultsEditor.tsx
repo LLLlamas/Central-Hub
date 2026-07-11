@@ -39,8 +39,9 @@ export function TypeDefaultsEditor({ open, onClose }: { open: boolean; onClose: 
       <p className="text-[12.5px] text-[var(--color-ink-3)] leading-relaxed">
         Set the visibility once per item type. New schedule items pick up these defaults automatically.
         For items already on the calendar, use <em>Sync to all</em> to push the template down. Every
-        type starts locked — only Management and Production can see or edit. The chip on the right shows
-        the <em>suggested</em> owning group for each type; grant it explicitly when you want them to edit.
+        type starts visible to the whole crew, editable only by Management and Production. The chip on
+        the right shows the <em>suggested</em> owning group for each type; grant it explicitly when you
+        want them to edit.
       </p>
       <div className="mt-4 grid md:grid-cols-[220px_1fr] gap-4">
         <ul className="border border-[var(--color-rule-soft)] rounded-[3px] divide-y divide-[var(--color-rule-soft)] max-h-[440px] overflow-y-auto">

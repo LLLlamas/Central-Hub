@@ -1,6 +1,6 @@
 // Domain types for the tour-ops central hub.
-// Mirrors the data model in potential-implementation.md (sec. 2),
-// extended with rider-section payloads from handoff-post-pdf-interpret.md.
+// Mirrors the data model in docs/potential-implementation.md (sec. 2),
+// extended with rider-section payloads from docs/handoff-post-pdf-interpret.md.
 // Visibility is ABAC, not RBAC — see Visibility type below.
 
 // ============================================================
@@ -350,7 +350,7 @@ export interface FlightPassengerResolution {
 
 // ============================================================
 // AI Ingest — Riders
-// Canonical section types from handoff-post-pdf-interpret.md §1.
+// Canonical section types from docs/handoff-post-pdf-interpret.md §1.
 // ============================================================
 
 export type RiderSectionType =

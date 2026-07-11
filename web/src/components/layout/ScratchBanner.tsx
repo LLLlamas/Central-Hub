@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
-import { useTour } from '@/components/tour/TourProvider';
+import { useTour, resetWalkthroughSeen } from '@/components/tour/TourProvider';
 import { Icon } from '@/components/ui/Icon';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -79,8 +79,8 @@ export function ScratchBanner() {
         size="sm"
       >
         <p className="text-[12.5px] text-[var(--color-ink-3)] leading-relaxed">
-          This clears everything you've imported — route, rider, and flights — and
-          starts the scratch tour from an empty shell. This can't be undone.
+          This clears everything you've imported — route, rider, flights, and
+          hotels — and starts the tour from an empty shell. This can't be undone.
         </p>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={() => setConfirmReset(false)}>
@@ -91,6 +91,7 @@ export function ScratchBanner() {
             size="sm"
             onClick={() => {
               resetScratchTour();
+              resetWalkthroughSeen();
               setConfirmReset(false);
             }}
           >

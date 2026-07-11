@@ -22,7 +22,7 @@ import {
   MONTHS, SECTION_HINTS, COL_ALIAS, STAND_MAP, MONITOR_TYPE_MAP, ROOM_TYPE_MAP,
   groupRows, rowText, buildColMap, assignCols,
   multiPageItems, headingItems, pageText, pagesText,
-  parseDateToISO, avgHeight, personnelNameMap, colAliasLookup,
+  parseDateToISO, avgHeight, personnelNameMap, normalizeName, colAliasLookup,
   extractFlightTickets,
   parseTocEntries, findHeadingPages, isPlotPage, classifyTocTitle,
   extractPageText, findNextHeadingY, findHeadingY,
@@ -101,7 +101,19 @@ async function renderPagesToPng(
       canvas.height = Math.ceil(viewport.height);
       const ctx = canvas.getContext('2d');
       if (!ctx) continue;
-      await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      // Canvas rendering can stall indefinitely in restricted browser
+      // environments even when text extraction works. A hung render must
+      // never brick the whole import — time out, and if one page stalls,
+      // stop trying (the rest will stall too). Plots just stay imageless.
+      const renderTask = page.render({ canvasContext: ctx, viewport, canvas });
+      const timedOut = await Promise.race([
+        renderTask.promise.then(() => false),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 10_000)),
+      ]);
+      if (timedOut) {
+        try { renderTask.cancel(); } catch { /* ignore */ }
+        break;
+      }
       out.set(n, {
         page: n,
         dataUrl: canvas.toDataURL('image/png'),
@@ -540,7 +552,7 @@ function detectConflicts(data: Partial<RiderImport>): Conflict[] {
   // §11 air tickets vs §12 touring-party size is intentionally NOT a conflict:
   // a rider almost always has fewer flight tickets than touring-party members
   // (local hires don't fly). Cross-document checks (rider vs travel grid, etc.)
-  // are the right place for this — see redesign-plan.md "Cross-document conflicts".
+  // are the right place for this — see docs/redesign-plan.md "Cross-document conflicts".
 
   const inputSec = sections.find(s => s.type === 'input_list');
   for (const ch of inputSec?.inputList ?? []) {
@@ -954,7 +966,7 @@ export async function parseFlightPdf(file: File, personnel: TourPerson[] = []): 
 
   const byName = personnelNameMap(personnel);
   const matchedPassengers = parsed.passengers.map(p => ({
-    ...p, matchedTourPersonId: byName.get(p.name.trim().toLowerCase()),
+    ...p, matchedTourPersonId: byName.get(normalizeName(p.name)),
   }));
 
   return {
@@ -987,6 +999,7 @@ export async function parseHotelPdf(
   };
 
   const hotels: Hotel[] = [];
+  const tasks: Task[] = [];
   let i = 0;
 
   while (i < rows.length) {
@@ -1027,7 +1040,7 @@ export async function parseHotelPdf(
       if (guest && /[A-Za-z]{2}/.test(guest)) {
         const parts = room.split(/\s*—\s*/);
         occupants.push({
-          tourPersonId: byName.get(guest.trim().toLowerCase()) ?? `tp_unknown_${guest.replace(/\s+/g, '_').toLowerCase()}`,
+          tourPersonId: byName.get(normalizeName(guest)) ?? `tp_unknown_${guest.replace(/\s+/g, '_').toLowerCase()}`,
           roomNumber: parts[0]?.trim(),
           roomType: parts[1]?.trim(),
         });
@@ -1035,15 +1048,47 @@ export async function parseHotelPdf(
       i++;
     }
 
+    // Deterministic ids: re-uploading the same booking must replace, not
+    // duplicate, the hotel and its tasks (AppState dedupes by id).
+    const hotelSlug = hotelName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    const resolvedDayId = dayId ?? tourDays[0]?.id ?? 'day_unknown';
     hotels.push({
-      id: `h_parsed_${hotels.length + 1}_${Date.now()}`,
-      dayId: dayId ?? tourDays[0]?.id ?? 'day_unknown',
+      id: `h_parsed_${hotelSlug}_${resolvedDayId}`,
+      dayId: resolvedDayId,
       name: hotelName, address, phone,
       checkIn, checkOut, nights, occupants,
       sensitive: false,
       visibility: vis.everyone('sees'),
     });
+
+    // Hotel-advance tasks, mirroring the fixture path so the Day Sheet's Tasks
+    // panel fills in on the live-parser path too.
+    if (resolvedDayId !== 'day_unknown') {
+      tasks.push({
+        id: `tk_hotel_rooming_${hotelSlug}`,
+        dayId: resolvedDayId,
+        title: `Send the final rooming list to ${hotelName}`,
+        status: 'todo',
+        visibility: vis.everyone('sees'),
+      });
+      const ciDate = tourDays.find(d => d.id === resolvedDayId)?.date;
+      if (ciDate) {
+        const co = new Date(`${ciDate}T00:00:00`);
+        co.setDate(co.getDate() + nights);
+        const coIso = `${co.getFullYear()}-${String(co.getMonth() + 1).padStart(2, '0')}-${String(co.getDate()).padStart(2, '0')}`;
+        const coDayId = dayByDate.get(coIso);
+        if (coDayId) {
+          tasks.push({
+            id: `tk_hotel_checkout_${hotelSlug}`,
+            dayId: coDayId,
+            title: `Confirm the ${checkOut} checkout at ${hotelName}`,
+            status: 'todo',
+            visibility: vis.everyone('sees'),
+          });
+        }
+      }
+    }
   }
 
-  return { hotels, tasks: [] };
+  return { hotels, tasks };
 }

@@ -157,9 +157,11 @@ export function DayDetail() {
             <div className="flex items-center gap-2">
               <MockTag source="schedule_item" field="Schedule items + times" />
               {managerView && (
-                <Button size="sm" variant="outline" leading={<Icon.Plus size={12} />}>
-                  Add item
-                </Button>
+                <Link to={`/daysheet/${day.date}`}>
+                  <Button size="sm" variant="outline" leading={<Icon.Plus size={12} />}>
+                    Add item
+                  </Button>
+                </Link>
               )}
             </div>
           }
@@ -167,7 +169,7 @@ export function DayDetail() {
           {items.length === 0 ? (
             <EmptyState
               title="Nothing scheduled yet"
-              hint="Pre-fill from a template like 'Arena Show Day' or add items one at a time."
+              hint="Add items from the day sheet — open it and switch to Edit."
             />
           ) : (
             <ol className="-mx-6 -my-2 divide-y divide-[var(--color-rule-soft)]">

@@ -164,7 +164,7 @@ function RouteImportSection() {
       setNote({
         tone: 'success',
         title: `Imported ${parsed.days.length} days across ${parsed.legs.length} leg(s)`,
-        detail: 'Every day now carries a mock schedule skeleton shaped to its type.',
+        detail: 'Every day now has a starter schedule shaped to its day type.',
       });
     } else {
       setNote(nonMatchNote(file, fixture, 'a CSV', routeFixture.filename));
@@ -270,7 +270,7 @@ function RouteSummary() {
             accept=".csv"
             onFiles={handleReupload}
             title="Drop a corrected route CSV"
-            hint="The new file replaces the current route. Day-level edits, locks, and overlays are preserved where dates still match."
+            hint="The new file replaces the current route and rebuilds each day's starter schedule. Day locks and permissions are kept where dates still match; schedule edits made in Day Sheet Edit mode are not."
             icon={<Icon.Calendar size={22} />}
             tourAnchor="route-reupload-dropzone"
           />
@@ -374,11 +374,17 @@ function FlightImportSection() {
     if (imported > 0) {
       setNote({
         tone: 'success',
-        title: `Parsed ${imported} flight${imported === 1 ? '' : 's'} from the grid`,
+        title: `Imported ${imported} flight${imported === 1 ? '' : 's'} from the grid`,
         detail: 'Review each leg below, then Approve & import to add Travel records.',
       });
     } else if (lastNote) {
       setNote(lastNote);
+    } else {
+      setNote({
+        tone: 'warning',
+        title: 'No flights found in that file',
+        detail: 'The grid was read but no rows had a passenger, flight number, and date. Check the file and try again.',
+      });
     }
   };
 
@@ -407,7 +413,7 @@ function FlightImportSection() {
     if (imported > 0) {
       setNote({
         tone: 'success',
-        title: `Parsed ${imported} flight import${imported === 1 ? '' : 's'}`,
+        title: `Imported ${imported} flight confirmation${imported === 1 ? '' : 's'}`,
         detail: 'Review the passenger matches, then Approve & import to add Travel records.',
       });
     } else if (lastNote) {
@@ -431,6 +437,16 @@ function FlightImportSection() {
         in one file) or per-flight <strong>boarding pass / e-ticket</strong> PDFs. Both feed the
         same review queue.
       </p>
+      {tour.days.length === 0 && (
+        <div className="mb-3 rounded-[3px] border border-[var(--color-day-rehearsal)]/50 bg-[var(--color-day-rehearsal)]/8 px-3 py-2 text-[12px] text-[var(--color-ink-2)] flex items-start gap-2">
+          <Icon.Info size={12} className="text-[var(--color-ink-3)] shrink-0 mt-[3px]" />
+          <span>
+            <strong>Import the route first.</strong> Flights land on tour days — without the
+            route there are no days to put them on, and they won't show up anywhere. Drop the
+            route CSV in <strong>Step 1</strong> above, then come back.
+          </span>
+        </div>
+      )}
       {needsRiderHint && (
         <div className="mb-3 rounded-[3px] border border-[var(--color-rule)] bg-[var(--color-paper-2)]/70 px-3 py-2 text-[12px] text-[var(--color-ink-2)] flex items-start gap-2">
           <Icon.Info size={12} className="text-[var(--color-ink-3)] shrink-0 mt-[3px]" />
@@ -438,7 +454,7 @@ function FlightImportSection() {
             <strong>Tip — import the rider first.</strong> Passenger names are matched against
             your tour roster; right now the roster only has you. Drop the rider on{' '}
             <Link to="/ingest/riders" className="underline font-semibold text-[var(--color-ink)]">
-              Rider ingest
+              Import rider
             </Link>{' '}
             so the band &amp; crew land on the roster before you import flights.
           </span>
@@ -560,7 +576,7 @@ function FlightImportSection() {
 function StatusChip({ status, inverted }: { status: FlightImport['status']; inverted?: boolean }) {
   const map = {
     queued: { tone: 'neutral' as const, label: 'Queued' },
-    parsing: { tone: 'travel' as const, label: 'Parsing' },
+    parsing: { tone: 'travel' as const, label: 'Reading' },
     review: { tone: 'rehearsal' as const, label: 'Review' },
     imported: { tone: 'success' as const, label: 'Imported' },
     failed: { tone: 'critical' as const, label: 'Failed' },
@@ -683,16 +699,26 @@ function FlightReview({ imp, duplicateOf }: { imp: FlightImport; duplicateOf?: F
         <div className="px-5 py-3.5 border-b border-[var(--color-rule-soft)] flex items-center justify-between gap-3">
           <div>
             <div className="eyebrow">Side-by-side review</div>
-            <button
-              type="button"
-              onClick={() => openPdf({ url: '/' + imp.filename, title: imp.filename })}
-              title="View the flight confirmation PDF"
-              className="mt-1 cursor-pointer hover:opacity-80 transition-opacity"
-            >
-              <Chip tone="travel">
-                <Icon.Document size={10} /> {imp.filename}
-              </Chip>
-            </button>
+            {/* Only sample files exist under /public — for a user-supplied file the
+                path would 404 into the SPA fallback, so the chip is not clickable. */}
+            {matchFixture(imp.filename) ? (
+              <button
+                type="button"
+                onClick={() => openPdf({ url: '/' + imp.filename, title: imp.filename })}
+                title="View the flight confirmation PDF"
+                className="mt-1 cursor-pointer hover:opacity-80 transition-opacity"
+              >
+                <Chip tone="travel">
+                  <Icon.Document size={10} /> {imp.filename}
+                </Chip>
+              </button>
+            ) : (
+              <div className="mt-1">
+                <Chip tone="travel">
+                  <Icon.Document size={10} /> {imp.filename}
+                </Chip>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <StatusChip status={imp.status} />
@@ -783,9 +809,6 @@ function FlightReview({ imp, duplicateOf }: { imp: FlightImport; duplicateOf?: F
                   </li>
                 ))}
               </ul>
-              <div className="mt-4 text-center text-[9px] text-[var(--color-ink-4)] uppercase tracking-[0.10em]">
-                — Mocked PDF preview · real PDF would render here —
-              </div>
             </div>
           </div>
 
@@ -995,7 +1018,7 @@ function HotelImportSection() {
     }
     setNote({
       tone: failed.length ? 'warning' : 'success',
-      title: `Imported ${totalHotels} hotel block${totalHotels === 1 ? '' : 's'}`,
+      title: `Imported ${totalHotels} hotel${totalHotels === 1 ? '' : 's'}`,
       detail: failed.length
         ? `${imported} of ${files.length} confirmations imported. Couldn't read: ${failed.join(', ')}.`
         : 'Rooming lists matched to your roster; hotel-advance tasks added to the calendar.',
@@ -1017,6 +1040,16 @@ function HotelImportSection() {
         the check-in day, matches the rooming list to your roster, and creates
         the hotel-advance tasks. Drop multiple confirmations together.
       </p>
+      {tour.days.length === 0 && (
+        <div className="mb-3 rounded-[3px] border border-[var(--color-day-rehearsal)]/50 bg-[var(--color-day-rehearsal)]/8 px-3 py-2 text-[12px] text-[var(--color-ink-2)] flex items-start gap-2">
+          <Icon.Info size={12} className="text-[var(--color-ink-3)] shrink-0 mt-[3px]" />
+          <span>
+            <strong>Import the route first.</strong> Hotels land on their check-in day —
+            without the route there are no days to put them on. Drop the route CSV in{' '}
+            <strong>Step 1</strong> above, then come back.
+          </span>
+        </div>
+      )}
       <FileDropZone
         accept=".pdf"
         multiple

@@ -8,6 +8,7 @@
 
 import { vis } from '@/lib/visibility';
 import type { Hotel, Task, TourPerson } from '@/types';
+import { normalizeName } from '@/lib/format';
 
 interface RawHotelBlock {
   fixtureId: string; // matches a Fixture id in lib/fixtureMatcher.ts
@@ -117,7 +118,7 @@ export interface ScratchHotelImport {
 }
 
 function buildBlock(b: RawHotelBlock, personnel: TourPerson[]): ScratchHotelImport {
-  const byName = new Map(personnel.map((p) => [p.person.name.trim().toLowerCase(), p.id]));
+  const byName = new Map(personnel.map((p) => [normalizeName(p.person.name), p.id]));
   const hotel: Hotel = {
     id: b.id,
     dayId: b.dayId,
@@ -133,7 +134,7 @@ function buildBlock(b: RawHotelBlock, personnel: TourPerson[]): ScratchHotelImpo
     sourceFilename: b.sourceFilename,
     occupants: b.rooms
       .map((r) => ({
-        tourPersonId: byName.get(r.name.trim().toLowerCase()),
+        tourPersonId: byName.get(normalizeName(r.name)),
         roomNumber: r.roomNumber,
         roomType: r.roomType,
       }))

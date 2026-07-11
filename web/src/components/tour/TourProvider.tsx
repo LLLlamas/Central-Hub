@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
@@ -32,6 +33,16 @@ function hasSeenWalkthrough(): boolean {
 function markSeen(): void {
   try {
     window.localStorage.setItem(SEEN_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+}
+
+// Re-arm the auto-start after a full tour reset — a wiped tour should greet
+// like a first visit.
+export function resetWalkthroughSeen(): void {
+  try {
+    window.localStorage.removeItem(SEEN_KEY);
   } catch {
     /* ignore */
   }
@@ -73,16 +84,30 @@ export function TourProvider({ children }: { children: ReactNode }) {
   }, [steps.length]);
   const back = useCallback(() => setStepIndex((i) => Math.max(0, i - 1)), []);
 
-  // Take the user to the step's route when it differs from where they are.
+  // Whether the active step's predicate was already satisfied when the step
+  // became active. Auto-advance only fires on a false→true transition, so
+  // Back onto a completed step doesn't bounce forward and a restart after
+  // imports doesn't rapid-fire through every step.
+  const satisfiedAtEntry = useRef(false);
+
+  // Take the user to the step's route once, when the step becomes active —
+  // not on every route change, so mid-step detours aren't yanked back.
   useEffect(() => {
     if (!running || !step) return;
+    satisfiedAtEntry.current = step.advanceWhen ? step.advanceWhen(tour) : false;
     if (location.pathname !== step.route) navigate(step.route);
-  }, [running, step, location.pathname, navigate]);
+    // Step-entry only: location/tour are read as-of the moment the step activates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, stepIndex]);
 
-  // Auto-advance a hands-on step once its completion predicate is satisfied.
+  // Auto-advance a hands-on step once its completion predicate flips true.
   useEffect(() => {
     if (!running || !step?.advanceWhen) return;
-    if (!step.advanceWhen(tour)) return;
+    if (!step.advanceWhen(tour)) {
+      satisfiedAtEntry.current = false; // went (or was) false → arm the trigger
+      return;
+    }
+    if (satisfiedAtEntry.current) return; // already done at entry — user drives with Next
     const t = setTimeout(next, 650); // a short beat so the user sees the result land
     return () => clearTimeout(t);
   }, [running, step, tour, next]);

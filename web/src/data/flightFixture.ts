@@ -7,6 +7,7 @@
 
 import { getNowIso } from '@/lib/today';
 import type { FlightImport, ParsedFlight, TourPerson } from '@/types';
+import { normalizeName } from '@/lib/format';
 
 interface RawFlight {
   fixtureId: string;     // matches a Fixture id in lib/fixtureMatcher.ts
@@ -98,11 +99,11 @@ export function buildScratchFlightImport(
   const raw = RAW_FLIGHTS.find((r) => r.fixtureId === fixtureId);
   if (!raw) return null;
 
-  const byName = new Map(personnel.map((p) => [p.person.name.trim().toLowerCase(), p.id]));
+  const byName = new Map(personnel.map((p) => [normalizeName(p.person.name), p.id]));
   const passengers: ParsedFlight['passengers'] = raw.passengers.map((p) => ({
     name: p.name,
     seat: p.seat,
-    matchedTourPersonId: byName.get(p.name.trim().toLowerCase()),
+    matchedTourPersonId: byName.get(normalizeName(p.name)),
   }));
   const unmatchedNames = passengers.filter((p) => !p.matchedTourPersonId).map((p) => p.name);
 

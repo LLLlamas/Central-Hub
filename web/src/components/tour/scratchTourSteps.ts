@@ -60,8 +60,8 @@ export const scratchTourSteps: TourStep[] = [
     id: 'flight-approve',
     route: '/ingest/flights',
     target: 'flight-approve',
-    title: 'Approve & commit',
-    body: 'Check the passenger matches: fix a typo in a name (pencil on hover), remove a parser-junk row (✕), or click "Resolve" to assign / add / skip. Then Approve — that commits the flights as Travel on each day. Re-upload anytime to fix seat changes or add passengers.',
+    title: 'Approve & import',
+    body: 'Check the passenger matches: fix a typo in a name (pencil on hover), remove a stray row (✕), or click "Resolve" to assign / add / skip. Then Approve — that puts the flights on each day as Travel. Re-upload anytime to fix seat changes or add passengers.',
     advanceWhen: (t) => t.travel.length > 0,
   },
   {

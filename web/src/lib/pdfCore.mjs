@@ -254,8 +254,14 @@ export function avgHeight(row) {
  * Build a lowercase-name → tourPersonId lookup map from a personnel array.
  * Works with any object that has `{ person: { name: string }, id: string }`.
  */
+// Accent/case/space-insensitive name key — mirrors normalizeName in lib/format.ts
+// (duplicated here because this module must stay pure ESM for the Node CLI).
+export function normalizeName(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
 export function personnelNameMap(personnel) {
-  return new Map(personnel.map(p => [p.person.name.trim().toLowerCase(), p.id]));
+  return new Map(personnel.map(p => [normalizeName(p.person.name), p.id]));
 }
 
 /**

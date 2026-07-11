@@ -67,7 +67,9 @@ export function getGroupTagById(tour: Tour, id: string): GroupTag | undefined {
 }
 
 export function getAllConflicts(tour: Tour): Conflict[] {
-  return tour.riderImports.flatMap((ri) =>
-    ri.sections.flatMap((s) => s.conflicts ?? []),
-  );
+  // Active rider only — older revisions in the version history carry the same
+  // static conflict ids, so scanning every import would duplicate each conflict
+  // after a v2 upload.
+  const active = tour.riderImports[0];
+  return active ? active.sections.flatMap((s) => s.conflicts ?? []) : [];
 }

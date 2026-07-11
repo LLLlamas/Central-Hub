@@ -47,6 +47,8 @@ export interface OverlayBundle {
   scheduleItemEditHistory: [ID, ScheduleItemEditRecord[]][];
   flightPassengerResolutions: [string, FlightPassengerResolution][];
   gearItems?: GearItem[];
+  /** Rider id the gear list was last seeded/merged from — guards re-seeding on reload. */
+  gearSeedRiderId?: string | null;
   /** Crew document submissions (Milestone 2). On `local` this is the persistence
    *  store for the submission flow so it's testable; on `supabase` submissions
    *  live in the DB and this stays empty (managers/crew read via the backend). */

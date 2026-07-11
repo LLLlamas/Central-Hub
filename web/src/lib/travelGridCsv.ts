@@ -7,6 +7,7 @@
 
 import { getNowIso } from '@/lib/today';
 import type { FlightImport, ParsedFlight, TourPerson } from '@/types';
+import { normalizeName } from '@/lib/format';
 
 export interface TravelGridRow {
   passenger: string;
@@ -115,7 +116,7 @@ export function buildFlightImportsFromGrid(
   if (rows.length === 0) return [];
 
   const byName = new Map(
-    personnel.map((p) => [p.person.name.trim().toLowerCase(), p.id]),
+    personnel.map((p) => [normalizeName(p.person.name), p.id]),
   );
 
   const groups = new Map<string, TravelGridRow[]>();
@@ -132,7 +133,7 @@ export function buildFlightImportsFromGrid(
     const passengers: ParsedFlight['passengers'] = legRows.map((r) => ({
       name: r.passenger,
       seat: r.seat,
-      matchedTourPersonId: byName.get(r.passenger.trim().toLowerCase()),
+      matchedTourPersonId: byName.get(normalizeName(r.passenger)),
     }));
     const parsed: ParsedFlight = {
       airline: first.airline,

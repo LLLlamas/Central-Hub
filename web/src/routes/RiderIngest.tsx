@@ -268,7 +268,7 @@ export function RiderIngest() {
             </Chip>
             <Chip tone="rehearsal">Revision {imp.revision}</Chip>
             <Chip tone="neutral" variant="outline">
-              {approvedCount}/{imp.sections.length} approved
+              {approvedCount}/{totalCount} approved
             </Chip>
           </div>
         }
@@ -906,7 +906,9 @@ function RosterSuggestions({ imp }: { imp: RiderImport }) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => remove(s)}
+                      onClick={() => {
+                        if (window.confirm(`Remove ${s.name} from the tour roster?`)) remove(s);
+                      }}
                       className="shrink-0 text-[var(--color-ink-3)] hover:text-[var(--color-critical)]"
                     >
                       Remove
@@ -1377,11 +1379,6 @@ function SectionView({
               </Chip>
             )}
             <SectionStatusChip status={effStatus} />
-            {managerView && (
-              <Button size="sm" variant="outline" leading={<Icon.X size={12} />}>
-                Re-extract
-              </Button>
-            )}
             {managerView && (approved ? (
               <Button size="sm" variant="outline" onClick={() => reopenSection(sectionKey)}>
                 Reopen
@@ -2262,8 +2259,19 @@ function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
     setNote(null);
     setIsParsing(true);
     try {
-      const parsed = await parseRiderPdf(file);
-      if (!parsed.sections.length) throw new Error('Parser returned no sections.');
+      // Last-resort cap: a stalled parse must fail into the catch (fixture
+      // fallback / friendly note) rather than leave "Parsing…" up forever.
+      const parsed = await Promise.race([
+        parseRiderPdf(file),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Rider parse timed out.')), 60_000),
+        ),
+      ]);
+      // A real rider always yields several sections; one or two means another
+      // document type slipped past the heading heuristics (e.g. a hotel booking
+      // whose "ROOMING LIST" label reads as a lodging section) — reject it
+      // rather than install it as the active rider and overwrite the artist name.
+      if (parsed.sections.length < 3) throw new Error('Too few rider sections found.');
       // Persist the raw bytes so a refresh can rehydrate the Blob URL — the
       // parser already detached its copy into the worker, so re-read from the
       // File (multiple reads are allowed).
@@ -2273,7 +2281,20 @@ function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
     } catch (err) {
       console.error('[rider parse] failed:', err);
       const fixture = matchFixture(file.name);
-      const msg = err instanceof Error ? err.message : String(err);
+      if (fixture && fixture.kind !== 'rider') {
+        const kindLabel =
+          fixture.kind === 'flight' ? 'flight confirmation'
+          : fixture.kind === 'hotel' ? 'hotel booking'
+          : fixture.kind === 'travel_grid' ? 'travel grid'
+          : 'tour route';
+        setNote({
+          tone: 'warning',
+          title: 'That file belongs to another step',
+          detail: `"${file.name}" looks like a ${kindLabel} — drop it on the Import route & travel page instead.`,
+        });
+        setIsParsing(false);
+        return;
+      }
       if (fixture?.kind === 'rider') {
         const fixtureImport = buildScratchRiderImport();
         // Fetch the canonical fixture PDF and stash it under the fixture
@@ -2296,15 +2317,15 @@ function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
         addRiderImportToScratch(hydrated, buildScratchRiderPersonnel());
         setNote({
           tone: 'warning',
-          title: 'Live parse failed — loaded sample data instead',
-          detail: `Couldn't parse "${file.name}": ${msg}. Falling back to the canonical Spanish fixture. Check the browser console for the full stack.`,
+          title: "We couldn't read this PDF — loaded the sample rider instead",
+          detail: `"${file.name}" couldn't be read, so the sample rider was loaded in its place. Everything below is the sample data.`,
         });
         onDone?.();
       } else {
         setNote({
           tone: 'warning',
-          title: "Couldn't parse this rider",
-          detail: `Parser error on "${file.name}": ${msg}. Check the browser console for the full stack — the rider may use an unusual table-of-contents layout the parser doesn't yet recognize.`,
+          title: "We couldn't read this file as a rider",
+          detail: `"${file.name}" doesn't look like a tech rider — no table of contents or rider sections were found. Try a different PDF, or the sample rider file.`,
         });
       }
     } finally {

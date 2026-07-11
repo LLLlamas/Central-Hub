@@ -10,7 +10,7 @@
 //   <MockBadge />          — section-level "Mock" chip with hover tooltip
 //   <DataSourcesPanel />   — per-page collapsible listing all sources
 //
-// Phases mirror tour-management-deep-research.md §2.
+// Phases mirror docs/tour-management-deep-research.md §2.
 // =============================================================
 
 import { FIXTURES } from '@/lib/fixtureMatcher';

@@ -288,7 +288,7 @@ export function ConflictResolveModal({ conflict, onClose }: ConflictResolveModal
                 type="text"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="e.g. Confirmed with Manuel by email — §8 is correct"
+                placeholder="e.g. Confirmed with Manuel by email — the lighting spec is correct"
                 className="w-full h-9 px-2.5 text-[12.5px] rounded-[3px] border border-[var(--color-rule)] bg-[var(--color-card)] outline-none focus:border-[var(--color-ink-4)]"
               />
             </div>

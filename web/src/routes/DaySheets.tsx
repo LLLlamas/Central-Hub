@@ -84,7 +84,7 @@ export function DaySheets() {
     return (
       <div>
         <PageHeader title="Day sheets" />
-        <EmptyState title="No days yet" hint="Add tour dates on the calendar to publish day sheets." />
+        <EmptyState title="No days yet" hint="Import the tour route to create days — each one gets its own day sheet." />
       </div>
     );
   }
@@ -170,11 +170,6 @@ export function DaySheets() {
                   </span>
                 )}
               </div>
-            )}
-            {managerView && (
-              <Button variant="primary" leading={<Icon.Sparkle size={14} />} className="min-h-11 md:min-h-9">
-                Publish
-              </Button>
             )}
           </>
         }
@@ -419,16 +414,10 @@ function ToolsRail({
 
       <Card>
         <div className="eyebrow mb-1.5">Revision</div>
-        <div className="font-mono text-[11.5px] tabular text-[var(--color-ink-3)]">
-          Rev 0 - Draft
-        </div>
-        <div className="text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
-          Not yet published. Push notifications fire on publish.
-        </div>
-        {lastUpdated && (
-          <div className="mt-2.5 pt-2.5 border-t border-[var(--color-rule-soft)]">
-            <LastUpdated stamp={lastUpdated} />
-          </div>
+        {lastUpdated ? (
+          <LastUpdated stamp={lastUpdated} />
+        ) : (
+          <div className="text-[11.5px] text-[var(--color-ink-3)]">No changes recorded yet.</div>
         )}
       </Card>
     </aside>
@@ -566,7 +555,7 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
         )}
 
         {hotels.length > 0 && (
-          <SheetSection title="Lodging" eyebrow={`${hotels.length} block`} mockSource={hotelsImported ? undefined : 'hotel'} realSource={hotelsImported ? 'hotel_confirmation' : undefined}>
+          <SheetSection title="Lodging" eyebrow={`${hotels.length} hotel${hotels.length === 1 ? '' : 's'}`} mockSource={hotelsImported ? undefined : 'hotel'} realSource={hotelsImported ? 'hotel_confirmation' : undefined}>
             <ul className="space-y-3">
               {hotels.map((h) => (
                 <li key={h.id}>
@@ -788,7 +777,7 @@ function DaySheet({ day, mode, viewAsUser }: { day: Day; mode: Mode; viewAsUser?
         {hotels.length > 0 && (
           <SheetSection
             title="Lodging"
-            eyebrow={`${hotels.length} block`}
+            eyebrow={`${hotels.length} hotel${hotels.length === 1 ? '' : 's'}`}
             mockSource={hotelsImported ? undefined : 'hotel'}
             mockNote={hotelsImported ? undefined : "Hotel names, addresses, and check-in times are mock. The rider states rooming requirements, but the actual hotel comes from travel advance."}
             realSource={hotelsImported ? 'hotel_confirmation' : undefined}

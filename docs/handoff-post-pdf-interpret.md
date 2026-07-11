@@ -10,7 +10,7 @@
 
 This handoff is for the developer (you, Claude Code) actively building the webapp. Background context lives in two companion docs in this repo:
 
-- `tour-research-v3.html` — full research on the touring industry, competitors, and information architecture
+- `docs/research/tour-ops-field-guide.html` — full research on the touring industry, competitors, and information architecture
 - `potential-implementation.md` — the full implementation playbook (data model, build order, tech stack)
 
 **Don't re-read those unless you need context.** This handoff has everything actionable.

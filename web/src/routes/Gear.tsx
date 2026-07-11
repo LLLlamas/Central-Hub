@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn';
 import { MockTag } from '@/components/provenance/MockTag';
 import { usePdfViewer } from '@/components/PdfViewer';
 import { fmtDate } from '@/lib/format';
+import { matchFixture } from '@/lib/fixtureMatcher';
 import type { GearCategory, GearItem, GearStatus, GearProvidedBy, Travel, Hotel } from '@/types';
 
 // ─── Category metadata ────────────────────────────────────────────────────────
@@ -545,7 +546,7 @@ function TravelCostsSection({ travel, managerView, onCostChange }: TravelCostsSe
                       </span>
                     </td>
                     <td className="py-2 pl-2 pr-3 text-right">
-                      {t.sourceFilename ? (
+                      {t.sourceFilename && matchFixture(t.sourceFilename) ? (
                         <button
                           onClick={() => openPdf({ url: '/' + t.sourceFilename, title: t.sourceFilename })}
                           className="inline-flex items-center gap-1 text-[11px] text-[var(--color-ink-3)] hover:text-[var(--color-ink)] hover:underline"
@@ -672,7 +673,7 @@ function HotelCostsSection({ hotels, managerView, onRateChange }: HotelCostsSect
                       )}
                     </td>
                     <td className="py-2 pl-2 pr-3 text-right">
-                      {h.sourceFilename ? (
+                      {h.sourceFilename && matchFixture(h.sourceFilename) ? (
                         <button
                           onClick={() => openPdf({ url: '/' + h.sourceFilename, title: h.sourceFilename })}
                           className="inline-flex items-center gap-1 text-[11px] text-[var(--color-ink-3)] hover:text-[var(--color-ink)] hover:underline"

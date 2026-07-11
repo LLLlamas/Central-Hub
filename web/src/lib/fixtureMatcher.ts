@@ -124,7 +124,7 @@ export function nonMatchNote(
   }
   return {
     tone: 'warning',
-    title: 'Sample only',
-    detail: `"${file.name}" isn't a recognized sample. This prototype matches uploads by filename — upload "${sampleFilename}".`,
+    title: "That file isn't one of the samples",
+    detail: `"${file.name}" isn't a sample file this step recognizes — try "${sampleFilename}".`,
   };
 }

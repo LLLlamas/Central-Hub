@@ -31,7 +31,12 @@ export function TodaySurface({ className }: { className?: string }) {
   } = useApp();
   const day = getDay(getTodayIso());
 
-  if (!day) return null;
+  // Off-tour days get a small status card instead of a silent hole — with a
+  // future tour the homepage would otherwise look broken for months.
+  if (!day) {
+    if (!tour.days.length) return null;
+    return <OffTourCard className={className} />;
+  }
 
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const venue = getMockVenue(day.venueId);
@@ -45,7 +50,6 @@ export function TodaySurface({ className }: { className?: string }) {
   const nextItem = visibleSchedule.find((it) => it.startTime >= currentClock) ?? visibleSchedule[0];
   const travel = getTravelForDay(day.id).filter((t) => managerView || resolveVisibility(t.visibility, user) !== 'blocked');
   const hotels = getHotelsForDay(day.id).filter((h) => managerView || resolveVisibility(h.visibility, user) !== 'blocked');
-  const unpublishedToday = !day.published;
 
   return (
     <section className={cn('card overflow-hidden bg-[var(--color-card)]', className)}>
@@ -100,18 +104,6 @@ export function TodaySurface({ className }: { className?: string }) {
               )}
             </div>
           </div>
-
-          {managerView && (
-            <div className="mt-5">
-              <AttentionLink
-                to={`/daysheet/${day.date}`}
-                icon={<Icon.Document size={14} />}
-                label={unpublishedToday ? 'Sheet not published' : 'Sheet published'}
-                hint={unpublishedToday ? 'Review today' : 'Ready'}
-                active={unpublishedToday}
-              />
-            </div>
-          )}
 
           <div className="mt-6 border-t border-[var(--color-rule-soft)] pt-5">
             <div className="flex items-center justify-between gap-3 mb-3">
@@ -203,40 +195,56 @@ export function TodaySurface({ className }: { className?: string }) {
   );
 }
 
-function AttentionLink({
-  to,
-  icon,
-  label,
-  hint,
-  active,
-  sourceTag = false,
-}: {
-  to: string;
-  icon: ReactNode;
-  label: string;
-  hint: string;
-  active: boolean;
-  sourceTag?: boolean;
-}) {
+function OffTourCard({ className }: { className?: string }) {
+  const { tour } = useApp();
+  const todayIso = getTodayIso();
+  const days = [...tour.days].sort((a, b) => a.date.localeCompare(b.date));
+  const first = days[0];
+  const last = days[days.length - 1];
+  const firstShow = days.find((d) => d.dayType === 'show');
+  const preTour = todayIso < first.date;
+  const daysAway = Math.max(
+    0,
+    Math.round((new Date(first.date).getTime() - new Date(todayIso).getTime()) / 86400000),
+  );
+
   return (
-    <Link
-      to={to}
-      className={cn(
-        'min-h-[76px] rounded-[4px] border px-3 py-2.5 flex items-start gap-2 transition-colors',
-        active
-          ? 'border-[var(--color-accent)]/35 bg-[var(--color-accent)]/7 text-[var(--color-accent)]'
-          : 'border-[var(--color-rule-soft)] bg-[var(--color-paper)]/45 text-[var(--color-ink-3)]',
-      )}
-    >
-      <span className="mt-0.5">{icon}</span>
-      <span className="min-w-0">
-        <span className="block text-[12.5px] font-semibold text-[var(--color-ink)]">
-          {label}
-          {sourceTag && <SourceTag source="rider_conflicts_derived" field="Rider conflicts" />}
-        </span>
-        <span className="mt-0.5 block text-[11.5px] text-[var(--color-ink-3)]">{hint}</span>
-      </span>
-    </Link>
+    <section className={cn('card overflow-hidden bg-[var(--color-card)]', className)}>
+      <div className="p-5 sm:p-7">
+        <div className="eyebrow">Today</div>
+        <h2 className="mt-2 font-display text-[28px] sm:text-[36px] leading-[1.02] font-bold text-[var(--color-ink)]">
+          {preTour
+            ? `Tour starts ${fmtDate(first.date, 'EEEE, MMMM d')}`
+            : `Tour wrapped ${fmtDate(last.date, 'MMMM d')}`}
+        </h2>
+        <p className="mt-2 text-[13.5px] text-[var(--color-ink-2)]">
+          {preTour ? (
+            <>
+              {daysAway === 0 ? 'Kickoff is today.' : daysAway === 1 ? 'One day away.' : `${daysAway} days away.`}{' '}
+              {firstShow && (
+                <>First show: {fmtDate(firstShow.date, 'EEE, MMM d')}{firstShow.city ? ` in ${firstShow.city}` : ''}.</>
+              )}
+            </>
+          ) : (
+            <>This surface fills in with the day's schedule, travel, and hotel on tour dates.</>
+          )}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            to={`/daysheet/${(firstShow ?? first).date}`}
+            className="min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]"
+          >
+            <Icon.Document size={14} /> {preTour ? 'First day sheet' : 'Day sheets'}
+          </Link>
+          <Link
+            to="/calendar"
+            className="min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] text-[var(--color-ink)] hover:border-[var(--color-ink-4)]"
+          >
+            <Icon.Calendar size={14} /> Calendar
+          </Link>
+        </div>
+      </div>
+    </section>
   );
 }
 

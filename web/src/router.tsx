@@ -1,4 +1,28 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
+
+// Friendly fallback for any render-time error — a live demo should never show
+// React Router's raw "Unexpected Application Error!" page.
+function RouteErrorCard() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[var(--color-paper)] p-6">
+      <div className="card max-w-md w-full bg-[var(--color-card)] p-6 text-center">
+        <div className="eyebrow">Something went wrong</div>
+        <h1 className="mt-2 font-display text-[24px] font-bold text-[var(--color-ink)]">
+          This page hit a snag
+        </h1>
+        <p className="mt-2 text-[13px] text-[var(--color-ink-3)] leading-relaxed">
+          Your tour data is safe. Head back to the overview and try again.
+        </p>
+        <a
+          href="/"
+          className="mt-4 inline-flex items-center gap-1.5 h-9 px-4 text-[13px] font-semibold rounded-[4px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]"
+        >
+          Back to overview
+        </a>
+      </div>
+    </div>
+  );
+}
 import { Layout } from '@/components/layout/Layout';
 import { PrintLayout } from '@/components/layout/PrintLayout';
 import { TourOverview } from '@/routes/TourOverview';
@@ -21,6 +45,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <Layout />,
+    errorElement: <RouteErrorCard />,
     children: [
       { index: true, element: <TourOverview /> },
       { path: 'calendar', element: <CalendarPage /> },
@@ -43,6 +68,7 @@ export const router = createBrowserRouter([
   {
     path: '/print',
     element: <PrintLayout />,
+    errorElement: <RouteErrorCard />,
     children: [
       { path: 'daysheet/:date', element: <DaySheetPrint /> },
     ],

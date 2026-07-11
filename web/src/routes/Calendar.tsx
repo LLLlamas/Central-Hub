@@ -93,7 +93,7 @@ export function CalendarPage() {
             Locked / closed out
           </div>
           <span className="font-mono text-[11px] tabular text-[var(--color-ink-3)] ml-auto">
-            {lockedDays.size} / {tour.days.length} locked
+            {tour.days.filter((d) => lockedDays.has(d.id)).length} / {tour.days.length} locked
           </span>
         </div>
       )}

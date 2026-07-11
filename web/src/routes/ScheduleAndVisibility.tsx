@@ -542,7 +542,7 @@ function FormField({ label, children }: { label: string; children: ReactNode }) 
 
 function LevelPill({ level }: { level: VisibilityLevel }) {
   const tone = level === 'owns' ? 'critical' : level === 'sees' ? 'travel' : 'off';
-  const label = level === 'owns' ? 'Owns' : level === 'sees' ? 'Sees' : 'Hidden';
+  const label = level === 'owns' ? 'Owns' : level === 'sees' ? 'Sees' : 'Blocked';
   return (
     <Chip tone={tone as any} variant="soft" size="sm">
       {label}
@@ -679,8 +679,8 @@ function PermissionsStatus({
       ) : (
         <>
           <p className="text-[12px] text-[var(--color-ink-3)] mb-2 leading-relaxed">
-            {remaining.length} item type{remaining.length === 1 ? '' : 's'} still on the locked-by-default seed.
-            Click one to jump to its first item.
+            {remaining.length} item type{remaining.length === 1 ? '' : 's'} still on the starting setting
+            (everyone can see, only managers can edit). Click one to review it.
           </p>
           <ul className="space-y-1">
             {remaining.map(({ type, items }) => (

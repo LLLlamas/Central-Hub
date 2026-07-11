@@ -79,7 +79,7 @@ export function TourOverview() {
       <div className="mt-5 space-y-3">
         {conflicts.length > 0 && (
           <CollapsibleSection
-            title="Rider conflicts"
+            title="Document conflicts"
             eyebrow="Needs decision"
             defaultOpen={false}
             badge={
@@ -289,6 +289,7 @@ function ScratchGetStarted() {
   const route = fixturesOfKind('route')[0];
   const rider = fixturesOfKind('rider')[0];
   const flight = fixturesOfKind('flight')[0];
+  const hotel = fixturesOfKind('hotel')[0];
   const steps = [
     {
       n: 1,
@@ -301,14 +302,21 @@ function ScratchGetStarted() {
       n: 2,
       title: 'Import the rider',
       file: rider?.filename,
-      hint: 'The AI ingest extracts every rider section for you to review, correct and approve.',
+      hint: 'Every rider section is pulled out for you to review, correct and approve.',
       to: '/ingest/riders',
     },
     {
       n: 3,
       title: 'Import the flights',
       file: flight?.filename,
-      hint: 'Review the parsed passenger matches, then approve them into Travel records.',
+      hint: 'Review the passenger matches, then approve them onto each day as travel.',
+      to: '/ingest/flights',
+    },
+    {
+      n: 4,
+      title: 'Import the hotels',
+      file: hotel?.filename,
+      hint: 'One PDF per hotel — each lands on its check-in day with the rooming list matched to your roster.',
       to: '/ingest/flights',
     },
   ];
@@ -323,10 +331,10 @@ function ScratchGetStarted() {
           You’re the new Tour Manager
         </h2>
         <p className="mt-2 text-[13px] text-[var(--color-ink-3)] leading-relaxed max-w-xl">
-          Elsa y Elmar are about to tour. Three documents are waiting in your inbox —
-          a routing spreadsheet from the booking agent, the band’s tech rider, and
-          flight confirmations from the travel agent. Import them in order and the
-          hub builds the tour around you.
+          Elsa y Elmar are about to tour. Four documents are waiting in your inbox —
+          a routing spreadsheet from the booking agent, the band’s tech rider,
+          flight confirmations from the travel agent, and hotel bookings. Import
+          them in order and the hub builds the tour around you.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
@@ -337,7 +345,7 @@ function ScratchGetStarted() {
             <Icon.Sparkle size={14} /> Start the walkthrough
           </button>
           <span className="text-[12px] text-[var(--color-ink-3)]">
-            or follow the three steps below at your own pace.
+            or follow the steps below at your own pace.
           </span>
         </div>
       </div>

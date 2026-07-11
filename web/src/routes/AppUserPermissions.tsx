@@ -235,7 +235,9 @@ function MemberTable({
                   </button>
                   {onRevoke && !isOwnerFloor && (
                     <button
-                      onClick={() => void onRevoke(m)}
+                      onClick={() => {
+                        if (window.confirm(`Revoke ${m.email}'s access to this tour?`)) void onRevoke(m);
+                      }}
                       className="ml-3 text-[11.5px] font-semibold text-[var(--color-accent)] hover:underline"
                     >
                       Revoke

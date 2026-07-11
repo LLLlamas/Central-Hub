@@ -114,3 +114,14 @@ export function shortTime(t?: string): string {
   if (!t) return '';
   return t; // 24h "16:00" already short
 }
+
+/** Accent/case/space-insensitive key for matching people by name — a rider's
+ *  "Manuel González" must match a travel grid's "manuel gonzalez". */
+export function normalizeName(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}

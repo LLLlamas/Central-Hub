@@ -345,4 +345,4 @@ end $$;
 -- Realtime: enable on the tables AppState subscribes to (Dashboard → Database →
 -- Replication, or: alter publication supabase_realtime add table schedule_items, …).
 -- Storage bucket `tour-pdfs` (private) + its membership RLS are created separately
--- (see supabase-implementation-spec.md §8).
+-- (see docs/backend.md (spec §8)).

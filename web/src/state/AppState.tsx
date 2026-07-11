@@ -469,6 +469,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [gearItems, setGearItems] = useState<GearItem[]>(
     () => initialOverlays?.gearItems ?? [],
   );
+  // Which rider id the gear list was last seeded/merged from. Guards the merge
+  // effect so a plain reload doesn't resurrect items the user deleted.
+  const [gearSeedRiderId, setGearSeedRiderId] = useState<string | null>(
+    () => initialOverlays?.gearSeedRiderId ?? null,
+  );
   // Document submissions. On `local` this is the source of truth (persisted in
   // the overlay bundle); on `supabase` it's a cache refreshed from the backend.
   const [submissions, setSubmissions] = useState<DocumentSubmission[]>(
@@ -568,15 +573,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const ri = tour.riderImports[0];
     if (!ri) return;
+    // Already seeded from this rider — skip, or a reload would re-append items
+    // the user deleted.
+    if (gearSeedRiderId === ri.id) return;
     let cancelled = false;
     import('@/data/gearFixture').then(({ buildRiderGearItems, mergeGearItems }) => {
       if (cancelled) return;
       const fresh = buildRiderGearItems();
       setGearItems((cur) => (cur.length === 0 ? fresh : mergeGearItems(cur, fresh)));
+      setGearSeedRiderId(ri.id);
     }).catch(() => { /* non-fatal */ });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tour.riderImports[0]?.id]);
+  }, [tour.riderImports[0]?.id, gearSeedRiderId]);
 
   // On supabase, pull the submissions the caller is allowed to see (own +,
   // for managers, all) once the tour is loaded. No-op on local (the overlay
@@ -612,6 +621,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       scheduleItemEditHistory: [...scheduleItemEditHistory.entries()],
       flightPassengerResolutions: [...flightPassengerResolutions.entries()],
       gearItems,
+      gearSeedRiderId,
       submissions,
       userKey,
     }),
@@ -631,6 +641,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       scheduleItemEditHistory,
       flightPassengerResolutions,
       gearItems,
+      gearSeedRiderId,
       submissions,
       userKey,
     ],
@@ -656,6 +667,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setScheduleItemEditHistory(new Map(b.scheduleItemEditHistory ?? []));
     setFlightPassengerResolutionsMap(new Map(b.flightPassengerResolutions ?? []));
     if (b.gearItems) setGearItems(b.gearItems);
+    if (b.gearSeedRiderId !== undefined) setGearSeedRiderId(b.gearSeedRiderId);
     if (b.submissions) setSubmissions(b.submissions);
     if (b.userKey) setUserKey(b.userKey);
   }, []);
@@ -795,6 +807,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setScheduleItemEditHistory(new Map());
     setFlightPassengerResolutionsMap(new Map());
     setGearItems([]);
+    setGearSeedRiderId(null);
     setSubmissions([]);
     if (isSupabase) {
       // Wipe the cloud tour + overlays + PDFs, then re-seed the fresh shell.
@@ -1010,20 +1023,30 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const addHotelImportToScratch = useCallback(
     (hotels: Hotel[], tasks: Task[], filename?: string) => {
       updateScratchTour((t) => {
+        // Dedupe by id AND by (name, check-in day) so re-uploading the same
+        // booking replaces the hotel even when ids differ (fixture vs parsed,
+        // or ids minted before they were deterministic).
         const hotelIds = new Set(hotels.map((h) => h.id));
+        const hotelKeys = new Set(hotels.map((h) => `${h.name.trim().toLowerCase()}|${h.dayId}`));
         const taskIds = new Set(tasks.map((tk) => tk.id));
+        const keptHotels = t.hotels.filter(
+          (h) => !hotelIds.has(h.id) && !hotelKeys.has(`${h.name.trim().toLowerCase()}|${h.dayId}`),
+        );
+        const replaced = keptHotels.length < t.hotels.length;
         return {
           ...t,
-          hotels: [...t.hotels.filter((h) => !hotelIds.has(h.id)), ...hotels],
+          hotels: [...keptHotels, ...hotels],
           tasks: [...t.tasks.filter((tk) => !taskIds.has(tk.id)), ...tasks],
           hotelImportHistory: [
             ...(t.hotelImportHistory ?? []),
-            ...(t.hotelImport ? [t.hotelImport] : []),
+            // Only a drop that replaces an existing hotel is an "update" —
+            // the second file of a first-time multi-file drop is not.
+            ...(t.hotelImport && replaced ? [t.hotelImport] : []),
           ],
           hotelImport: {
             at: getNowIso(),
             by: currentName,
-            updates: (t.hotelImport?.updates ?? 0) + (t.hotelImport ? 1 : 0),
+            updates: (t.hotelImport?.updates ?? 0) + (t.hotelImport && replaced ? 1 : 0),
             filename: filename ?? t.hotelImport?.filename,
           },
         };
@@ -1061,6 +1084,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       void backend.deletePdf('rider', id);
       // Clear gear items seeded from this rider so re-import gets a fresh list.
       setGearItems([]);
+      setGearSeedRiderId(null);
     },
     [updateScratchTour],
   );
@@ -1143,18 +1167,39 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         const wasImported = existing.status === 'imported';
 
         // Detect purely additive merge: all existing passengers survive with
-        // the same seat. If so, patch Travel records directly — no re-approval.
+        // the same seat, the flight metadata is unchanged, AND every added
+        // passenger matched the roster. If so, patch Travel records directly —
+        // no re-approval. A time/airport/PNR change or an unmatched addition
+        // must go back through review (mirrors diffFlightImports in the UI) —
+        // otherwise the day sheet would keep stale times, or strand passengers
+        // with no resolution path on an already-committed import.
         const isAdditiveOnly =
           wasImported &&
           existing.parsedFlights.every((pfExisting, idx) => {
             const pfMerged = merged[idx];
-            if (!pfMerged) return false;
-            return pfExisting.passengers.every((ep) =>
+            const pfIncoming = incoming.parsedFlights[idx] ?? incoming.parsedFlights[0];
+            if (!pfMerged || !pfIncoming) return false;
+            const metadataChanged =
+              pfExisting.departureTime !== pfIncoming.departureTime ||
+              pfExisting.arrivalTime !== pfIncoming.arrivalTime ||
+              pfExisting.departureAirport !== pfIncoming.departureAirport ||
+              pfExisting.arrivalAirport !== pfIncoming.arrivalAirport ||
+              (pfIncoming.recordLocator != null &&
+                pfExisting.recordLocator !== pfIncoming.recordLocator);
+            if (metadataChanged) return false;
+            const survivors = pfExisting.passengers.every((ep) =>
               pfMerged.passengers.some(
                 (mp) =>
                   mp.name.trim().toLowerCase() === ep.name.trim().toLowerCase() &&
                   mp.seat === ep.seat,
               ),
+            );
+            if (!survivors) return false;
+            const existingNames = new Set(
+              pfExisting.passengers.map((p) => p.name.trim().toLowerCase()),
+            );
+            return pfMerged.passengers.every(
+              (mp) => existingNames.has(mp.name.trim().toLowerCase()) || !!mp.matchedTourPersonId,
             );
           });
 
@@ -1794,6 +1839,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     (dayId: ID, init?: Partial<ScheduleItem>): ID => {
       const type = init?.type ?? 'other';
       const existingIds = new Set(tour.scheduleItems.map((i) => i.id));
+      // Also avoid ids that only live on in edit history (deleted items keep
+      // their audit trail) — reusing one would graft the old item's history
+      // onto the new item.
+      for (const k of scheduleItemEditHistory.keys()) existingIds.add(k);
       let n = tour.scheduleItems.length + 1;
       let id = `si_new_${n}`;
       while (existingIds.has(id)) id = `si_new_${++n}`;
@@ -1820,12 +1869,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           status: 'created',
           resolvedAt: { at: getNowIso(), by: currentName },
         };
-        next.set(id, [record]);
+        next.set(id, [...(prev.get(id) ?? []), record]);
         return next;
       });
       return id;
     },
-    [tour.scheduleItems, getScheduleTypeDefault, updateScratchTour, stampDay, currentName],
+    [tour.scheduleItems, scheduleItemEditHistory, getScheduleTypeDefault, updateScratchTour, stampDay, currentName],
   );
 
   const deleteScheduleItem = useCallback(
@@ -1899,9 +1948,26 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const removeTourPerson = useCallback(
     (id: ID) => {
+      // Guards: removing the last person would crash the provider (there'd be
+      // no viewer at all), and removing the last manager would permanently
+      // lock the tour out of every manager surface.
+      const target = tour.personnel.find((tp) => tp.id === id);
+      if (!target) return;
+      const remaining = tour.personnel.filter((tp) => tp.id !== id);
+      if (remaining.length === 0) return;
+      const isManagerGroup = (g: string) => g === 'grp_mgmt' || g === 'grp_production';
+      if (isManagerGroup(target.groupId) && !remaining.some((tp) => isManagerGroup(tp.groupId))) {
+        return;
+      }
       updateScratchTour((t) => ({ ...t, personnel: t.personnel.filter((tp) => tp.id !== id) }));
+      // If the removed person was the active viewer, fall back to the default
+      // viewer so the app doesn't stay pinned to a ghost.
+      if (userKey === id) {
+        const fallback = remaining.find((tp) => isManagerGroup(tp.groupId)) ?? remaining[0];
+        setUserKey(fallback.id);
+      }
     },
-    [updateScratchTour],
+    [tour.personnel, userKey, updateScratchTour],
   );
 
   const updateTourPerson = useCallback(
@@ -1941,8 +2007,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     (init: Omit<GearItem, 'id'>): ID => {
       let id!: ID;
       setGearItems((prev) => {
-        // Use the current list length as a monotonic offset — unique within session.
-        id = `gear_manual_${prev.length + 1}`;
+        // Length-based offset, with a collision loop — after a delete the
+        // length shrinks and a bare offset would reuse a live id.
+        const ids = new Set(prev.map((g) => g.id));
+        let n = prev.length + 1;
+        id = `gear_manual_${n}`;
+        while (ids.has(id)) id = `gear_manual_${++n}`;
         return [...prev, { ...init, id }];
       });
       return id;

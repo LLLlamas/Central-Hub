@@ -13,7 +13,7 @@ import { useApp } from '@/state/AppState';
 import { Icon } from '@/components/ui/Icon';
 import { mockVenues } from '@/data/mockVenues';
 import { fmtDate, dayTypeLabel } from '@/lib/format';
-import type { Tour, CurrentUser } from '@/types';
+import type { Tour, CurrentUser, Visibility } from '@/types';
 import { resolveVisibility } from '@/lib/visibility';
 import { cn } from '@/lib/cn';
 
@@ -73,7 +73,11 @@ interface PaletteItem {
   keywords: string[];
 }
 
-function buildIndex(tour: Tour, user: CurrentUser): PaletteItem[] {
+function buildIndex(
+  tour: Tour,
+  user: CurrentUser,
+  getVisibilityEdit: (itemId: string) => Visibility | undefined,
+): PaletteItem[] {
   const items: PaletteItem[] = [];
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
 
@@ -122,7 +126,9 @@ function buildIndex(tour: Tour, user: CurrentUser): PaletteItem[] {
   // Schedule items — only those the current viewer is allowed to see (otherwise
   // hidden items leak via search title/time/location).
   for (const si of tour.scheduleItems) {
-    if (resolveVisibility(si.visibility, user) === 'blocked') continue;
+    // Layer the manager's saved visibility edits over the seed — the palette
+    // must hide exactly what the day sheets hide.
+    if (resolveVisibility(getVisibilityEdit(si.id) ?? si.visibility, user) === 'blocked') continue;
     const day = tour.days.find((d) => d.id === si.dayId);
     if (!day) continue;
     items.push({
@@ -193,10 +199,10 @@ function CommandPalette() {
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
-  const { tour, user } = useApp();
+  const { tour, user, getVisibilityEdit } = useApp();
   const navigate = useNavigate();
 
-  const items = useMemo(() => buildIndex(tour, user), [tour, user]);
+  const items = useMemo(() => buildIndex(tour, user, getVisibilityEdit), [tour, user, getVisibilityEdit]);
   const results = useMemo(() => filter(items, query), [items, query]);
 
   // Reset state every time the palette opens.

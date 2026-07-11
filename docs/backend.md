@@ -197,7 +197,7 @@ No UI rebuilds required. The data model, visibility logic, and pending/approval 
 > Supabase** (Postgres + Auth + Storage + Realtime + RLS). The earlier Firebase
 > effort is **retired** — its files were removed; only the backend-agnostic seam
 > (`lib/backend/`), the `AuthProvider`, and the auth/membership types survive.
-> Read `CLAUDE.md` (working map) and `users-in-prod.md` (original architecture
+> Read `CLAUDE.md` (working map) and Part 1 above (original architecture
 > rationale) alongside this.
 
 **User mandate:** real **multi-user + live updates**, secure, with information
@@ -605,3 +605,85 @@ CLI alternative: `npm run build && npx wrangler pages deploy web/dist`.
 
 **Trusted-crew demo only:** with this milestone's client-side privacy, treat the
 deployed URL as a trusted-crew demo (matches the caveat in CLAUDE.md).
+
+---
+
+# Part 3 — Current implementation state (moved verbatim from CLAUDE.md, 2026-07-11)
+
+
+All persistence routes through one interface, `lib/backend/types.ts` → `Backend`
+(`subscribeTour`/`saveTour`/`loadOverlays`/`saveOverlays`/`loadPdf`/`savePdf`/
+`deletePdf`/`clearAll`, plus optional **membership** methods — see below).
+`lib/backend/index.ts` selects the impl from `VITE_BACKEND` (default **`local`**):
+`local.ts` wraps today's localStorage + IndexedDB modules verbatim; `supabase.ts`
+persists the **shared** `Tour` + shared overlays as JSONB rows (`tours`/`overlays`)
+and PDF bytes to the `tour-pdfs` Storage bucket. **Storage is now tour-scoped:**
+path `{tourId}/{scope}/{id}.pdf` (`scope = rider|doc`) so shared-tour crew can open
+the TM's rider PDF — the supabase backend caches the active tour id from
+`subscribeTour` and threads it into `savePdf/loadPdf`. See
+`supabase-implementation-spec.md` + `supabase/schema.sql` + the membership
+migration `supabase/migrations/0002_members.sql`. **The `local` path is
+byte-for-byte unchanged** — every supabase behavior is gated on
+`BACKEND_KIND === 'supabase'`, and the Supabase SDK only loads via dynamic import.
+
+### Shared tour + role-gated membership (`tour_members`)
+
+The supabase model is **one shared tour per tour**, set up by the TM/PM, that crew
+join and view filtered to their role. Implemented in `0002_members.sql`:
+- **`tour_members`** (PK `(tour_id, email)`) carries `role`, `status`
+  (`pending|active|revoked`), `group_id`, `tour_person_id`, `requested_group_id`,
+  `nudged_at`. **Email-seedable**: a manager grants access by email before the
+  person ever logs in. Helpers `is_active_member(tour_id)` / `is_manager(tour_id)`
+  back every RLS policy. `tours`/`overlays` RLS = active members read, managers write.
+- **Bootstrap by email, no Edge Function:** pre-seed `tour_members` rows (TM/PM,
+  status active) via the SQL at the bottom of `0002_members.sql`. On login the
+  `SECURITY DEFINER` RPC `claim_membership()` links `user_id = auth.uid()` to the
+  row matching `auth.email()` (idempotent; links **only the caller's own** email).
+  `list_active_tour_groups()` (SECURITY DEFINER, callable by pending users) feeds
+  the Waiting screen's group dropdown without exposing the rest of the tour.
+- **Auth flow:** `AuthProvider` resolves `membership` + `membershipStatus`
+  (`none|pending|active`) after sign-in (claim → getMyMembership). `AuthGate` →
+  app when `active`; `WaitingForAccess` (group-guess dropdown + Nudge) when
+  `none|pending`. `local` reports a synthetic **active TM** membership, so the gate
+  is always open and behavior is unchanged.
+- **CurrentUser from membership (supabase):** managers may preview-as via the
+  TopBar switcher (like local); **non-managers are pinned** to their membership
+  identity (switcher hidden). `AppState` derives this; `isManagerMember` (reuses
+  `isOwnerFloorRole` from `lib/access.ts`) also gates the shared tour/overlay
+  *writes* so non-managers never attempt a manager-only write.
+- **Permissions UI:** `/access` → `AppUserPermissions` (manager-only): roster of
+  active+pending+revoked, **assign role+group** (creates a linked `TourPerson` via
+  `addTourPerson` if the membership has none — the people↔group↔role↔calendar join),
+  **add by email**, **revoke** (status→revoked). **TM/PM cannot be revoked** — the UI
+  hides the control AND a DB trigger (`trg_protect_owner_roles`) rejects revoking/
+  deleting any owner-floor role. Personnel's edit modal has a manager-only "Remove
+  from tour" (`removeTourPerson`); auth revoke lives on `/access`.
+- **Overlays are tour-shared** (manager-authored, identical for everyone); only the
+  per-user viewer choice (`userKey`) stays client-side and is stripped before the
+  shared overlay write.
+
+**⚠️ Client-side privacy caveat (accepted this milestone):** privacy *between active
+members* is **UI-only** — the full Tour JSONB reaches every active member's browser
+and `lib/visibility.ts` hides parts in the UI, so a determined member could read
+hidden fields via devtools. Safe for a **trusted-crew demo**. Before untrusted
+members, do the Phase B per-row `readable_by` RLS decomposition already drafted in
+`supabase/migrations/0001_init.sql`.
+
+- **AppState wiring:** boot/persist effects route through `backend`. On `local`,
+  the synchronous `useState` initializers read localStorage as before. On
+  `supabase`, the tour starts as a fresh `createScratchTour()` shell with
+  `booting = true`; a cloud-boot effect waits for sign-in, `subscribeTour`s, and
+  either `setTour(cloudTour)` + `loadOverlays` or seeds + saves a fresh tour,
+  then clears `booting`. Supabase tour/overlay writes are debounced ~500ms.
+  `booting` is exposed on `useApp()`; `Layout` shows a spinner until it clears.
+  `resetScratchTour` calls `backend.clearAll` on supabase.
+- **Auth:** `AuthProvider` (mounted above `AppStateProvider` in `main.tsx`) is a
+  synthetic no-op "Tour Manager" on `local`; on `supabase` it subscribes to
+  Supabase auth (`lib/supabase/auth.ts` — Google OAuth + email magic-link).
+  `AuthGate` (between them) gates only on `supabase`: spinner while `loading` (or
+  membership resolving), `LoginScreen` when `signed-out`, `WaitingForAccess` when
+  signed-in without an active membership, app when `membershipStatus === 'active'`.
+  `local` is never gated. `TopBar` shows the signed-in email + sign-out only on
+  `supabase`; the viewer/role-switcher shows for **managers** (preview-as) and is
+  hidden/pinned for non-managers.
+

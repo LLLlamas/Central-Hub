@@ -172,7 +172,7 @@ export function DaySheetPrint() {
             {/* Locked watermark — visible only in print */}
             {locked && (
               <div className="hidden print:block absolute right-7 top-1 font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--color-ink-3)]">
-                Locked · published
+                Locked
               </div>
             )}
           </header>
@@ -282,12 +282,12 @@ export function DaySheetPrint() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-5 gap-y-0.5 text-[11px]">
               {tour.personnel.map((m) => {
-                const g = tour.groups.find((gr) => gr.id === m.groupId)!;
+                const g = tour.groups.find((gr) => gr.id === m.groupId);
                 return (
                   <div key={m.id} className="flex items-baseline gap-1.5 min-w-0">
                     <span
                       className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ background: g.color }}
+                      style={{ background: g?.color ?? 'var(--color-ink-4)' }}
                       aria-hidden
                     />
                     <span

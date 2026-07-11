@@ -48,7 +48,7 @@ describe('nonMatchNote', () => {
 
   it('flags an unrecognized file and suggests the sample', () => {
     const note = nonMatchNote(file('random.pdf'), null, 'a CSV', 'sample.csv');
-    expect(note.title).toBe('Sample only');
+    expect(note.title).toBe("That file isn't one of the samples");
     expect(note.detail).toContain('sample.csv');
   });
 });

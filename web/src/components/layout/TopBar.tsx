@@ -5,6 +5,7 @@ import { useCommandPalette } from '@/components/CommandPalette';
 import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
+import { isOwnerFloorRole } from '@/lib/access';
 import { BACKEND_KIND } from '@/lib/backend';
 
 export function TopBar() {
@@ -14,10 +15,11 @@ export function TopBar() {
   const palette = useCommandPalette();
   const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
   const showAccount = BACKEND_KIND === 'supabase';
-  // Managers preview-as via the switcher; non-managers are pinned to their own
-  // identity (no switcher). On `local` the viewer is the TM → switcher shows,
-  // exactly as before.
-  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
+  // The switcher is a manager preview tool. Capability must come from the
+  // signed-in membership (the real identity), not the previewed persona —
+  // otherwise previewing a crew member becomes a one-way door with no way back.
+  // On `local` the membership is a synthetic active TM, so the switcher always shows.
+  const managerView = !auth.membership || isOwnerFloorRole(auth.membership.role);
 
   return (
     <header className="sticky top-0 z-30 bg-[var(--color-paper)]/95 backdrop-blur border-b border-[var(--color-rule)]">
