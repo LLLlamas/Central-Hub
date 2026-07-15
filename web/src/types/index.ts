@@ -101,6 +101,10 @@ export interface Tour {
    *  `lib/visibilityDefaults.ts`. Partial so the user can clear a type back
    *  to "no template" if they want raw per-item control. */
   visibilityDefaultsByType?: Partial<Record<ScheduleItemType, Visibility>>;
+  /** Per-tour venue directory, keyed by venueId — overrides/stores venue
+   *  details for this tour. Falls back to a static seeded directory when a
+   *  venueId isn't present here. */
+  venues?: Record<ID, Venue>;
 }
 
 export interface Leg {
@@ -108,6 +112,26 @@ export interface Leg {
   name: string;       // "North America Leg 1"
   startDate: ISODate;
   endDate: ISODate;
+}
+
+// ============================================================
+// Tour summary — lightweight card/list projection of a Tour,
+// used by the "My Shows" multi-tour switcher. Derived, never stored.
+// ============================================================
+
+export type TourSummaryStatus = 'draft' | 'upcoming' | 'on_tour' | 'completed';
+
+export interface TourSummary {
+  id: ID;
+  name: string;
+  artistName: string;
+  status: TourSummaryStatus;
+  startDate: ISODate | null;
+  endDate: ISODate | null;
+  dayCount: number;
+  showCount: number;
+  primaryCity: string | null;
+  updatedAt: ISODateTime;
 }
 
 // ============================================================
@@ -136,6 +160,41 @@ export interface Day {
   sunset?: HHMM;
   published: boolean; // day sheet posted
   lastUpdated?: UpdateStamp;
+}
+
+// ============================================================
+// Venues
+// The rider PDF never contains venue addresses or local promoter
+// contacts — those come from the booking agent's deal memos and
+// the PM's advance work with the venue's house production team.
+// A first-class entity: `Tour.venues` stores per-tour overrides,
+// falling back to a static seeded directory when a venueId isn't
+// present there.
+// ============================================================
+
+export interface Venue {
+  name: string;
+  address: string;
+  city: string;
+  country: string;
+  phone?: string;
+  capacity?: number;
+  /** Local power voltage (mains) — relevant for backline. */
+  voltage?: string;
+  /** Local currency for settlement. */
+  currency?: string;
+  /** Local primary language. */
+  language?: string;
+  /** Promoter org (e.g. "OCESA"). */
+  promoter?: string;
+  promoterRep?: string;
+  promoterPhone?: string;
+  promoterEmail?: string;
+  /** Venue's own production manager (the "house PM" the tour PM advances with). */
+  housePM?: string;
+  housePMPhone?: string;
+  /** Stage door street/entrance — what the bus driver needs. */
+  stageDoor?: string;
 }
 
 // ============================================================
@@ -558,10 +617,37 @@ export interface PlotImage {
   height?: number;
 }
 
+// --- Stage media (reserved "Stage design" section) ---------
+// A lightweight visual attachment for the stage-plot/design section: a
+// pasted external link (most commonly a Dropbox share link) or a locally
+// uploaded file, never a spec form or drag-and-drop canvas.
+export interface StageMediaItem {
+  id: ID;
+  kind: 'image' | 'video' | 'link';
+  /** Pasted external URL — a Dropbox share link, a direct image/video URL,
+   *  or a general link. Mutually exclusive in practice with `docId`. */
+  url?: string;
+  /** Set when the bytes were uploaded locally and stored via this app's
+   *  existing document-storage seam (`lib/documentStore.ts`), distinct from
+   *  a pasted `url`. */
+  docId?: string;
+  /** Runtime-only Blob URL for a `docId`-backed item — mirrors
+   *  `RiderImport.pdfObjectUrl` exactly: never persisted, stripped before
+   *  localStorage save, re-minted on boot. */
+  objectUrl?: string;
+  mimeType?: string;
+  caption?: string;
+  addedAt: UpdateStamp;
+}
+
 // --- Section payload (one of, by type) ---------------------
 export interface RiderSection {
+  /** Stable key for approvals/edits/history — replaces the fragile
+   *  `${type}-${index}` composite key used elsewhere. */
+  id: ID;
   type: RiderSectionType;
-  pages: number[];
+  /** Absent for an authored section (no source PDF pages). */
+  pages?: number[];
   status: RiderSectionStatus;
   confidence?: number;
   language?: string;
@@ -584,6 +670,9 @@ export interface RiderSection {
   conflicts?: Conflict[];
   /** Page-image references for visual sections (stage plot, lightplot). */
   plots?: PlotImage[];
+  /** Stage-media gallery attachments (images/video/links) for the reserved
+   *  "Stage design" section — see `StageMediaItem`. */
+  media?: StageMediaItem[];
   // free-text fallback for sections without dedicated structure
   freeText?: string;
   freeTextEn?: string;
@@ -593,9 +682,13 @@ export interface RiderSection {
   pageTexts?: { page: number; text: string }[];
 }
 
+// Where a rider's content originated. undefined === 'imported' (pre-dates this field).
+export type RiderOrigin = 'authored' | 'imported';
+
 export interface RiderImport {
   id: ID;
-  filename: string;
+  /** Absent for an authored rider (no source file). */
+  filename?: string;
   /** Blob URL for the uploaded PDF — live in the current browser session only.
    *  Stripped before localStorage persistence; rehydrated on boot from the raw
    *  bytes stored in IndexedDB (`lib/riderPdfStore.ts`), keyed by `id`. When
@@ -603,9 +696,13 @@ export interface RiderImport {
   pdfObjectUrl?: string;
   uploadedAt: ISODateTime;
   uploadedBy: string;
-  sourceLanguage: string;
-  pageCount: number;
+  /** Absent for an authored rider (no source PDF to detect a language from). */
+  sourceLanguage?: string;
+  /** Absent for an authored rider (no source PDF pages). */
+  pageCount?: number;
   status: IngestStatus;
+  /** undefined === 'imported' — no migration needed for existing persisted data. */
+  origin?: RiderOrigin;
   artistName?: string;
   revisionInfo?: { version?: string; date?: string; warning?: string };
   productionManager?: { name?: string; email?: string; phone?: string };
@@ -620,16 +717,22 @@ export interface RiderSectionEdit {
   inputList?: InputChannel[];
   monitorMix?: MonitorMix[];
   fohOutputs?: FOHOutput[];
+  backline?: BacklineSpec;
+  lodging?: LodgingSpec;
+  catering?: CateringSpec;
   freeText?: string;
   freeTextEn?: string;
 }
 
-// Archived record of a completed edit event (approved / rejected / direct manager edit).
+// Archived record of a completed edit event (approved / rejected / direct manager
+// edit / section created / section deleted). The last two cover the rider-authoring
+// structural mutators (addRiderSection / removeRiderSection / moveRiderSection /
+// renameRiderSection) — mirrors ScheduleItemEditRecord's 'created' | 'deleted'.
 export interface SectionEditRecord {
   patch: RiderSectionEdit;
   changes: FieldChange[];
   proposedAt?: UpdateStamp;   // undefined for direct manager edits
-  status: 'approved' | 'rejected' | 'direct';
+  status: 'approved' | 'rejected' | 'direct' | 'created' | 'deleted';
   resolvedAt: UpdateStamp;
 }
 
@@ -664,6 +767,74 @@ export interface ScheduleItemEditRecord {
   changes: FieldChange[];
   status: 'direct' | 'created' | 'deleted';
   resolvedAt: UpdateStamp;
+}
+
+// ============================================================
+// Venue negotiation — the rider gets sent to the venue per show;
+// the venue responds per item and the two sides reconcile back
+// and forth until every item is confirmed.
+// ============================================================
+
+// `RiderItemSnapshot` is defined here (not in lib/riderItems.ts, where it
+// originated) because `ShowAdvance` below needs it and this file imports
+// nothing — keeping it here avoids a types/index.ts <-> lib/riderItems.ts
+// circular import. lib/riderItems.ts imports it back from '@/types'.
+export interface RiderItemSnapshot {
+  itemKey: string;
+  sectionId: string;
+  sectionType: RiderSectionType;
+  sectionTitle: string;
+  kind: 'item' | 'section_ack';
+  label: string;
+  requestedQty: number;
+  qtyLabel?: string;
+  unit?: string;
+  notes?: string;
+  /** Set on a re-sent ShowAdvance.items entry that no longer appears in the
+   *  current rider — the item + its negotiation thread are carried forward
+   *  (not deleted) so history isn't silently lost, but it's read-only and
+   *  excluded from "fully confirmed" checks. Never set on a freshly-derived
+   *  item (see lib/riderItems.ts). */
+  stale?: boolean;
+}
+
+export type VenueItemAnswer = 'have' | 'partial' | 'dont_have' | 'acknowledged' | 'issue';
+
+export type ReconcileAction = 'accept_venue' | 'band_brings' | 'substitute' | 'drop';
+
+// One stamped entry in an item's negotiation thread — either the venue's
+// response, the TM's reconciling move, a free-text note, or a reopen event.
+export interface NegotiationEntry {
+  id: ID;
+  kind: 'venue_response' | 'tm_reconcile' | 'note' | 'reopened';
+  answer?: VenueItemAnswer;
+  qtyOffered?: number;
+  action?: ReconcileAction;
+  substitution?: string;
+  note?: string;
+  stamp: UpdateStamp;
+}
+
+export type NegotiationStatus = 'awaiting_venue' | 'awaiting_tm' | 'confirmed';
+
+export interface NegotiationThread {
+  showDayId: ID;
+  itemKey: string;
+  entries: NegotiationEntry[];
+  status: NegotiationStatus;
+}
+
+export type ShowRiderStatus = 'draft' | 'sent' | 'in_negotiation' | 'confirmed';
+
+export interface ShowAdvance {
+  showDayId: ID;
+  venueId?: ID;
+  status: ShowRiderStatus;
+  items: RiderItemSnapshot[];
+  riderRevision: number;
+  sentAt?: UpdateStamp;
+  confirmedAt?: UpdateStamp;
+  history: { status: ShowRiderStatus; stamp: UpdateStamp; note?: string }[];
 }
 
 // ============================================================

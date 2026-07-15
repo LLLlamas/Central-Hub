@@ -1,16 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
-import { useTour } from '@/components/tour/TourProvider';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, EmptyState } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
-import { MockBadge } from '@/components/provenance/MockBadge';
-import { MockTag } from '@/components/provenance/MockTag';
-import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { usePdfViewer } from '@/components/PdfViewer';
 import { FileDropZone } from '@/components/ingest/FileDropZone';
 import { UploadResultNote } from '@/components/ingest/UploadResultNote';
@@ -18,6 +14,7 @@ import type { UploadNote } from '@/components/ingest/UploadResultNote';
 import { CancelImportButton } from '@/components/ingest/CancelImportButton';
 import { ResolveUnmatchedModal } from '@/components/ingest/ResolveUnmatchedModal';
 import { LastUpdated } from '@/components/LastUpdated';
+import { FLIGHTS_ENABLED } from '@/lib/features';
 import { diffFlightImports, diffIsEmpty } from '@/lib/flightImportDiff';
 import { matchFixture, fixturesOfKind, nonMatchNote } from '@/lib/fixtureMatcher';
 import { parseRouteCsv } from '@/lib/routeCsv';
@@ -26,35 +23,35 @@ import { buildScratchFlightImport } from '@/data/flightFixture';
 import { buildScratchHotelImport } from '@/data/hotelFixture';
 import { parseFlightPdf, parseHotelPdf } from '@/lib/pdfParser';
 import { dayTypeLabel, fmtDate } from '@/lib/format';
+import { tourPath } from '@/lib/routing';
 import { cn } from '@/lib/cn';
 import type { FlightImport, DayType } from '@/types';
 
 type Note = UploadNote | null;
 
 /**
- * "Import route & travel" — the combined ingest page. The route CSV lays down
- * the tour skeleton (days, venues, show-day schedule); flight PDFs then attach
- * travel to those days. Two collapsible sections keep it from overwhelming.
+ * "Import route & hotels" — the combined ingest page. The route CSV lays down
+ * the tour skeleton (days, venues, show-day schedule); hotel PDFs then attach
+ * rooming to check-in days. Flights & travel is a third section, currently
+ * hidden behind FLIGHTS_ENABLED. Collapsible sections keep it from overwhelming.
  */
 export function FlightIngest() {
   const { tour, user } = useApp();
-  const { step } = useTour();
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const routeLoaded = tour.days.length > 0;
-  const activeStepId = step?.id;
 
   // Importing is a manager-only power tool. Crew contribute documents via /me
   // (the Submissions inbox surfaces what they send for review).
   if (!managerView) {
     return (
       <div>
-        <PageHeader eyebrow="Import route & travel" title="Route &amp; travel import" />
+        <PageHeader eyebrow="Import route & hotels" title="Route &amp; hotels import" />
         <Card>
           <EmptyState
             title="Managers only"
-            hint="Importing the route and travel is done by the TM/PM. Need to share a flight or document? Use My Travel & Info to submit it for review."
+            hint="Importing the route and hotels is done by the TM/PM. Need to share a document? Use My Travel & Info to submit it for review."
             action={
-              <Link to="/me">
+              <Link to={tourPath(tour.id, 'me')}>
                 <Button variant="primary" size="sm">Go to My Travel &amp; Info</Button>
               </Link>
             }
@@ -65,21 +62,19 @@ export function FlightIngest() {
   }
 
   return (
-    // pb-[40vh] gives the walkthrough room to scroll a bottom-of-page target
-    // (the hotel dropzone) into the upper third of the viewport so the coach-
-    // mark bubble doesn't overlap it when stepping from Flights → Hotels.
-    <div className="pb-[40vh]">
+    <div>
       <PageHeader
-        eyebrow="Import route & travel"
-        title="Route &amp; travel import"
-        description="First bring in the tour route, then the flights that move the party between cities."
-        meta={<MockBadge source="flight_import" />}
+        eyebrow="Import route & hotels"
+        title="Route &amp; hotels import"
+        description={FLIGHTS_ENABLED
+          ? 'First bring in the tour route, then the flights and hotels that move the party between cities.'
+          : 'First bring in the tour route, then the hotel bookings.'}
       />
 
       <div className="space-y-4">
         <CollapsibleSection
           title="Tour route &amp; schedule"
-          defaultOpen={!routeLoaded || activeStepId === 'route'}
+          defaultOpen={!routeLoaded}
           badge={
             routeLoaded ? (
               <Chip tone="success" size="sm" variant="outline">
@@ -93,30 +88,25 @@ export function FlightIngest() {
           <RouteImportSection />
         </CollapsibleSection>
 
-        <CollapsibleSection
-          title="Flights &amp; travel"
-          defaultOpen={
-            (routeLoaded && tour.hotels.length === 0) ||
-            activeStepId === 'flight' ||
-            activeStepId === 'flight-approve'
-          }
-          badge={(() => {
-            const pending = tour.flightImports.filter((fi) => fi.status === 'review').length;
-            const approved = tour.flightImports.filter((fi) => fi.status === 'imported').length;
-            if (pending > 0) return <Chip tone="rehearsal" size="sm" variant="outline">{pending} pending review</Chip>;
-            if (approved > 0) return <Chip tone="success" size="sm" variant="outline">✓ {approved} approved · travel records</Chip>;
-            return <Chip tone="neutral" size="sm" variant="outline">No imports yet</Chip>;
-          })()}
-        >
-          <FlightImportSection />
-        </CollapsibleSection>
+        {FLIGHTS_ENABLED && (
+          <CollapsibleSection
+            title="Flights &amp; travel"
+            defaultOpen={routeLoaded && tour.hotels.length === 0}
+            badge={(() => {
+              const pending = tour.flightImports.filter((fi) => fi.status === 'review').length;
+              const approved = tour.flightImports.filter((fi) => fi.status === 'imported').length;
+              if (pending > 0) return <Chip tone="rehearsal" size="sm" variant="outline">{pending} pending review</Chip>;
+              if (approved > 0) return <Chip tone="success" size="sm" variant="outline">✓ {approved} approved · travel records</Chip>;
+              return <Chip tone="neutral" size="sm" variant="outline">No imports yet</Chip>;
+            })()}
+          >
+            <FlightImportSection />
+          </CollapsibleSection>
+        )}
 
         <CollapsibleSection
           title="Hotels &amp; rooming"
-          defaultOpen={
-            (tour.hotels.length === 0 && tour.travel.length > 0) ||
-            activeStepId === 'hotel'
-          }
+          defaultOpen={tour.hotels.length === 0 && tour.days.length > 0}
           badge={
             tour.hotels.length > 0 ? (
               <Chip tone="success" size="sm" variant="outline">
@@ -130,11 +120,6 @@ export function FlightIngest() {
           <HotelImportSection />
         </CollapsibleSection>
       </div>
-
-      <DataSourcesPanel
-        sourceKeys={['route_import', 'flight_import', 'travel', 'tour_person']}
-        intro="The route CSV builds the tour calendar and a schedule skeleton; flight PDFs are reviewed, then approved into Travel records."
-      />
     </div>
   );
 }
@@ -188,7 +173,6 @@ function RouteImportSection() {
         title="Drop the tour-route CSV"
         hint={`Upload "${routeFixture.filename}" — ${routeFixture.extracts}`}
         icon={<Icon.Calendar size={22} />}
-        tourAnchor="route-dropzone"
       />
       {note && <UploadResultNote {...note} onDismiss={() => setNote(null)} />}
     </div>
@@ -246,7 +230,6 @@ function RouteSummary() {
             {tour.days.length} days · {tour.legs.length} leg
             {tour.legs.length === 1 ? '' : 's'}
           </span>
-          <MockTag source="route_import" field="Tour route" />
         </div>
         <Button
           size="sm"
@@ -272,7 +255,6 @@ function RouteSummary() {
             title="Drop a corrected route CSV"
             hint="The new file replaces the current route and rebuilds each day's starter schedule. Day locks and permissions are kept where dates still match; schedule edits made in Day Sheet Edit mode are not."
             icon={<Icon.Calendar size={22} />}
-            tourAnchor="route-reupload-dropzone"
           />
           {note && <UploadResultNote {...note} onDismiss={() => setNote(null)} />}
         </div>
@@ -453,7 +435,7 @@ function FlightImportSection() {
           <span>
             <strong>Tip — import the rider first.</strong> Passenger names are matched against
             your tour roster; right now the roster only has you. Drop the rider on{' '}
-            <Link to="/ingest/riders" className="underline font-semibold text-[var(--color-ink)]">
+            <Link to={tourPath(tour.id, 'ingest/riders')} className="underline font-semibold text-[var(--color-ink)]">
               Import rider
             </Link>{' '}
             so the band &amp; crew land on the roster before you import flights.
@@ -472,7 +454,6 @@ function FlightImportSection() {
               : 'Bulk import — upload a travel-grid CSV.'
           }
           icon={<Icon.Sparkle size={22} />}
-          tourAnchor="travel-grid-dropzone"
         />
         <FileDropZone
           accept=".pdf"
@@ -485,7 +466,6 @@ function FlightImportSection() {
               : 'Per-flight — upload a confirmation PDF.'
           }
           icon={<Icon.Plane size={22} />}
-          tourAnchor="flight-dropzone"
         />
       </div>
       {note && <div className="mb-5"><UploadResultNote {...note} onDismiss={() => setNote(null)} /></div>}
@@ -741,7 +721,7 @@ function FlightReview({ imp, duplicateOf }: { imp: FlightImport; duplicateOf?: F
               />
             )}
             {imp.status === 'review' && (
-              <span data-tour="flight-approve" className="inline-flex">
+              <span className="inline-flex">
                 <Button
                   size="sm"
                   variant="primary"
@@ -1057,7 +1037,6 @@ function HotelImportSection() {
         title="Drop hotel booking confirmation PDFs"
         hint={hint}
         icon={<Icon.Home size={22} />}
-        tourAnchor="hotel-dropzone"
       />
       {note && <UploadResultNote {...note} onDismiss={() => setNote(null)} />}
     </div>

@@ -1,7 +1,7 @@
 // Pure query helpers over a Tour object.
-// Previously these lived in data/mockTour.ts and read the static mockTour
-// directly — which bypassed the demo/scratch tour swap. They now take an
-// explicit `tour` so they work against whichever tour is active. AppState
+// Previously these lived in the old fixture data module and read that static
+// tour object directly — which bypassed the scratch tour swap. They now take
+// an explicit `tour` so they work against whichever tour is active. AppState
 // re-exposes them bound to the active tour (see state/AppState.tsx).
 
 import type {

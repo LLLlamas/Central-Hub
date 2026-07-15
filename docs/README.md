@@ -13,7 +13,7 @@ Reference docs for Central-Hub. The working map for day-to-day development is th
 
 - [tour-management-deep-research.md](tour-management-deep-research.md) — domain research: info architecture, tour lifecycle, competitor landscape.
 - [research/tour-ops-field-guide.html](research/tour-ops-field-guide.html) — "How a tour works" long-form field guide (final iteration; earlier v3/v3_1 drafts deleted, recoverable from git history).
-- [handoff-post-pdf-interpret.md](handoff-post-pdf-interpret.md) — the AI analysis of the rider PDF; source of the extracted rider data and the demo conflicts. Referenced by comments in `web/src/types/index.ts` and `web/src/data/mockTour.ts`.
+- [handoff-post-pdf-interpret.md](handoff-post-pdf-interpret.md) — the AI analysis of the rider PDF; source of the extracted rider data and the demo conflicts. Referenced by comments in `web/src/types/index.ts` and `web/src/data/fixtures/riderSeed.ts`.
 
 ## Audits
 

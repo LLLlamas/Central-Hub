@@ -2,11 +2,12 @@ import { NavLink } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
 import { Icon } from '@/components/ui/Icon';
 import { Chip } from '@/components/ui/Chip';
-import { MockTag } from '@/components/provenance/MockTag';
 import { SourceTag } from '@/components/provenance/SourceTag';
 import { cn } from '@/lib/cn';
 import { fmtDate, daysBetween } from '@/lib/format';
 import { getTodayIso } from '@/lib/today';
+import { sectionKey } from '@/lib/riderBuilder';
+import { isVenuePersona, VENUE_VISIBLE_ROUTES } from '@/lib/access';
 
 type NavEntry = {
   to: string;
@@ -16,23 +17,24 @@ type NavEntry = {
 };
 
 const nav: NavEntry[] = [
-  { to: '/', label: 'Today', icon: 'Home', group: 'tour' },
-  { to: '/calendar', label: 'Calendar', icon: 'Calendar', group: 'tour' },
-  { to: '/me', label: 'My Travel & Info', icon: 'User', group: 'tour' },
-  { to: '/personnel', label: 'People', icon: 'Users', group: 'tour' },
-  { to: '/plots', label: 'Plots', icon: 'Image', group: 'tour' },
-  { to: '/gear', label: 'Supplies & Costs', icon: 'Package', group: 'tour' },
-  { to: '/schedule', label: 'Schedule Permissions', icon: 'Layers', group: 'ops' },
-  { to: '/access', label: 'App User Permissions', icon: 'Lock', group: 'ops' },
-  { to: '/submissions', label: 'Submissions', icon: 'Inbox', group: 'ops' },
-  { to: '/daysheet', label: 'Day Sheets', icon: 'Document', group: 'ops' },
-  { to: '/ingest/flights', label: 'Import route & travel', icon: 'Plane', group: 'ingest' },
-  { to: '/ingest/riders', label: 'Import rider', icon: 'Sparkle', group: 'ingest' },
+  { to: '', label: 'Today', icon: 'Home', group: 'tour' },
+  { to: 'calendar', label: 'Calendar', icon: 'Calendar', group: 'tour' },
+  { to: 'me', label: 'My Travel & Info', icon: 'User', group: 'tour' },
+  { to: 'personnel', label: 'People', icon: 'Users', group: 'tour' },
+  { to: 'plots', label: 'Plots', icon: 'Image', group: 'tour' },
+  { to: 'gear', label: 'Supplies & Costs', icon: 'Package', group: 'tour' },
+  { to: 'advance', label: 'Venue advance', icon: 'Handshake', group: 'tour' },
+  { to: 'schedule', label: 'Schedule Permissions', icon: 'Layers', group: 'ops' },
+  { to: 'access', label: 'App User Permissions', icon: 'Lock', group: 'ops' },
+  { to: 'submissions', label: 'Submissions', icon: 'Inbox', group: 'ops' },
+  { to: 'daysheet', label: 'Day Sheets', icon: 'Document', group: 'ops' },
+  { to: 'rider', label: 'Rider', icon: 'Sparkle', group: 'ops' },
+  { to: 'ingest/flights', label: 'Import route & hotels', icon: 'MapPin', group: 'ingest' },
 ];
 
 // Routes only managers (TM/PM) see in the nav. Crew contribute via /me, not
 // the import tools or the manager-only ops screens.
-const MANAGER_ONLY = new Set(['/schedule', '/access', '/submissions', '/ingest/flights', '/ingest/riders']);
+const MANAGER_ONLY = new Set(['schedule', 'access', 'submissions', 'ingest/flights', 'rider']);
 
 const groupLabels: Record<NavEntry['group'], string> = {
   tour: 'Tour',
@@ -42,23 +44,18 @@ const groupLabels: Record<NavEntry['group'], string> = {
 
 function useIngestStatus(tour: ReturnType<typeof useApp>['tour'], isSectionApproved: ReturnType<typeof useApp>['isSectionApproved']) {
   const routeDone = tour.days.length > 0;
-  const flightsPending = tour.flightImports.filter((fi) => fi.status === 'review').length;
-  const flightsApproved = tour.flightImports.filter((fi) => fi.status === 'imported').length;
   const hotelsDone = tour.hotels.length > 0;
-  const travelStarted = routeDone || tour.flightImports.length > 0 || hotelsDone;
-  const travelDone = routeDone && flightsPending === 0 && flightsApproved > 0 && hotelsDone;
+  const travelStarted = routeDone || hotelsDone;
+  const travelDone = routeDone && hotelsDone;
 
   const riderImport = tour.riderImports[0];
   const riderStarted = !!riderImport;
-  // Mirror RiderIngest's sectionRows filter: exclude 'other'-type pseudo-sections
+  // Mirror RiderBuilder's sectionRows filter: exclude 'other'-type pseudo-sections
   // (the old conflicts rail entry — dropped from the review surface but still present
   // in imp.sections, causing an off-by-one vs the "N/M approved" header chip).
   const reviewableSections = riderImport?.sections?.filter((s) => s.type !== 'other') ?? [];
   const riderTotal = reviewableSections.length;
-  const riderApproved = reviewableSections.filter((s, i) => {
-    const globalIdx = riderImport!.sections.indexOf(s);
-    return isSectionApproved(`${s.type}-${globalIdx}`);
-  }).length;
+  const riderApproved = reviewableSections.filter((s) => isSectionApproved(sectionKey(s))).length;
   const riderDone = riderStarted && riderTotal > 0 && riderApproved === riderTotal;
 
   return { travelDone, travelStarted, travelPending: travelStarted && !travelDone, riderDone, riderStarted, riderPending: riderStarted && !riderDone };
@@ -68,6 +65,7 @@ export function Sidebar() {
   const { tour, user, lockedDays, isSectionApproved } = useApp();
   const ingest = useIngestStatus(tour, isSectionApproved);
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
+  const venuePersona = isVenuePersona(user);
   const today = getTodayIso();
   const dToStart = daysBetween(today, tour.startDate);
   const dToEnd = daysBetween(today, tour.endDate);
@@ -103,9 +101,8 @@ export function Sidebar() {
                 {stateLabel}
               </Chip>
             </div>
-            <div className="mt-2.5 font-mono text-[10.5px] text-[var(--color-ink-4)] tabular inline-flex items-center gap-1">
+            <div className="mt-2.5 font-mono text-[10.5px] text-[var(--color-ink-4)] tabular">
               {fmtDate(tour.startDate, 'MMM d')} - {fmtDate(tour.endDate, 'MMM d, yyyy')}
-              <MockTag source="tour_route" field="Tour dates" />
             </div>
             <div className="mt-3 pt-3 border-t border-[var(--color-rule-soft)] flex flex-wrap items-center gap-x-3 gap-y-1.5">
               <div
@@ -122,7 +119,12 @@ export function Sidebar() {
 
       <nav className="flex-1 overflow-y-auto py-3">
         {(['tour', 'ops', 'ingest'] as const).map((groupKey) => {
-          const entries = nav.filter((n) => n.group === groupKey && (!MANAGER_ONLY.has(n.to) || managerView));
+          const entries = nav.filter(
+            (n) =>
+              n.group === groupKey &&
+              (!MANAGER_ONLY.has(n.to) || managerView) &&
+              (!venuePersona || VENUE_VISIBLE_ROUTES.has(n.to)),
+          );
           if (entries.length === 0) return null;
           return (
           <div key={groupKey} className="px-3 mb-4">
@@ -133,16 +135,16 @@ export function Sidebar() {
               {entries.map((entry) => {
                 const I = Icon[entry.icon];
                 const dot =
-                  entry.to === '/ingest/flights'
+                  entry.to === 'ingest/flights'
                     ? ingest.travelDone ? 'green' : ingest.travelPending ? 'red' : 'grey'
-                    : entry.to === '/ingest/riders'
+                    : entry.to === 'rider'
                     ? ingest.riderDone ? 'green' : ingest.riderPending ? 'red' : 'grey'
                     : null;
                 return (
                   <li key={entry.to}>
                     <NavLink
                       to={entry.to}
-                      end={entry.to === '/'}
+                      end={entry.to === ''}
                       className={({ isActive }) =>
                         cn(
                           'flex items-center gap-2.5 px-2.5 py-1.5 rounded-[3px] text-[13px] font-semibold transition-colors',

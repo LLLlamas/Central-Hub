@@ -15,6 +15,8 @@ function fakeLocalStorage() {
   };
 }
 
+const TOUR_ID = 'tour_test-1';
+
 beforeEach(() => {
   (globalThis as { window?: unknown }).window = { localStorage: fakeLocalStorage() };
 });
@@ -24,37 +26,37 @@ afterEach(() => {
 
 describe('scratchStorage round-trip', () => {
   it('returns null for a new visitor with nothing stored', () => {
-    expect(loadScratchTour()).toBeNull();
+    expect(loadScratchTour(TOUR_ID)).toBeNull();
   });
 
   it('persists and restores a scratch tour deep-equal', () => {
-    const tour = createScratchTour();
-    saveScratchTour(tour);
-    expect(loadScratchTour()).toEqual(tour);
+    const tour = createScratchTour(TOUR_ID);
+    saveScratchTour(TOUR_ID, tour);
+    expect(loadScratchTour(TOUR_ID)).toEqual(tour);
   });
 
   it('saving null removes the stored tour', () => {
-    saveScratchTour(createScratchTour());
-    saveScratchTour(null);
-    expect(loadScratchTour()).toBeNull();
+    saveScratchTour(TOUR_ID, createScratchTour(TOUR_ID));
+    saveScratchTour(TOUR_ID, null);
+    expect(loadScratchTour(TOUR_ID)).toBeNull();
   });
 
   it('discards a corrupt stored payload', () => {
-    window.localStorage.setItem('tour-hub:scratch-tour', '{not valid json');
-    expect(loadScratchTour()).toBeNull();
+    window.localStorage.setItem(`tour-hub:tour:${TOUR_ID}`, '{not valid json');
+    expect(loadScratchTour(TOUR_ID)).toBeNull();
   });
 
   it('discards valid JSON that is not Tour-shaped', () => {
     // Valid JSON, wrong shape â€” would crash callers doing `tour.days.length`.
     for (const payload of ['"a string"', '42', '[]', '{"id":"x"}']) {
-      window.localStorage.setItem('tour-hub:scratch-tour', payload);
-      expect(loadScratchTour()).toBeNull();
+      window.localStorage.setItem(`tour-hub:tour:${TOUR_ID}`, payload);
+      expect(loadScratchTour(TOUR_ID)).toBeNull();
     }
   });
 
   it('clearScratchTour removes the stored tour', () => {
-    saveScratchTour(createScratchTour());
-    clearScratchTour();
-    expect(window.localStorage.getItem('tour-hub:scratch-tour')).toBeNull();
+    saveScratchTour(TOUR_ID, createScratchTour(TOUR_ID));
+    clearScratchTour(TOUR_ID);
+    expect(window.localStorage.getItem(`tour-hub:tour:${TOUR_ID}`)).toBeNull();
   });
 });

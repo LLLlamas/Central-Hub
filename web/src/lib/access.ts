@@ -41,6 +41,14 @@ export function isOwnerFloorRole(role: MemberRole): boolean {
   return OWNER_FLOOR_ROLES.has(role);
 }
 
+/** True when the current viewer is the simulated venue persona (`grp_venue`) — a narrower, second role check than `managerView`. */
+export function isVenuePersona(user: Pick<CurrentUser, 'groupId'>): boolean {
+  return user.groupId === 'grp_venue';
+}
+
+/** In-tour route fragments a venue persona may see in nav (Sidebar/More) — single source shared across nav surfaces so they can't drift. */
+export const VENUE_VISIBLE_ROUTES: ReadonlySet<string> = new Set(['advance']);
+
 /** Shape a Membership into the CurrentUser the visibility resolver expects. */
 export function membershipToCurrentUser(m: Membership): CurrentUser {
   return {

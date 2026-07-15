@@ -3,7 +3,7 @@
  * ------------------------------------------------------------
  * A brand-new tour manager opens the app with nothing: no route,
  * no rider, no crew but themselves. They build the tour up by
- * uploading the project's mock fixture files. See CLAUDE.md
+ * uploading the project's sample fixture files. See CLAUDE.md
  * "Data modes" for the full flow.
  *
  * This is a minimal shell: named, with the standard group
@@ -12,12 +12,11 @@
  * ============================================================
  */
 
-import type { Tour, Person, TourPerson, CurrentUser } from '@/types';
-import { groups } from '@/data/mockTour';
+import type { ID, Tour, Person, TourPerson, CurrentUser } from '@/types';
+import { groups } from '@/data/groups';
 import { getTodayIso } from '@/lib/today';
 import { buildScheduleTypeDefaults } from '@/lib/visibilityDefaults';
 
-export const SCRATCH_TOUR_ID = 'tour_scratch';
 export const SCRATCH_ORG_ID = 'org_scratch';
 export const SCRATCH_TOUR_NAME = 'My Tour 2026';
 export const SCRATCH_TM_TP_ID = 'tp_scratch_tm';
@@ -39,12 +38,14 @@ const scratchTmTourPerson: TourPerson = {
   endDate: '',
 };
 
-/** Build a fresh, empty scratch tour — the minimal shell. */
-export function createScratchTour(): Tour {
+/** Build a fresh, empty scratch tour — the minimal shell. `name` lets "+ New
+ *  show" give the tour a real name up front so multiple drafts aren't
+ *  indistinguishable in My Shows; omit it to fall back to the placeholder. */
+export function createScratchTour(tourId: ID, name?: string): Tour {
   return {
-    id: SCRATCH_TOUR_ID,
+    id: tourId,
     organizationId: SCRATCH_ORG_ID,
-    name: SCRATCH_TOUR_NAME,
+    name: name?.trim() || SCRATCH_TOUR_NAME,
     artistName: '',
     status: 'announced',
     // Placeholder span until a route is imported (applyRouteToScratch sets the

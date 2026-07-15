@@ -9,7 +9,7 @@ import {
 
 describe('createScratchTour', () => {
   it('is a named, empty shell with a single Tour Manager', () => {
-    const t = createScratchTour();
+    const t = createScratchTour('tour_test-1');
     expect(t.name).toBe(SCRATCH_TOUR_NAME);
     expect(t.personnel).toHaveLength(1);
     expect(t.personnel[0].id).toBe(SCRATCH_TM_TP_ID);
@@ -18,7 +18,7 @@ describe('createScratchTour', () => {
   });
 
   it('has every content collection empty but keeps the group taxonomy', () => {
-    const t = createScratchTour();
+    const t = createScratchTour('tour_test-1');
     expect(t.days).toEqual([]);
     expect(t.scheduleItems).toEqual([]);
     expect(t.travel).toEqual([]);
@@ -29,21 +29,21 @@ describe('createScratchTour', () => {
   });
 
   it('is JSON-serializable (so it can be persisted to localStorage)', () => {
-    const t = createScratchTour();
+    const t = createScratchTour('tour_test-1');
     expect(JSON.parse(JSON.stringify(t))).toEqual(t);
   });
 });
 
 describe('scratchUsers / scratchDefaultUserKey', () => {
   it('derives the viewer map from the tour personnel', () => {
-    const t = createScratchTour();
+    const t = createScratchTour('tour_test-1');
     const users = scratchUsers(t);
     expect(Object.keys(users)).toEqual([SCRATCH_TM_TP_ID]);
     expect(users[SCRATCH_TM_TP_ID].name).toBe('Tour Manager');
   });
 
   it('grows as personnel are added', () => {
-    const t = createScratchTour();
+    const t = createScratchTour('tour_test-1');
     t.personnel.push({
       id: 'tp_x',
       personId: 'p_x',
@@ -58,6 +58,6 @@ describe('scratchUsers / scratchDefaultUserKey', () => {
   });
 
   it('defaults the viewer to the Tour Manager', () => {
-    expect(scratchDefaultUserKey(createScratchTour())).toBe(SCRATCH_TM_TP_ID);
+    expect(scratchDefaultUserKey(createScratchTour('tour_test-1'))).toBe(SCRATCH_TM_TP_ID);
   });
 });

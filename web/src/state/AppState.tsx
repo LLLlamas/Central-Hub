@@ -13,6 +13,10 @@ import type { ParsedRoute } from '@/lib/routeCsv';
 import { vis } from '@/lib/visibility';
 import { getNowIso } from '@/lib/today';
 import { FLIGHT_COST_BY_LEG } from '@/data/flightFixture';
+import { normalizeRider, createRiderDraft as buildRiderDraft, sectionKey } from '@/lib/riderBuilder';
+import { getMergedSections, deriveRiderItems } from '@/lib/riderItems';
+import { threadKey, applyVenueResponse, applyReconcile, reopenThread, isShowFullyConfirmed } from '@/lib/negotiation';
+import { getVenueForTour, VENUE_DIRECTORY } from '@/data/venues';
 import type {
   Tour,
   CurrentUser,
@@ -36,6 +40,9 @@ import type {
   GroupTag,
   TourPerson,
   RiderImport,
+  RiderSection,
+  RiderSectionType,
+  StageMediaItem,
   FlightImport,
   FlightPassengerResolution,
   ScheduleItemType,
@@ -44,11 +51,24 @@ import type {
   DocumentSubmission,
   SubmissionType,
   DocumentKind,
+  ShowAdvance,
+  ShowRiderStatus,
+  NegotiationThread,
+  VenueItemAnswer,
+  ReconcileAction,
 } from '@/types';
 import { defaultVisibilityForType } from '@/lib/visibilityDefaults';
 import { scheduleItemLabel } from '@/lib/format';
 
 export type { ParsedRoute } from '@/lib/routeCsv';
+
+// Module scope (not component state) so it survives AppStateProvider
+// remounting on every tour switch (`key={tourId}` in TourScope) — pdfjs plot
+// rendering is expensive enough that re-doing it on every switch back into an
+// already-visited tour reads as a hang. Keyed by rider import id; entries for
+// tours no longer open just sit unused (bounded by riders touched this tab
+// session, not worth evicting for a single-session cache).
+const hydratedPlotsCache = new Map<ID, RiderImport>();
 
 export interface ConflictResolution {
   resolvedAt: string;       // ISO datetime
@@ -92,12 +112,49 @@ interface AppState {
   // The tour starts as an empty shell the user builds up by uploading fixture
   // files. Reset wipes it back to the shell. See CLAUDE.md "Data modes".
   resetScratchTour: () => void;
+  /** Rename the tour and/or set its artist name. Omit a field to leave it
+   *  unchanged; an empty/whitespace `name` is ignored (the tour always keeps
+   *  a name). */
+  renameTour: (patch: { name?: string; artistName?: string }) => void;
   applyRouteToScratch: (parsed: ParsedRoute, filename?: string) => void;
   addRiderImportToScratch: (ri: RiderImport, personnel: TourPerson[]) => void;
   /** Promote a stored rider revision to the active slot (riderImports[0]).
    *  Existing section approvals/edits are kept — they're keyed by section, not
    *  by import, so the user doesn't lose review work. */
   setActiveRider: (id: ID) => void;
+
+  // Rider authoring — the TM/PM builds the rider directly in-app from a
+  // consensus 14-section TOC template instead of only ever uploading a PDF.
+  // No-op (defensive) if riderImports already has an entry.
+  createRiderDraft: () => void;
+  /** Append a new section to the active rider (riderImports[0]). Returns the
+   *  new section's id so the caller can scroll to / auto-select it. */
+  addRiderSection: (type: RiderSectionType, title: string) => ID;
+  /** Remove a section from the active rider; also drops its now-orphaned
+   *  approval/edit/pending overlay entries. */
+  removeRiderSection: (sectionId: ID) => void;
+  /** Swap a section with its immediate neighbor (-1 = up, 1 = down) and
+   *  renumber every section's tocIndex to match the new order. */
+  moveRiderSection: (sectionId: ID, direction: -1 | 1) => void;
+  renameRiderSection: (sectionId: ID, title: string) => void;
+  /** Cover-page metadata (artist name / PM contact / party size) — a direct
+   *  manager write, not a negotiable section, so no propose/approve dance. */
+  updateRiderMeta: (patch: Partial<Pick<RiderImport, 'artistName' | 'productionManager' | 'partySize'>>) => void;
+
+  // Stage-media gallery (reserved "Stage design" section) — pasted links or
+  // locally-uploaded images/video, attached to a section on the active rider.
+  // Local uploads are a two-step split: the caller saves bytes through the
+  // document-storage seam itself (`backend.savePdf(tourId, 'doc', docId, bytes)`)
+  // and only then calls `addStageMedia` with that `docId` already set on
+  // `init`; the paste-a-link path just sets `init.url` directly. Either way
+  // this mutator itself stays synchronous, matching `addRiderSection` /
+  // `addGearItem` / `addTourPerson`. Returns the new item's id.
+  addStageMedia: (sectionId: ID, init: Omit<StageMediaItem, 'id' | 'addedAt' | 'objectUrl'>) => ID;
+  /** Remove a stage-media item; if it was a local upload (`docId` set), also
+   *  deletes the stored bytes via the same document-storage seam so orphaned
+   *  bytes don't accumulate. */
+  removeStageMedia: (sectionId: ID, mediaId: ID) => void;
+
   addFlightImportToScratch: (fi: FlightImport) => void;
   commitFlightImportToScratch: (importId: ID) => void;
   addHotelImportToScratch: (hotels: Hotel[], tasks: Task[], filename?: string) => void;
@@ -196,6 +253,9 @@ interface AppState {
   approvePendingEdit: (key: string) => void;
   rejectPendingEdit: (key: string) => void;
   getSectionHistory: (key: string) => SectionEditRecord[];
+  // Full history overlays, exposed raw for surfaces (e.g. UpdatesFeed) that
+  // fold every source together rather than looking up one key at a time.
+  sectionEditHistory: ReadonlyMap<string, SectionEditRecord[]>;
 
   pendingConflictResolutions: ReadonlyMap<ID, PendingConflictResolution>;
   getPendingConflictResolution: (id: ID) => PendingConflictResolution | undefined;
@@ -215,6 +275,7 @@ interface AppState {
   approvePendingVisibilityEdit: (itemId: ID) => void;
   rejectPendingVisibilityEdit: (itemId: ID) => void;
   getVisibilityHistory: (itemId: ID) => VisibilityEditRecord[];
+  visibilityEditHistory: ReadonlyMap<ID, VisibilityEditRecord[]>;
 
   // Schedule-item content edits (times / title / location / notes / type) plus
   // add + delete. These mutate the tour directly (not an overlay) so every read
@@ -224,6 +285,7 @@ interface AppState {
   addScheduleItem: (dayId: ID, init?: Partial<ScheduleItem>) => ID;
   deleteScheduleItem: (itemId: ID) => void;
   getScheduleItemHistory: (itemId: ID) => ScheduleItemEditRecord[];
+  scheduleItemEditHistory: ReadonlyMap<ID, ScheduleItemEditRecord[]>;
 
   // Personnel + groups — direct tour mutation (no propose/approve), mirroring
   // the schedule-item content edits. `addTourPerson` returns the new id.
@@ -232,6 +294,44 @@ interface AppState {
   updateTourPerson: (id: ID, patch: TourPersonPatch) => void;
   addGroup: (name: string, color: string) => ID;
 
+  // Venue negotiation — the rider is sent to each show's venue, the venue
+  // responds per item, and the two sides reconcile until every item is
+  // confirmed. `showAdvances` is keyed by showDayId; `negotiations` is keyed
+  // by `threadKey(showDayId, itemKey)` (see lib/negotiation.ts). Both are
+  // tour-shared overlays (persisted like every other Map above).
+  showAdvances: ReadonlyMap<ID, ShowAdvance>;
+  negotiations: ReadonlyMap<string, NegotiationThread>;
+  /** Send (or re-send) the active rider to the show's venue — snapshots the
+   *  current rider items onto a ShowAdvance and creates the venue's
+   *  TourPerson (grp_venue) if one doesn't exist yet. */
+  sendRiderToVenue: (showDayId: ID) => void;
+  /** Record the venue's answer for one item; auto-confirms when they have
+   *  everything requested, otherwise lands on `awaiting_tm`. */
+  recordVenueResponse: (
+    showDayId: ID,
+    itemKey: string,
+    answer: VenueItemAnswer,
+    qtyOffered?: number,
+    note?: string,
+  ) => void;
+  /** The TM's reconciling move for a gap the venue reported — always resolves
+   *  the item to `confirmed`. No-op if there's no thread yet. */
+  reconcileItem: (
+    showDayId: ID,
+    itemKey: string,
+    action: ReconcileAction,
+    substitution?: string,
+    note?: string,
+  ) => void;
+  /** Revisit an already-confirmed item, sending it back to the venue. No-op
+   *  if there's no thread yet. */
+  reopenNegotiation: (showDayId: ID, itemKey: string, note?: string) => void;
+  /** Marks the show's advance `confirmed` — no-op if any item isn't
+   *  confirmed yet (the UI should already disable this action then). */
+  markShowConfirmed: (showDayId: ID) => void;
+  getShowAdvance: (showDayId: ID) => ShowAdvance | undefined;
+  getNegotiationThread: (showDayId: ID, itemKey: string) => NegotiationThread | undefined;
+
   // Gear & supplies — a flat list of rider-sourced and manually-added items.
   // Status and cost are tracked here; the rider section is the source of truth
   // for item names/quantities. Persisted in the overlay bundle.
@@ -239,6 +339,9 @@ interface AppState {
   updateGearItem: (id: ID, patch: Partial<Omit<GearItem, 'id'>>) => void;
   addGearItem: (init: Omit<GearItem, 'id'>) => ID;
   deleteGearItem: (id: ID) => void;
+  /** Single "last updated" stamp for the whole gear list — bumped by every
+   *  gear mutator, mirroring how `getDayLastUpdated` tracks one stamp per day. */
+  gearUpdatedAt: UpdateStamp | undefined;
 
   // Inline cost edits for Travel + Hotel records — surfaced on the
   // Supplies & Costs page. Mutate the tour directly.
@@ -292,10 +395,6 @@ const Ctx = createContext<AppState | null>(null);
 
 // On the supabase backend, coalesce rapid tour/overlay edits into one DB write.
 const SUPABASE_WRITE_DEBOUNCE_MS = 500;
-
-// Stamp used when the rider import seeds approvals for sections the rider
-// marks already-approved — dated to when the PM reviewed revision 2.
-const SEED_SECTION_APPROVAL: UpdateStamp = { at: '2025-09-11T10:00', by: 'Manuel González' };
 
 function computeSectionChanges(before: RiderSectionEdit, after: RiderSectionEdit): FieldChange[] {
   const changes: FieldChange[] = [];
@@ -355,6 +454,25 @@ function computeSectionChanges(before: RiderSectionEdit, after: RiderSectionEdit
     changes.push({ rowLabel: 'Free text (EN)', field: 'freeTextEn', before: before.freeTextEn ?? '', after: after.freeTextEn ?? '' });
   }
 
+  // Coarse "did this field change at all" diff — these are single nested
+  // objects (not row lists like inputList/monitorMix above), so one
+  // FieldChange per changed field is sufficient; no deep per-row diff.
+  const beforeBackline = JSON.stringify(before.backline ?? null);
+  const afterBackline = JSON.stringify(after.backline ?? null);
+  if (beforeBackline !== afterBackline) {
+    changes.push({ rowLabel: 'Backline', field: 'backline', before: before.backline ? beforeBackline : '', after: after.backline ? afterBackline : '' });
+  }
+  const beforeLodging = JSON.stringify(before.lodging ?? null);
+  const afterLodging = JSON.stringify(after.lodging ?? null);
+  if (beforeLodging !== afterLodging) {
+    changes.push({ rowLabel: 'Lodging', field: 'lodging', before: before.lodging ? beforeLodging : '', after: after.lodging ? afterLodging : '' });
+  }
+  const beforeCatering = JSON.stringify(before.catering ?? null);
+  const afterCatering = JSON.stringify(after.catering ?? null);
+  if (beforeCatering !== afterCatering) {
+    changes.push({ rowLabel: 'Catering', field: 'catering', before: before.catering ? beforeCatering : '', after: after.catering ? afterCatering : '' });
+  }
+
   return changes;
 }
 
@@ -382,6 +500,16 @@ function computeVisibilityChanges(before: Visibility, after: Visibility): FieldC
   return changes;
 }
 
+// Run every rider import through `normalizeRider` the moment a tour is
+// obtained — from localStorage, freshly created, or (on supabase) pulled from
+// the backend — so every section has a stable `id` before anything else in
+// this file (or a component) reads `tour.riderImports`. Legacy sections (no
+// id, no origin) get their compat-shim id assigned here, once, up front.
+function normalizeTourRiders(t: Tour): Tour {
+  if (t.riderImports.length === 0) return t;
+  return { ...t, riderImports: t.riderImports.map(normalizeRider) };
+}
+
 function computeScheduleItemChanges(before: ScheduleItem, patch: ScheduleItemPatch): FieldChange[] {
   const changes: FieldChange[] = [];
   const fields: (keyof ScheduleItemPatch)[] = ['startTime', 'endTime', 'title', 'location', 'notes', 'type'];
@@ -395,7 +523,7 @@ function computeScheduleItemChanges(before: ScheduleItem, patch: ScheduleItemPat
   return changes;
 }
 
-export function AppStateProvider({ children }: { children: ReactNode }) {
+export function AppStateProvider({ children, tourId }: { children: ReactNode; tourId: ID }) {
   const auth = useAuth();
   const isSupabase = BACKEND_KIND === 'supabase';
 
@@ -411,16 +539,27 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // once auth is signed-in. The synchronous local reads return null on
   // supabase (no localStorage), so the shell is the harmless starting point.
   const [tour, setTour] = useState<Tour>(() =>
-    isSupabase ? createScratchTour() : loadScratchTour() ?? createScratchTour(),
+    normalizeTourRiders(
+      isSupabase ? createScratchTour(tourId) : loadScratchTour(tourId) ?? createScratchTour(tourId),
+    ),
   );
   const [booting, setBooting] = useState<boolean>(isSupabase);
   // Restore the overlay bundle (visibility edits, lock state, section
   // approvals / history, conflict resolutions, viewer choice). One read,
   // distributed into each state slot below.
-  const initialOverlays = useMemo(() => (isSupabase ? null : loadOverlays()), [isSupabase]);
+  const initialOverlays = useMemo(() => (isSupabase ? null : loadOverlays(tourId)), [isSupabase, tourId]);
   // Debounce timers for supabase writes (no-op on local).
   const tourSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overlaySaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Debounces `sectionEditHistory` appends from `updateSectionEdit` so a burst
+  // of same-field keystrokes (every EditableText onChange in Backline/Lodging/
+  // Catering fires one call per character, unlike a blur-commit input) collapses
+  // into a single history record instead of one per keystroke. `sectionEdits`
+  // itself is NOT debounced — it's updated synchronously on every call so the
+  // field stays live — only the audit-trail write is coalesced. `patch` accumulates
+  // every field touched during the burst (not just the latest call's patch) so
+  // switching fields mid-burst doesn't drop an earlier field's change from the diff.
+  const sectionEditDebounce = useRef<Map<string, { timer: ReturnType<typeof setTimeout>; before: RiderSectionEdit; patch: RiderSectionEdit }>>(new Map());
   const [userKey, setUserKey] = useState<string>(
     () => initialOverlays?.userKey ?? scratchDefaultUserKey(tour),
   );
@@ -466,6 +605,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [flightPassengerResolutions, setFlightPassengerResolutionsMap] = useState<
     ReadonlyMap<string, FlightPassengerResolution>
   >(() => new Map(initialOverlays?.flightPassengerResolutions ?? []));
+  const [showAdvances, setShowAdvances] = useState<ReadonlyMap<ID, ShowAdvance>>(
+    () => new Map(initialOverlays?.showAdvances ?? []),
+  );
+  const [negotiations, setNegotiations] = useState<ReadonlyMap<string, NegotiationThread>>(
+    () => new Map(initialOverlays?.negotiations ?? []),
+  );
   const [gearItems, setGearItems] = useState<GearItem[]>(
     () => initialOverlays?.gearItems ?? [],
   );
@@ -473,6 +618,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // effect so a plain reload doesn't resurrect items the user deleted.
   const [gearSeedRiderId, setGearSeedRiderId] = useState<string | null>(
     () => initialOverlays?.gearSeedRiderId ?? null,
+  );
+  // Single "last updated" stamp for the whole gear list — not a Map, since
+  // there's exactly one gear list per tour (unlike per-day / per-section
+  // stamps elsewhere in this file).
+  const [gearUpdatedAt, setGearUpdatedAt] = useState<UpdateStamp | undefined>(
+    () => initialOverlays?.gearUpdatedAt ?? undefined,
   );
   // Document submissions. On `local` this is the source of truth (persisted in
   // the overlay bundle); on `supabase` it's a cache refreshed from the backend.
@@ -507,15 +658,26 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // and the embedded viewer keep working without a re-upload. Re-runs only when
   // the set of riders-missing-a-url changes (stable id:hasUrl fingerprint).
   const riderUrlState = tour.riderImports.map((r) => `${r.id}:${r.pdfObjectUrl ? '1' : '0'}`).join(',');
+  // Every Blob URL this provider instance has minted, so they can be revoked
+  // when it unmounts (tour switch via the `key={tourId}` remount in
+  // TourScope, or the tab closing) instead of leaking for the session.
+  const mintedPdfUrlsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    return () => {
+      for (const url of mintedPdfUrlsRef.current) URL.revokeObjectURL(url);
+      mintedPdfUrlsRef.current.clear();
+    };
+  }, []);
   useEffect(() => {
     const needsUrl = tour.riderImports.filter((r) => !r.pdfObjectUrl);
     if (needsUrl.length === 0) return;
     let cancelled = false;
     Promise.all(
       needsUrl.map(async (ri) => {
-        const bytes = await backend.loadPdf('rider', ri.id);
+        const bytes = await backend.loadPdf(tourId, 'rider', ri.id);
         if (cancelled || !bytes) return null;
         const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        mintedPdfUrlsRef.current.add(url);
         return { id: ri.id, url };
       }),
     )
@@ -540,19 +702,107 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [riderUrlState]);
 
+  // Rehydrate every stage-media item's Blob URL after a reload, mirroring the
+  // rider-PDF rehydration effect above. `scratchStorage` strips `objectUrl` on
+  // save; the raw bytes for a locally-uploaded item (`docId` set) live in the
+  // document store (`lib/documentStore.ts`, via the `'doc'` PdfScope). Pasted-
+  // link items (`url` only, no `docId`) need no rehydration and are skipped.
+  // Only the active rider's sections are scanned — prior rider revisions'
+  // stage media isn't surfaced anywhere today.
+  const stageMediaUrlState = (tour.riderImports[0]?.sections ?? [])
+    .flatMap((s) => s.media ?? [])
+    .map((m) => `${m.id}:${m.docId ?? ''}:${m.objectUrl ? '1' : '0'}`)
+    .join(',');
+  const mintedStageMediaUrlsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    return () => {
+      for (const url of mintedStageMediaUrlsRef.current) URL.revokeObjectURL(url);
+      mintedStageMediaUrlsRef.current.clear();
+    };
+  }, []);
+  useEffect(() => {
+    const ri = tour.riderImports[0];
+    if (!ri) return;
+    const needsUrl: { sectionId: ID; mediaId: ID; docId: string; mimeType?: string }[] = [];
+    for (const s of ri.sections) {
+      for (const m of s.media ?? []) {
+        if (m.docId && !m.objectUrl) {
+          needsUrl.push({ sectionId: s.id, mediaId: m.id, docId: m.docId, mimeType: m.mimeType });
+        }
+      }
+    }
+    if (needsUrl.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      needsUrl.map(async (item) => {
+        const bytes = await backend.loadPdf(tourId, 'doc', item.docId);
+        if (cancelled || !bytes) return null;
+        const url = URL.createObjectURL(new Blob([bytes], { type: item.mimeType || 'application/octet-stream' }));
+        mintedStageMediaUrlsRef.current.add(url);
+        return { sectionId: item.sectionId, mediaId: item.mediaId, url };
+      }),
+    )
+      .then((results) => {
+        if (cancelled) return;
+        const updates = results.filter((r): r is { sectionId: ID; mediaId: ID; url: string } => r !== null);
+        if (updates.length === 0) return;
+        setTour((t) => {
+          const cur = t.riderImports[0];
+          if (!cur || cur.id !== ri.id) return t;
+          return {
+            ...t,
+            riderImports: [
+              {
+                ...cur,
+                sections: cur.sections.map((s) => {
+                  const matches = updates.filter((u) => u.sectionId === s.id);
+                  if (matches.length === 0 || !s.media) return s;
+                  return {
+                    ...s,
+                    media: s.media.map((m) => {
+                      const match = matches.find((u) => u.mediaId === m.id);
+                      return match ? { ...m, objectUrl: match.url } : m;
+                    }),
+                  };
+                }),
+              },
+              ...t.riderImports.slice(1),
+            ],
+          };
+        });
+      })
+      .catch(() => {
+        /* rehydrate failure is non-fatal — UI degrades to "no preview" affordance */
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageMediaUrlState]);
+
   // Re-derive plot data URLs after a reload. `scratchStorage` strips them on
   // save (base64 PNGs blow the localStorage quota), so a restored tour has
   // plot metadata but no images — render them once from the rider PDF.
+  // Rendering goes through pdfjs and is genuinely expensive, so the result is
+  // cached at module scope (survives this provider remounting on every tour
+  // switch, via `key={tourId}` in TourScope) keyed by rider import id — bouncing
+  // between tours in one session re-renders each rider's plots at most once.
   useEffect(() => {
     const ri = tour.riderImports[0];
     if (!ri) return;
     const needs = ri.sections.some((s) => s.plots?.some((p) => !p.dataUrl));
     if (!needs) return;
+    const cached = hydratedPlotsCache.get(ri.id);
+    if (cached) {
+      setTour((t) => (t.riderImports[0]?.id === ri.id ? { ...t, riderImports: [cached, ...t.riderImports.slice(1)] } : t));
+      return;
+    }
     let cancelled = false;
     (async () => {
       const { hydrateRiderPlotImages } = await import('@/data/riderFixture');
       const hydrated = await hydrateRiderPlotImages(ri);
       if (cancelled) return;
+      hydratedPlotsCache.set(ri.id, hydrated);
       setTour((t) => {
         // Bail if the import has been swapped in the meantime.
         if (t.riderImports[0]?.id !== ri.id) return t;
@@ -576,6 +826,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     // Already seeded from this rider — skip, or a reload would re-append items
     // the user deleted.
     if (gearSeedRiderId === ri.id) return;
+    // An authored rider has no PDF to derive the hardcoded fixture gear list
+    // from — it's tied to the demo rider's specific content and would be
+    // nonsensical for a rider the TM is writing from scratch. A later phase
+    // adds a manager-triggered "sync gear from rider" action that derives
+    // gear from authored content instead.
+    if (ri.origin === 'authored') {
+      setGearSeedRiderId(ri.id);
+      return;
+    }
     let cancelled = false;
     import('@/data/gearFixture').then(({ buildRiderGearItems, mergeGearItems }) => {
       if (cancelled) return;
@@ -620,8 +879,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       visibilityEditHistory: [...visibilityEditHistory.entries()],
       scheduleItemEditHistory: [...scheduleItemEditHistory.entries()],
       flightPassengerResolutions: [...flightPassengerResolutions.entries()],
+      showAdvances: [...showAdvances.entries()],
+      negotiations: [...negotiations.entries()],
       gearItems,
       gearSeedRiderId,
+      gearUpdatedAt,
       submissions,
       userKey,
     }),
@@ -640,8 +902,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       visibilityEditHistory,
       scheduleItemEditHistory,
       flightPassengerResolutions,
+      showAdvances,
+      negotiations,
       gearItems,
       gearSeedRiderId,
+      gearUpdatedAt,
       submissions,
       userKey,
     ],
@@ -666,8 +931,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setVisibilityEditHistory(new Map(b.visibilityEditHistory ?? []));
     setScheduleItemEditHistory(new Map(b.scheduleItemEditHistory ?? []));
     setFlightPassengerResolutionsMap(new Map(b.flightPassengerResolutions ?? []));
+    setShowAdvances(new Map(b.showAdvances ?? []));
+    setNegotiations(new Map(b.negotiations ?? []));
     if (b.gearItems) setGearItems(b.gearItems);
     if (b.gearSeedRiderId !== undefined) setGearSeedRiderId(b.gearSeedRiderId);
+    if (b.gearUpdatedAt !== undefined) setGearUpdatedAt(b.gearUpdatedAt);
     if (b.submissions) setSubmissions(b.submissions);
     if (b.userKey) setUserKey(b.userKey);
   }, []);
@@ -701,10 +969,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     // First-emission guard: load overlays / seed exactly once. Later emissions
     // are realtime tour updates and only refresh `tour`.
     let firstHandled = false;
-    const unsub = backend.subscribeTour(null, (cloudTour) => {
+    const unsub = backend.subscribeTour(tourId, (cloudTour) => {
       if (cancelled) return;
       if (cloudTour) {
-        setTour(cloudTour);
+        setTour(normalizeTourRiders(cloudTour));
         if (!firstHandled) {
           firstHandled = true;
           void backend.loadOverlays(cloudTour.id).then((b) => {
@@ -720,7 +988,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       // Falls back to a per-user id if no membership tour is known.
       if (!firstHandled) {
         firstHandled = true;
-        const fresh = createScratchTour();
+        const fresh = createScratchTour(tourId);
         const tid = auth.membership?.tourId || (auth.user?.uid ? `tour_${auth.user.uid}` : fresh.id);
         fresh.id = tid;
         setTour(fresh);
@@ -787,7 +1055,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // the user truly starts from scratch.
   const resetScratchTour = useCallback(() => {
     const prevTourId = tour.id;
-    const t = createScratchTour();
+    const t = createScratchTour(tourId);
     // Keep the per-user tour id on supabase so reset re-seeds the same row.
     if (isSupabase) t.id = prevTourId;
     setTour(t);
@@ -799,6 +1067,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setSectionEdits(new Map());
     setPendingEdits(new Map());
     setPendingConflictResolutions(new Map());
+    for (const { timer } of sectionEditDebounce.current.values()) clearTimeout(timer);
+    sectionEditDebounce.current.clear();
     setSectionEditHistory(new Map());
     setDayLockHistory(new Map());
     setVisibilityEdits(new Map());
@@ -806,23 +1076,40 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setVisibilityEditHistory(new Map());
     setScheduleItemEditHistory(new Map());
     setFlightPassengerResolutionsMap(new Map());
+    setShowAdvances(new Map());
+    setNegotiations(new Map());
     setGearItems([]);
     setGearSeedRiderId(null);
+    setGearUpdatedAt(undefined);
     setSubmissions([]);
     if (isSupabase) {
       // Wipe the cloud tour + overlays + PDFs, then re-seed the fresh shell.
       void backend.clearAll(prevTourId).then(() => backend.saveTour(t));
     } else {
-      clearOverlays();
-      void clearAllRiderPdfs();
-      void clearAllDocuments();
+      clearOverlays(tourId);
+      void clearAllRiderPdfs(tourId);
+      void clearAllDocuments(tourId);
     }
-  }, [tour.id, isSupabase]);
+  }, [tour.id, isSupabase, tourId]);
 
   // ---- Tour mutators -------------------------------------------------------
   const updateScratchTour = useCallback((updater: (t: Tour) => Tour) => {
     setTour((prev) => updater(prev));
   }, []);
+  /** Rename the tour and/or set its artist name — the only way `Tour.name`
+   *  changes post-creation today. Additive: no current surface calls this
+   *  yet, but it gives a future "Tour settings" page one mutator to call
+   *  instead of reaching into `updateScratchTour` directly. */
+  const renameTour = useCallback(
+    (patch: { name?: string; artistName?: string }) => {
+      updateScratchTour((t) => ({
+        ...t,
+        name: patch.name !== undefined ? patch.name.trim() || t.name : t.name,
+        artistName: patch.artistName !== undefined ? patch.artistName.trim() : t.artistName,
+      }));
+    },
+    [updateScratchTour],
+  );
   const applyRouteToScratch = useCallback(
     (parsed: ParsedRoute, filename?: string) => {
       updateScratchTour((t) => ({
@@ -865,15 +1152,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           personnel: [...t.personnel, ...newPersonnel.filter((p) => !existing.has(p.id))],
         };
       });
-      // Seed approvals for sections the rider marks already-approved (parity
-      // with demo mode) so the review surface shows a realistic mixed state.
-      setSectionApprovals((prev) => {
-        const next = new Map(prev);
-        ri.sections.forEach((s, i) => {
-          if (s.status === 'approved') next.set(`${s.type}-${i}`, SEED_SECTION_APPROVAL);
-        });
-        return next;
-      });
+      // No approval seeding here — an authored or freshly-imported rider
+      // starts with nothing pre-approved; the TM must explicitly mark each
+      // section complete via `approveSection`.
       // Gear seeding is handled by the useEffect below that watches
       // `tour.riderImports[0]?.id` — same pattern as plot image hydration.
     },
@@ -892,6 +1173,220 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     },
     [updateScratchTour],
   );
+
+  // ---- Rider authoring (create-from-TOC-template + structural edits) ------
+  // The TM/PM author the rider directly in-app from a consensus 14-section
+  // table of contents, rather than only ever extracting one from an uploaded
+  // PDF. `createRiderDraft` (pure fn in lib/riderBuilder.ts) builds the blank
+  // template; the four structural mutators below let the TM add/remove/
+  // reorder/rename sections afterward. All are manager-direct writes (no
+  // propose/approve dance) — same spirit as updateScheduleItem content edits.
+  const createRiderDraft = useCallback(() => {
+    updateScratchTour((t) => {
+      if (t.riderImports.length > 0) return t; // defensive — UI already gates on this
+      const draft = buildRiderDraft(currentName);
+      return { ...t, riderImports: [draft, ...t.riderImports] };
+    });
+  }, [updateScratchTour, currentName]);
+
+  // Splice a patch into the active rider (riderImports[0]) — shared by every
+  // rider-authoring mutator below so the "no active rider" guard and the
+  // splice-back-into-array plumbing isn't repeated per mutator.
+  const updateActiveRider = useCallback(
+    (fn: (ri: RiderImport) => RiderImport) => {
+      updateScratchTour((t) => {
+        const cur = t.riderImports[0];
+        if (!cur) return t;
+        return { ...t, riderImports: [fn(cur), ...t.riderImports.slice(1)] };
+      });
+    },
+    [updateScratchTour],
+  );
+
+  // Append one SectionEditRecord to a section's history overlay — shared by
+  // every rider-section mutator that logs an audit entry.
+  const appendSectionHistory = useCallback((key: ID, record: SectionEditRecord) => {
+    setSectionEditHistory((prev) => {
+      const next = new Map(prev);
+      next.set(key, [...(prev.get(key) ?? []), record]);
+      return next;
+    });
+  }, []);
+
+  const addRiderSection = useCallback(
+    (type: RiderSectionType, title: string): ID => {
+      const id: ID = `sec_${crypto.randomUUID()}`;
+      updateActiveRider((cur) => {
+        const maxToc = cur.sections.reduce((m, s) => Math.max(m, s.tocIndex ?? 0), 0);
+        const newSection: RiderSection = { id, type, title, status: 'pending', tocIndex: maxToc + 1 };
+        return { ...cur, sections: [...cur.sections, newSection] };
+      });
+      appendSectionHistory(id, {
+        patch: {},
+        changes: [{ rowLabel: title, field: 'created', before: '', after: title }],
+        status: 'created',
+        resolvedAt: { at: getNowIso(), by: currentName },
+      });
+      return id;
+    },
+    [updateActiveRider, appendSectionHistory, currentName],
+  );
+
+  const removeRiderSection = useCallback(
+    (sectionId: ID) => {
+      const section = tour.riderImports[0]?.sections.find((s) => s.id === sectionId);
+      if (!section) return;
+      const key = sectionKey(section);
+      updateActiveRider((cur) => ({ ...cur, sections: cur.sections.filter((s) => s.id !== sectionId) }));
+      // Clean up now-orphaned overlay entries for the deleted section. Also
+      // cancel any in-flight debounced history write for this key (see
+      // `updateSectionEdit`) so a stray edit made just before removal can't
+      // push a history record for a section that no longer exists.
+      const pendingDebounce = sectionEditDebounce.current.get(key);
+      if (pendingDebounce) {
+        clearTimeout(pendingDebounce.timer);
+        sectionEditDebounce.current.delete(key);
+      }
+      setSectionApprovals((prev) => {
+        if (!prev.has(key)) return prev;
+        const next = new Map(prev);
+        next.delete(key);
+        return next;
+      });
+      setSectionEdits((prev) => {
+        if (!prev.has(key)) return prev;
+        const next = new Map(prev);
+        next.delete(key);
+        return next;
+      });
+      setPendingEdits((prev) => {
+        if (!prev.has(key)) return prev;
+        const next = new Map(prev);
+        next.delete(key);
+        return next;
+      });
+      const label = section.title ?? section.type;
+      appendSectionHistory(key, {
+        patch: {},
+        changes: [{ rowLabel: label, field: 'deleted', before: label, after: '' }],
+        status: 'deleted',
+        resolvedAt: { at: getNowIso(), by: currentName },
+      });
+    },
+    [tour.riderImports, updateActiveRider, appendSectionHistory, currentName],
+  );
+
+  const moveRiderSection = useCallback(
+    (sectionId: ID, direction: -1 | 1) => {
+      const ri = tour.riderImports[0];
+      const idx = ri?.sections.findIndex((s) => s.id === sectionId) ?? -1;
+      if (!ri || idx === -1) return;
+      const swapIdx = idx + direction;
+      if (swapIdx < 0 || swapIdx >= ri.sections.length) return;
+      const section = ri.sections[idx];
+      const key = sectionKey(section);
+      updateActiveRider((cur) => {
+        const curIdx = cur.sections.findIndex((s) => s.id === sectionId);
+        const curSwapIdx = curIdx + direction;
+        if (curIdx === -1 || curSwapIdx < 0 || curSwapIdx >= cur.sections.length) return cur;
+        const sections = [...cur.sections];
+        [sections[curIdx], sections[curSwapIdx]] = [sections[curSwapIdx], sections[curIdx]];
+        // Only renumber sections meant to carry a tocIndex (same predicate as
+        // RiderBuilder's `sectionRows` filter). The trailing legacy "other"-type
+        // conflicts pseudo-section (no tocIndex, hidden from the rail) must never
+        // be assigned one here — that would surface it as a bogus rail entry and
+        // risk it being renamed/removed, silently destroying real conflict data.
+        let nextToc = 0;
+        const renumbered = sections.map((s) => {
+          const carriesTocIndex = s.type !== 'other' || s.tocIndex != null;
+          if (!carriesTocIndex) return s;
+          nextToc += 1;
+          return { ...s, tocIndex: nextToc };
+        });
+        return { ...cur, sections: renumbered };
+      });
+      const label = section.title ?? section.type;
+      appendSectionHistory(key, {
+        patch: {},
+        changes: [{ rowLabel: label, field: 'tocIndex', before: String(idx + 1), after: String(swapIdx + 1) }],
+        status: 'direct',
+        resolvedAt: { at: getNowIso(), by: currentName },
+      });
+    },
+    [tour.riderImports, updateActiveRider, appendSectionHistory, currentName],
+  );
+
+  const renameRiderSection = useCallback(
+    (sectionId: ID, title: string) => {
+      const section = tour.riderImports[0]?.sections.find((s) => s.id === sectionId);
+      if (!section) return;
+      const key = sectionKey(section);
+      const before = section.title ?? section.type;
+      updateActiveRider((cur) => ({
+        ...cur,
+        sections: cur.sections.map((s) => (s.id === sectionId ? { ...s, title } : s)),
+      }));
+      appendSectionHistory(key, {
+        patch: {},
+        changes: [{ rowLabel: before, field: 'title', before, after: title }],
+        status: 'direct',
+        resolvedAt: { at: getNowIso(), by: currentName },
+      });
+    },
+    [tour.riderImports, updateActiveRider, appendSectionHistory, currentName],
+  );
+
+  // Cover-page metadata (artist name / PM contact / party size) — not a
+  // negotiable section, so a plain direct write, same spirit as `renameTour`.
+  const updateRiderMeta = useCallback(
+    (patch: Partial<Pick<RiderImport, 'artistName' | 'productionManager' | 'partySize'>>) => {
+      updateActiveRider((cur) => ({ ...cur, ...patch }));
+    },
+    [updateActiveRider],
+  );
+
+  // ---- Stage-media gallery (reserved "Stage design" section) --------------
+  // Attachments are either a pasted link (`init.url` set, nothing to store)
+  // or a local upload — for that path the caller has already awaited saving
+  // the bytes via `backend.savePdf(tourId, 'doc', docId, bytes)` and passes
+  // that `docId` in `init`. Either way this mutator is a synchronous direct
+  // write, matching `addRiderSection` / `addGearItem`. No size-cap check here:
+  // by the time bytes reach the document store the UI has already validated
+  // them against the 25 MB soft cap — see the interface doc comment above.
+  const addStageMedia = useCallback(
+    (sectionId: ID, init: Omit<StageMediaItem, 'id' | 'addedAt' | 'objectUrl'>): ID => {
+      const id: ID = `media_${crypto.randomUUID()}`;
+      const item: StageMediaItem = {
+        ...init,
+        id,
+        addedAt: { at: getNowIso(), by: currentName },
+      };
+      updateActiveRider((cur) => ({
+        ...cur,
+        sections: cur.sections.map((s) => (s.id === sectionId ? { ...s, media: [...(s.media ?? []), item] } : s)),
+      }));
+      return id;
+    },
+    [updateActiveRider, currentName],
+  );
+
+  const removeStageMedia = useCallback(
+    (sectionId: ID, mediaId: ID) => {
+      const section = tour.riderImports[0]?.sections.find((s) => s.id === sectionId);
+      const item = section?.media?.find((m) => m.id === mediaId);
+      updateActiveRider((cur) => ({
+        ...cur,
+        sections: cur.sections.map((s) =>
+          s.id === sectionId && s.media ? { ...s, media: s.media.filter((m) => m.id !== mediaId) } : s,
+        ),
+      }));
+      // Orphaned bytes clean-up — mirrors `cancelRiderImport`'s fire-and-forget
+      // `backend.deletePdf` for the rider PDF store.
+      if (item?.docId) void backend.deletePdf(tourId, 'doc', item.docId);
+    },
+    [tour.riderImports, updateActiveRider, tourId],
+  );
+
   const addFlightImportToScratch = useCallback(
     (fi: FlightImport) => {
       updateScratchTour((t) => {
@@ -1081,7 +1576,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         ...t,
         riderImports: t.riderImports.filter((r) => r.id !== id),
       }));
-      void backend.deletePdf('rider', id);
+      void backend.deletePdf(tourId, 'rider', id);
       // Clear gear items seeded from this rider so re-import gets a fresh list.
       setGearItems([]);
       setGearSeedRiderId(null);
@@ -1621,18 +2116,32 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       return next;
     });
     if (before) {
-      const changes = computeSectionChanges(before, patch);
-      setSectionEditHistory((prev) => {
-        const next = new Map(prev);
-        const record: SectionEditRecord = {
-          patch,
-          changes,
-          status: 'direct',
-          resolvedAt: { at: getNowIso(), by: currentName },
-        };
-        next.set(key, [...(prev.get(key) ?? []), record]);
-        return next;
-      });
+      // Coalesce a burst of rapid edits into one history record: keep the
+      // *first* `before` seen in the burst and accumulate every patch touched
+      // during it (so switching fields mid-burst still shows up in the diff),
+      // then push the merged record after a short quiet period.
+      const pendingMap = sectionEditDebounce.current;
+      const existing = pendingMap.get(key);
+      if (existing) clearTimeout(existing.timer);
+      const burstBefore = existing?.before ?? before;
+      const mergedPatch = { ...existing?.patch, ...patch };
+      const timer = setTimeout(() => {
+        pendingMap.delete(key);
+        const changes = computeSectionChanges(burstBefore, mergedPatch);
+        if (changes.length === 0) return;
+        setSectionEditHistory((prev) => {
+          const next = new Map(prev);
+          const record: SectionEditRecord = {
+            patch: mergedPatch,
+            changes,
+            status: 'direct',
+            resolvedAt: { at: getNowIso(), by: currentName },
+          };
+          next.set(key, [...(prev.get(key) ?? []), record]);
+          return next;
+        });
+      }, 800);
+      pendingMap.set(key, { timer, before: burstBefore, patch: mergedPatch });
     }
   }, [currentName]);
 
@@ -1996,11 +2505,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   );
 
   // ---- Gear & supplies mutations ------------------------------------------
+  // Every mutator also bumps `gearUpdatedAt` — the single "last updated" stamp
+  // for the whole list (surfaced as one line on the Gear page), same stamp
+  // discipline as every other mutator in this file.
+  const stampGear = useCallback(() => {
+    setGearUpdatedAt({ at: getNowIso(), by: currentName });
+  }, [currentName]);
+
   const updateGearItem = useCallback(
     (itemId: ID, patch: Partial<Omit<GearItem, 'id'>>) => {
       setGearItems((prev) => prev.map((g) => (g.id === itemId ? { ...g, ...patch } : g)));
+      stampGear();
     },
-    [],
+    [stampGear],
   );
 
   const addGearItem = useCallback(
@@ -2015,16 +2532,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         while (ids.has(id)) id = `gear_manual_${++n}`;
         return [...prev, { ...init, id }];
       });
+      stampGear();
       return id;
     },
-    [],
+    [stampGear],
   );
 
   const deleteGearItem = useCallback(
     (itemId: ID) => {
       setGearItems((prev) => prev.filter((g) => g.id !== itemId));
+      stampGear();
     },
-    [],
+    [stampGear],
   );
 
   // ---- Document submissions (Milestone 2) ---------------------------------
@@ -2059,14 +2578,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         if (created && file) {
           // Path segment {uid}/{id} → {tourId}/submissions/{uid}/{id}.pdf.
           const seg = `${created.uid}/${created.id}`;
-          await backend.savePdf('submissions', seg, await file.arrayBuffer());
+          await backend.savePdf(tourId, 'submissions', seg, await file.arrayBuffer());
         }
         if (created) setSubmissions((prev) => [created, ...prev]);
         return created ?? null;
       }
       // Local: synthesize the row and store bytes keyed by id.
       const id = `sub_local_${Date.now()}`;
-      if (file) await backend.savePdf('submissions', id, await file.arrayBuffer());
+      if (file) await backend.savePdf(tourId, 'submissions', id, await file.arrayBuffer());
       const sub: DocumentSubmission = {
         id,
         tourId: tour.id,
@@ -2128,7 +2647,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       if (!sub.storagePath && !sub.filename) return null;
       // Local stores bytes keyed by the submission id; supabase under {uid}/{id}.
       const key = isSupabase ? `${sub.uid}/${sub.id}` : sub.id;
-      const bytes = await backend.loadPdf('submissions', key);
+      const bytes = await backend.loadPdf(tourId, 'submissions', key);
       if (!bytes) return null;
       const type = sub.filename?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream';
       return URL.createObjectURL(new Blob([bytes], { type }));
@@ -2170,15 +2689,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // ---- Travel / Hotel cost edits ------------------------------------------
   // Inline edits from the Supplies & Costs page. Mutate the tour directly
   // (rebuild + persist), the same shape as updateScheduleItem — every read
-  // site sees the change without an overlay layer.
+  // site sees the change without an overlay layer. Both also bump `stampGear`
+  // since they land on the same Gear page and feed the same Grand total the
+  // page's one "last updated" line reports on.
   const updateHotelCost = useCallback(
     (hotelId: ID, patch: Partial<Pick<Hotel, 'nightlyRate' | 'currency' | 'taxRate'>>) => {
       updateScratchTour((t) => ({
         ...t,
         hotels: t.hotels.map((h) => (h.id === hotelId ? { ...h, ...patch } : h)),
       }));
+      stampGear();
     },
-    [updateScratchTour],
+    [updateScratchTour, stampGear],
   );
 
   const updateTravelCost = useCallback(
@@ -2187,8 +2709,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         ...t,
         travel: t.travel.map((tr) => (tr.id === travelId ? { ...tr, ...patch } : tr)),
       }));
+      stampGear();
     },
-    [updateScratchTour],
+    [updateScratchTour, stampGear],
   );
 
   const addGroup = useCallback(
@@ -2203,6 +2726,191 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       return id;
     },
     [tour.groups, updateScratchTour],
+  );
+
+  // ---- Venue negotiation ---------------------------------------------------
+  // The rider is sent to each show's venue; the venue answers per item; the
+  // TM reconciles any gap. `showAdvances` snapshots the rider's items per
+  // show; `negotiations` holds the stamped thread per item (keyed via
+  // `threadKey`). Pure state transitions live in lib/negotiation.ts — this
+  // file only owns persistence + stamping, mirroring sectionApprovals/
+  // resolvedConflicts above.
+  const sendRiderToVenue = useCallback(
+    (showDayId: ID) => {
+      const day = tour.days.find((d) => d.id === showDayId);
+      if (!day) return;
+      const venueId = day.venueId;
+      const venue = getVenueForTour(tour, venueId);
+      const stamp: UpdateStamp = { at: getNowIso(), by: currentName };
+
+      if (venueId) {
+        const venuePersonId = `tp_venue_${venueId}`;
+        const hasVenuePerson = tour.personnel.some((p) => p.id === venuePersonId);
+        if (!hasVenuePerson) {
+          const venueName = venue?.name ?? 'Venue';
+          const newPerson: TourPerson = {
+            id: venuePersonId,
+            personId: `p_venue_${venueId}`,
+            person: { id: `p_venue_${venueId}`, name: venue?.housePM ?? `${venueName} production` },
+            role: `House PM — ${venueName}`,
+            groupId: 'grp_venue',
+            tagIds: [],
+            startDate: tour.startDate,
+            endDate: tour.endDate,
+            isPlaceholder: !venue?.housePM,
+          };
+          updateScratchTour((t) => ({ ...t, personnel: [...t.personnel, newPerson] }));
+        }
+      }
+
+      const activeRider = tour.riderImports[0];
+      const mergedSections = activeRider ? getMergedSections(activeRider.sections, sectionEdits) : [];
+      const items = deriveRiderItems(mergedSections);
+      const riderRevision = activeRider?.revision ?? 0;
+
+      const existing = showAdvances.get(showDayId);
+      if (!existing) {
+        const advance: ShowAdvance = {
+          showDayId,
+          venueId,
+          status: 'sent',
+          items,
+          riderRevision,
+          sentAt: stamp,
+          history: [{ status: 'sent', stamp }],
+        };
+        setShowAdvances((prev) => {
+          const next = new Map(prev);
+          next.set(showDayId, advance);
+          return next;
+        });
+        return;
+      }
+
+      // Re-send: items that dropped out of the current rider keep their
+      // existing negotiation thread untouched (not deleted) — carried forward
+      // flagged `stale: true` so the negotiation history stays visible
+      // (AdvanceDetail renders them read-only in a "no longer in the current
+      // rider" group) instead of silently vanishing from `advance.items`.
+      const hadResponse = existing.items.some((it) => {
+        const th = negotiations.get(threadKey(showDayId, it.itemKey));
+        return th?.status === 'confirmed' || th?.status === 'awaiting_tm';
+      });
+      const newKeys = new Set(items.map((it) => it.itemKey));
+      const droppedItems = existing.items
+        .filter((it) => !newKeys.has(it.itemKey))
+        .map((it) => ({ ...it, stale: true as const }));
+      const nextStatus: ShowRiderStatus = hadResponse ? 'in_negotiation' : 'sent';
+      const updated: ShowAdvance = {
+        ...existing,
+        venueId,
+        items: [...items, ...droppedItems],
+        riderRevision,
+        status: nextStatus,
+        sentAt: stamp,
+        history: [...existing.history, { status: nextStatus, stamp, note: 'Rider re-sent' }],
+      };
+      setShowAdvances((prev) => {
+        const next = new Map(prev);
+        next.set(showDayId, updated);
+        return next;
+      });
+    },
+    [tour, sectionEdits, showAdvances, negotiations, currentName, updateScratchTour],
+  );
+
+  // Shared by every negotiation mutator below — clone the Map, set one key,
+  // return it (the standard immutable-Map-update idiom used throughout this
+  // file for overlay state).
+  const setNegotiation = useCallback((key: string, value: NegotiationThread) => {
+    setNegotiations((prev) => {
+      const next = new Map(prev);
+      next.set(key, value);
+      return next;
+    });
+  }, []);
+
+  const recordVenueResponse = useCallback(
+    (showDayId: ID, itemKey: string, answer: VenueItemAnswer, qtyOffered?: number, note?: string) => {
+      const advance = showAdvances.get(showDayId);
+      const item = advance?.items.find((it) => it.itemKey === itemKey);
+      if (!advance || !item) return;
+      const stamp: UpdateStamp = { at: getNowIso(), by: currentName };
+      const key = threadKey(showDayId, itemKey);
+      const updated = applyVenueResponse(
+        negotiations.get(key),
+        showDayId,
+        itemKey,
+        item,
+        answer,
+        qtyOffered,
+        note,
+        stamp,
+      );
+      setNegotiation(key, updated);
+      // First response received — flip the show off `sent` even if this
+      // particular item auto-confirmed.
+      setShowAdvances((prev) => {
+        const cur = prev.get(showDayId);
+        if (!cur || cur.status !== 'sent') return prev;
+        const next = new Map(prev);
+        next.set(showDayId, { ...cur, status: 'in_negotiation' });
+        return next;
+      });
+    },
+    [showAdvances, negotiations, currentName, setNegotiation],
+  );
+
+  const reconcileItem = useCallback(
+    (showDayId: ID, itemKey: string, action: ReconcileAction, substitution?: string, note?: string) => {
+      const key = threadKey(showDayId, itemKey);
+      const existing = negotiations.get(key);
+      if (!existing) return; // no-op — no thread yet (venue hasn't responded)
+      const stamp: UpdateStamp = { at: getNowIso(), by: currentName };
+      setNegotiation(key, applyReconcile(existing, action, substitution, note, stamp));
+    },
+    [negotiations, currentName, setNegotiation],
+  );
+
+  const reopenNegotiation = useCallback(
+    (showDayId: ID, itemKey: string, note?: string) => {
+      const key = threadKey(showDayId, itemKey);
+      const existing = negotiations.get(key);
+      if (!existing) return; // no-op — nothing to reopen
+      const stamp: UpdateStamp = { at: getNowIso(), by: currentName };
+      setNegotiation(key, reopenThread(existing, note, stamp));
+    },
+    [negotiations, currentName, setNegotiation],
+  );
+
+  const markShowConfirmed = useCallback(
+    (showDayId: ID) => {
+      const advance = showAdvances.get(showDayId);
+      if (!advance) return;
+      // Stale (no-longer-in-the-rider) items don't gate confirmation — see
+      // sendRiderToVenue's re-send comment above.
+      const activeItems = advance.items.filter((it) => !it.stale);
+      if (!isShowFullyConfirmed(activeItems, negotiations, showDayId)) return; // no-op — not every item confirmed
+      const stamp: UpdateStamp = { at: getNowIso(), by: currentName };
+      const updated: ShowAdvance = {
+        ...advance,
+        status: 'confirmed',
+        confirmedAt: stamp,
+        history: [...advance.history, { status: 'confirmed', stamp }],
+      };
+      setShowAdvances((prev) => {
+        const next = new Map(prev);
+        next.set(showDayId, updated);
+        return next;
+      });
+    },
+    [showAdvances, negotiations, currentName],
+  );
+
+  const getShowAdvance = useCallback((showDayId: ID) => showAdvances.get(showDayId), [showAdvances]);
+  const getNegotiationThread = useCallback(
+    (showDayId: ID, itemKey: string) => negotiations.get(threadKey(showDayId, itemKey)),
+    [negotiations],
   );
 
   const getPendingConflictResolution = useCallback(
@@ -2259,9 +2967,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setUserKey,
       allUsers,
       resetScratchTour,
+      renameTour,
       applyRouteToScratch,
       addRiderImportToScratch,
       setActiveRider,
+      createRiderDraft,
+      addRiderSection,
+      removeRiderSection,
+      moveRiderSection,
+      renameRiderSection,
+      updateRiderMeta,
+      addStageMedia,
+      removeStageMedia,
       addFlightImportToScratch,
       commitFlightImportToScratch,
       addHotelImportToScratch,
@@ -2311,6 +3028,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       approvePendingEdit,
       rejectPendingEdit,
       getSectionHistory,
+      sectionEditHistory,
       pendingConflictResolutions,
       getPendingConflictResolution,
       proposeConflictResolution,
@@ -2325,18 +3043,30 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       approvePendingVisibilityEdit,
       rejectPendingVisibilityEdit,
       getVisibilityHistory,
+      visibilityEditHistory,
       updateScheduleItem,
       addScheduleItem,
       deleteScheduleItem,
       getScheduleItemHistory,
+      scheduleItemEditHistory,
       addTourPerson,
       removeTourPerson,
       updateTourPerson,
       addGroup,
+      showAdvances,
+      negotiations,
+      sendRiderToVenue,
+      recordVenueResponse,
+      reconcileItem,
+      reopenNegotiation,
+      markShowConfirmed,
+      getShowAdvance,
+      getNegotiationThread,
       gearItems,
       updateGearItem,
       addGearItem,
       deleteGearItem,
+      gearUpdatedAt,
       updateHotelCost,
       updateTravelCost,
       submissions,
@@ -2347,7 +3077,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       loadSubmissionFileUrl,
       addDocument,
     }),
-    [tour, booting, user, userKey, allUsers, resetScratchTour, applyRouteToScratch, addRiderImportToScratch, setActiveRider, addFlightImportToScratch, commitFlightImportToScratch, editFlightImportPassenger, removeFlightImportPassenger, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory, addTourPerson, updateTourPerson, addGroup, gearItems, updateGearItem, addGearItem, deleteGearItem, updateHotelCost, updateTravelCost, submissions, refreshSubmissions, proposeSubmission, approveSubmission, rejectSubmission, loadSubmissionFileUrl, addDocument],
+    [tour, booting, user, userKey, allUsers, resetScratchTour, renameTour, applyRouteToScratch, addRiderImportToScratch, setActiveRider, createRiderDraft, addRiderSection, removeRiderSection, moveRiderSection, renameRiderSection, updateRiderMeta, addStageMedia, removeStageMedia, addFlightImportToScratch, commitFlightImportToScratch, editFlightImportPassenger, removeFlightImportPassenger, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, sectionEditHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, visibilityEditHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory, scheduleItemEditHistory, addTourPerson, updateTourPerson, addGroup, showAdvances, negotiations, sendRiderToVenue, recordVenueResponse, reconcileItem, reopenNegotiation, markShowConfirmed, getShowAdvance, getNegotiationThread, gearItems, updateGearItem, addGearItem, deleteGearItem, gearUpdatedAt, updateHotelCost, updateTravelCost, submissions, refreshSubmissions, proposeSubmission, approveSubmission, rejectSubmission, loadSubmissionFileUrl, addDocument],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -4,7 +4,6 @@ import { useApp } from '@/state/AppState';
 import { canSee } from '@/lib/visibility';
 import { Icon } from '@/components/ui/Icon';
 import { Chip } from '@/components/ui/Chip';
-import { MockTag } from '@/components/provenance/MockTag';
 import { SourceTag } from '@/components/provenance/SourceTag';
 import { SensitiveExplain } from '@/components/ExplainTag';
 import { LastUpdated } from '@/components/LastUpdated';
@@ -15,10 +14,12 @@ import {
   travelModeIcon,
   travelModeLabel,
 } from '@/lib/format';
-import { getMockVenue } from '@/data/mockVenues';
+import { getVenue } from '@/data/venues';
 import { cn } from '@/lib/cn';
+import { FLIGHTS_ENABLED } from '@/lib/features';
 import { getGeneratedAtLabel } from '@/lib/today';
 import { buildShareUrl, verifyShareToken } from '@/lib/shareToken';
+import { tourPath } from '@/lib/routing';
 import type { Day, ScheduleItem, Travel, Hotel } from '@/types';
 
 /**
@@ -37,7 +38,7 @@ export function DaySheetPrint() {
 
   const handleCopyLink = () => {
     if (!date) return;
-    navigator.clipboard.writeText(buildShareUrl(date)).then(() => {
+    navigator.clipboard.writeText(buildShareUrl(tour.id, date)).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -63,9 +64,9 @@ export function DaySheetPrint() {
   const items = getScheduleItemsForDay(day.id)
     .filter((it) => canSee(it.visibility, user))
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  const travel = getTravelForDay(day.id).filter((t) => canSee(t.visibility, user));
+  const travel = FLIGHTS_ENABLED ? getTravelForDay(day.id).filter((t) => canSee(t.visibility, user)) : [];
   const hotels = getHotelsForDay(day.id).filter((h) => canSee(h.visibility, user));
-  const venue = getMockVenue(day.venueId);
+  const venue = getVenue(day.venueId);
   const dayIndex = tour.days.findIndex((d) => d.id === day.id);
   const pm = tour.riderImports[0]?.productionManager;
   const tm = tour.personnel.find((p) => p.role === 'Tour Manager');
@@ -81,7 +82,7 @@ export function DaySheetPrint() {
           </span>
         ) : (
           <Link
-            to={`/daysheet/${date}`}
+            to={tourPath(tour.id, `daysheet/${date}`)}
             className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
           >
             ← Back to day sheet
@@ -129,7 +130,6 @@ export function DaySheetPrint() {
                     <>
                       <span className="text-[var(--color-ink-4)]">·</span>
                       <span>{venue.name}</span>
-                      <MockTag source="venue" field="Venue" />
                     </>
                   )}
                 </div>
@@ -163,10 +163,10 @@ export function DaySheetPrint() {
 
             {/* Fact strip */}
             <div className="mt-4 pt-3 border-t border-[var(--color-rule-soft)] grid grid-cols-4 gap-3">
-              <Fact label="Weather" value={day.weather ? `${day.weather.conditions} · ${day.weather.low}/${day.weather.high}°C` : 'TBD'} mockSource="day_weather" />
-              <Fact label="Sun" value={day.sunrise && day.sunset ? `↑ ${day.sunrise}  ↓ ${day.sunset}` : 'TBD'} mockSource="day_weather" />
-              <Fact label="Local" value={venue ? `${venue.language ?? '—'} · ${venue.currency ?? '—'}` : '—'} mockSource={venue ? 'venue' : undefined} />
-              <Fact label="Power" value={venue?.voltage ?? '—'} mockSource={venue ? 'venue' : undefined} />
+              <Fact label="Weather" value={day.weather ? `${day.weather.conditions} · ${day.weather.low}/${day.weather.high}°C` : 'TBD'} />
+              <Fact label="Sun" value={day.sunrise && day.sunset ? `↑ ${day.sunrise}  ↓ ${day.sunset}` : 'TBD'} />
+              <Fact label="Local" value={venue ? `${venue.language ?? '—'} · ${venue.currency ?? '—'}` : '—'} />
+              <Fact label="Power" value={venue?.voltage ?? '—'} />
             </div>
 
             {/* Locked watermark — visible only in print */}
@@ -181,7 +181,7 @@ export function DaySheetPrint() {
           <div className="grid grid-cols-[1.55fr_1fr] gap-x-6 px-7 py-5">
             {/* LEFT: schedule + travel + notes */}
             <div className="space-y-5 min-w-0">
-              <Section title="Schedule" count={items.length} sourceKey="schedule_item">
+              <Section title="Schedule" count={items.length}>
                 {items.length === 0 ? (
                   <Empty>Nothing scheduled.</Empty>
                 ) : (
@@ -194,7 +194,7 @@ export function DaySheetPrint() {
               </Section>
 
               {travel.length > 0 && (
-                <Section title="Travel" count={travel.length} sourceKey="travel">
+                <Section title="Travel" count={travel.length}>
                   <ul className="space-y-1.5">
                     {travel.map((t) => (
                       <TravelRow key={t.id} travel={t} />
@@ -213,13 +213,13 @@ export function DaySheetPrint() {
             {/* RIGHT: venue + hotel + key contacts */}
             <div className="space-y-5 min-w-0 border-l border-[var(--color-rule-soft)] pl-5">
               {venue && (
-                <Section title="Venue" sourceKey="venue">
+                <Section title="Venue">
                   <VenueBlock venue={venue} />
                 </Section>
               )}
 
               {hotels.length > 0 && (
-                <Section title="Lodging" count={hotels.length} sourceKey="hotel">
+                <Section title="Lodging" count={hotels.length}>
                   <ul className="space-y-3">
                     {hotels.map((h) => (
                       <HotelRow key={h.id} hotel={h} />
@@ -245,7 +245,6 @@ export function DaySheetPrint() {
                       role={tm.isPlaceholder ? 'Tour Manager (name TBD)' : 'Tour Manager'}
                       phone={tm.person.phone}
                       email={tm.person.email}
-                      mockSource={tm.isPlaceholder ? 'tour_person' : undefined}
                     />
                   )}
                   {venue?.housePM && (
@@ -253,7 +252,6 @@ export function DaySheetPrint() {
                       name={venue.housePM}
                       role={`House PM · ${venue.name}`}
                       phone={venue.housePMPhone}
-                      mockSource="venue"
                     />
                   )}
                   {venue?.promoterRep && (
@@ -262,7 +260,6 @@ export function DaySheetPrint() {
                       role={`Promoter · ${venue.promoter}`}
                       phone={venue.promoterPhone}
                       email={venue.promoterEmail}
-                      mockSource="venue"
                     />
                   )}
                 </ul>
@@ -333,12 +330,13 @@ export function DaySheetPrint() {
 // ============================================================
 
 function NotFoundView() {
+  const { tour } = useApp();
   return (
     <div className="p-12 text-center">
       <h1 className="font-display text-[28px] font-bold">Day not found</h1>
       <p className="mt-2 text-[14px] text-[var(--color-ink-3)]">
         That date isn’t on this tour.{' '}
-        <Link to="/daysheet" className="underline">
+        <Link to={tourPath(tour.id, 'daysheet')} className="underline">
           Back to day sheets
         </Link>
         .
@@ -357,7 +355,7 @@ function DayJumper({ day }: { day: Day }) {
     <div className="hidden md:inline-flex items-center gap-1 ml-3 border-l border-[var(--color-rule)] pl-3">
       {prev ? (
         <Link
-          to={`/print/daysheet/${prev.date}`}
+          to={tourPath(tour.id, `print/daysheet/${prev.date}`)}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
           title={`Previous: ${fmtDate(prev.date, 'EEE, MMM d')}`}
         >
@@ -369,7 +367,7 @@ function DayJumper({ day }: { day: Day }) {
       <span className="text-[var(--color-ink-5)] mx-1">·</span>
       {next ? (
         <Link
-          to={`/print/daysheet/${next.date}`}
+          to={tourPath(tour.id, `print/daysheet/${next.date}`)}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
           title={`Next: ${fmtDate(next.date, 'EEE, MMM d')}`}
         >
@@ -385,12 +383,10 @@ function DayJumper({ day }: { day: Day }) {
 function Section({
   title,
   count,
-  sourceKey,
   children,
 }: {
   title: string;
   count?: number;
-  sourceKey?: Parameters<typeof MockTag>[0]['source'];
   children: React.ReactNode;
 }) {
   return (
@@ -398,7 +394,6 @@ function Section({
       <div className="flex items-baseline justify-between mb-2 pb-1 border-b border-[var(--color-ink)]">
         <h3 className="font-display text-[13px] font-bold uppercase tracking-[0.04em] text-[var(--color-ink)]">
           {title}
-          {sourceKey && <MockTag source={sourceKey} field={title} />}
         </h3>
         {count !== undefined && (
           <span className="font-mono text-[10px] tabular text-[var(--color-ink-3)]">
@@ -414,17 +409,14 @@ function Section({
 function Fact({
   label,
   value,
-  mockSource,
 }: {
   label: string;
   value: string;
-  mockSource?: Parameters<typeof MockTag>[0]['source'];
 }) {
   return (
     <div>
-      <div className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--color-ink-3)] flex items-baseline gap-1">
+      <div className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--color-ink-3)]">
         {label}
-        {mockSource && <MockTag source={mockSource} field={label} />}
       </div>
       <div className="font-mono text-[11.5px] tabular text-[var(--color-ink)] mt-0.5 leading-tight">
         {value}
@@ -492,7 +484,7 @@ function TravelRow({ travel }: { travel: Travel }) {
   );
 }
 
-function VenueBlock({ venue }: { venue: ReturnType<typeof getMockVenue> & object }) {
+function VenueBlock({ venue }: { venue: ReturnType<typeof getVenue> & object }) {
   return (
     <div className="text-[12px] space-y-0.5">
       <div className="font-semibold text-[var(--color-ink)] leading-tight">{venue.name}</div>
@@ -561,21 +553,18 @@ function ContactRow({
   phone,
   email,
   sourceKey,
-  mockSource,
 }: {
   name: string;
   role: string;
   phone?: string;
   email?: string;
   sourceKey?: Parameters<typeof SourceTag>[0]['source'];
-  mockSource?: Parameters<typeof MockTag>[0]['source'];
 }) {
   return (
     <li>
       <div className="font-semibold text-[var(--color-ink)] leading-tight flex items-baseline gap-1">
         {name}
         {sourceKey && <SourceTag source={sourceKey} field={name} />}
-        {mockSource && <MockTag source={mockSource} field={name} />}
       </div>
       <div className="text-[10.5px] text-[var(--color-ink-3)] leading-tight">{role}</div>
       {phone && (

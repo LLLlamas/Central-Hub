@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Modal } from '@/components/ui/Modal';
 import { cn } from '@/lib/cn';
-import { MockTag } from '@/components/provenance/MockTag';
+import { FLIGHTS_ENABLED } from '@/lib/features';
 import { usePdfViewer } from '@/components/PdfViewer';
+import { LastUpdated } from '@/components/LastUpdated';
 import { fmtDate } from '@/lib/format';
 import { matchFixture } from '@/lib/fixtureMatcher';
+import { tourPath } from '@/lib/routing';
 import type { GearCategory, GearItem, GearStatus, GearProvidedBy, Travel, Hotel } from '@/types';
 
 // ─── Category metadata ────────────────────────────────────────────────────────
@@ -490,7 +492,6 @@ function TravelCostsSection({ travel, managerView, onCostChange }: TravelCostsSe
             {fmtMoney(total)}
           </span>
         )}
-        <MockTag source="flight_import" field="Flight costs" />
         <Icon.ChevronDown
           size={13}
           className={cn('text-[var(--color-ink-4)] transition-transform', open ? 'rotate-180' : '')}
@@ -616,7 +617,6 @@ function HotelCostsSection({ hotels, managerView, onRateChange }: HotelCostsSect
             {fmtMoney(grand)}
           </span>
         )}
-        <MockTag source="hotel" field="Hotel costs" />
         <Icon.ChevronDown
           size={13}
           className={cn('text-[var(--color-ink-4)] transition-transform', open ? 'rotate-180' : '')}
@@ -700,7 +700,7 @@ function HotelCostsSection({ hotels, managerView, onRateChange }: HotelCostsSect
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function Gear() {
-  const { gearItems, updateGearItem, addGearItem, deleteGearItem, updateHotelCost, updateTravelCost, tour, user } = useApp();
+  const { gearItems, updateGearItem, addGearItem, deleteGearItem, updateHotelCost, updateTravelCost, tour, user, gearUpdatedAt } = useApp();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<GearCategory | 'all'>('all');
   const [query, setQuery] = useState('');
@@ -711,9 +711,21 @@ export function Gear() {
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const pdfUrl = tour.riderImports[0]?.pdfObjectUrl;
   const hasRider = tour.riderImports.length > 0;
-  const hasTravel = tour.travel.length > 0;
+  const hasTravel = FLIGHTS_ENABLED && tour.travel.length > 0;
   const hasHotels = tour.hotels.length > 0;
   const hasAnything = hasRider || hasTravel || hasHotels;
+  const isAuthoredRiderEmpty = hasRider && tour.riderImports[0]?.origin === 'authored' && gearItems.length === 0;
+  const gearCopy = {
+    emptyDescription: FLIGHTS_ENABLED
+      ? 'Every rider item, flight, and hotel in one place — status, estimated costs, and links back to the source documents.'
+      : 'Every rider item and hotel in one place — status, estimated costs, and links back to the source documents.',
+    emptyHint: FLIGHTS_ENABLED
+      ? 'Build or import the rider, the route + flights, and hotels to see supplies and cost rollups here.'
+      : 'Build or import the rider, and import hotels, to see supplies and cost rollups here.',
+    mainDescription: FLIGHTS_ENABLED
+      ? 'Rider supplies plus flight and hotel costs. Click any cost cell to edit it; click a status badge to cycle it.'
+      : 'Rider supplies plus hotel costs. Click any cost cell to edit it; click a status badge to cycle it.',
+  };
 
   // Summary stats — supplies (rider gear)
   const totalItems = gearItems.length;
@@ -724,10 +736,9 @@ export function Gear() {
     .reduce((sum, i) => sum + (i.estimatedCost ?? 0) * i.quantity, 0);
 
   // Summary stats — travel + hotels
-  const totalTravelCost = tour.travel.reduce(
-    (sum, t) => sum + (t.costPerPassenger ?? 0) * t.passengers.length,
-    0,
-  );
+  const totalTravelCost = FLIGHTS_ENABLED
+    ? tour.travel.reduce((sum, t) => sum + (t.costPerPassenger ?? 0) * t.passengers.length, 0)
+    : 0;
   const totalHotelCost = tour.hotels.reduce((sum, h) => {
     const rooms = h.occupants.length;
     const nights = h.nights ?? 1;
@@ -796,15 +807,15 @@ export function Gear() {
         <PageHeader
           eyebrow="Supplies & Costs"
           title="Supplies & Costs"
-          description="Every rider item, flight, and hotel in one place — status, estimated costs, and links back to the source documents."
+          description={gearCopy.emptyDescription}
         />
         <EmptyState
-          title="Nothing imported yet"
-          hint="Import the rider, the route + flights, and hotels to see supplies and cost rollups here."
+          title="Nothing here yet"
+          hint={gearCopy.emptyHint}
           action={
             <div className="flex gap-2">
-              <Link to="/ingest/riders"><Button variant="outline">Import rider</Button></Link>
-              <Link to="/ingest/flights"><Button variant="outline">Import route &amp; travel</Button></Link>
+              <Link to={tourPath(tour.id, 'rider')}><Button variant="outline">Build rider</Button></Link>
+              <Link to={tourPath(tour.id, 'ingest/flights')}><Button variant="outline">Import route &amp; hotels</Button></Link>
             </div>
           }
         />
@@ -817,7 +828,7 @@ export function Gear() {
       <PageHeader
         eyebrow="Supplies & Costs"
         title="Supplies & Costs"
-        description="Rider supplies plus flight and hotel costs. Click any cost cell to edit it; click a status badge to cycle it."
+        description={gearCopy.mainDescription}
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--color-ink-3)]">
             {hasRider && <span>{totalItems} supplies</span>}
@@ -830,7 +841,7 @@ export function Gear() {
                 <span>Grand total: <strong className="text-[var(--color-ink)]">{fmtMoney(grandTotal)}</strong></span>
               </>
             )}
-            <MockTag source="gear_costs" field="Estimated costs" />
+            {gearUpdatedAt && <LastUpdated stamp={gearUpdatedAt} />}
           </div>
         }
         actions={
@@ -932,6 +943,12 @@ export function Gear() {
                   {fmtMoney(totalEstCost)} total
                 </span>
               )}
+            </div>
+          )}
+
+          {isAuthoredRiderEmpty && (
+            <div className="mb-4 px-3 py-2.5 rounded-md bg-[var(--color-paper-2)] border border-[var(--color-rule-soft)] text-[12px] text-[var(--color-ink-3)]">
+              Authored riders don't auto-populate supplies yet — add items manually below.
             </div>
           )}
 

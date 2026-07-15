@@ -2,7 +2,7 @@
 //
 // There is no backend and no real PDF/CSV parsing yet. In scratch mode an
 // upload is matched by filename against this registry; a match populates the
-// known mock data that file represents. An unknown file is treated as a
+// known sample data that file represents. An unknown file is treated as a
 // "sample only" — the UI says so rather than pretending to parse it.
 //
 // When a real ingest backend exists this registry is replaced by an actual
@@ -27,7 +27,7 @@ export const FIXTURES: Fixture[] = [
   {
     id: 'route_mexico_7day',
     kind: 'route',
-    filename: 'mock-tour-route-mexico-7day.csv',
+    filename: 'sample-tour-route-mexico-7day.csv',
     label: 'Tour route — Mexico leg (7 days)',
     extracts: '7 tour days, 2 venues, and a show-day schedule skeleton.',
   },
@@ -45,7 +45,7 @@ export const FIXTURES: Fixture[] = [
   {
     id: 'travel_grid_mexico',
     kind: 'travel_grid',
-    filename: 'mock-travel-grid-mexico.csv',
+    filename: 'sample-travel-grid-mexico.csv',
     label: 'Travel-agent grid — Mexico leg',
     extracts: 'Both Mexico flights × 8 passengers in one bulk import (the agent’s grid).',
   },

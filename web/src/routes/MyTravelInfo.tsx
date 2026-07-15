@@ -12,6 +12,8 @@ import { FileDropZone } from '@/components/ingest/FileDropZone';
 import { canSee } from '@/lib/visibility';
 import { fmtDate } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { FLIGHTS_ENABLED } from '@/lib/features';
+import { tourPath } from '@/lib/routing';
 import type { DocumentSubmission, SubmissionType } from '@/types';
 
 const SUBMISSION_TYPES: { value: SubmissionType; label: string; hint: string }[] = [
@@ -81,7 +83,9 @@ export function MyTravelInfo() {
       <PageHeader
         eyebrow="My travel & info"
         title={me?.person.name ? `Hi, ${me.person.name.split(' ')[0]}` : 'My travel & info'}
-        description="Your flights, hotel, schedule, and plots — plus anything you've shared with the team."
+        description={FLIGHTS_ENABLED
+          ? "Your flights, hotel, schedule, and plots — plus anything you've shared with the team."
+          : "Your hotel, schedule, and plots — plus anything you've shared with the team."}
         actions={
           <Button variant="primary" size="md" leading={<Icon.Plus size={14} />} onClick={() => setSubmitOpen(true)}>
             Submit a document
@@ -91,37 +95,39 @@ export function MyTravelInfo() {
 
       <div className="space-y-6">
         {/* Flights */}
-        <Card padded={false}>
-          <SectionHeader icon={<Icon.Plane size={14} />} title="My flights" count={myTravel.length} />
-          {myTravel.length === 0 ? (
-            <EmptyState title="No flights yet" hint="Your flights show here once travel is booked and approved." />
-          ) : (
-            <ul className="divide-y divide-[var(--color-rule-soft)]">
-              {myTravel.map((t) => {
-                const day = dayById(t.dayId);
-                const seat = t.passengers.find((p) => p.tourPersonId === myPersonId)?.seat;
-                return (
-                  <li key={t.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-semibold text-[var(--color-ink)]">
-                        {t.carrier} {t.identifier} · {t.from} › {t.to}
+        {FLIGHTS_ENABLED && (
+          <Card padded={false}>
+            <SectionHeader icon={<Icon.Plane size={14} />} title="My flights" count={myTravel.length} />
+            {myTravel.length === 0 ? (
+              <EmptyState title="No flights yet" hint="Your flights show here once travel is booked and approved." />
+            ) : (
+              <ul className="divide-y divide-[var(--color-rule-soft)]">
+                {myTravel.map((t) => {
+                  const day = dayById(t.dayId);
+                  const seat = t.passengers.find((p) => p.tourPersonId === myPersonId)?.seat;
+                  return (
+                    <li key={t.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-[var(--color-ink)]">
+                          {t.carrier} {t.identifier} · {t.from} › {t.to}
+                        </div>
+                        <div className="mt-0.5 text-[11.5px] text-[var(--color-ink-3)] tabular">
+                          {day ? fmtDate(day.date, 'EEE MMM d') : '—'} · {t.departTime} → {t.arriveTime}
+                          {t.recordLocator ? ` · PNR ${t.recordLocator}` : ''}
+                        </div>
                       </div>
-                      <div className="mt-0.5 text-[11.5px] text-[var(--color-ink-3)] tabular">
-                        {day ? fmtDate(day.date, 'EEE MMM d') : '—'} · {t.departTime} → {t.arriveTime}
-                        {t.recordLocator ? ` · PNR ${t.recordLocator}` : ''}
-                      </div>
-                    </div>
-                    {seat && (
-                      <Chip tone="travel" size="sm" variant="outline">
-                        Seat {seat}
-                      </Chip>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
+                      {seat && (
+                        <Chip tone="travel" size="sm" variant="outline">
+                          Seat {seat}
+                        </Chip>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+        )}
 
         {/* Hotels */}
         <Card padded={false}>
@@ -159,7 +165,7 @@ export function MyTravelInfo() {
               {myDays.map(({ day, items }) => (
                 <li key={day.id} className="px-5 py-3">
                   <Link
-                    to={`/daysheet/${day.date}`}
+                    to={tourPath(tour.id, `daysheet/${day.date}`)}
                     className="text-[12px] font-semibold text-[var(--color-ink)] hover:underline inline-flex items-center gap-1"
                   >
                     {fmtDate(day.date, 'EEE MMM d')}
@@ -199,7 +205,7 @@ export function MyTravelInfo() {
               ))}
             </div>
             <div className="px-5 pb-4">
-              <Link to="/plots" className="text-[12px] font-semibold text-[var(--color-ocean)] hover:underline">
+              <Link to={tourPath(tour.id, 'plots')} className="text-[12px] font-semibold text-[var(--color-ocean)] hover:underline">
                 Open Plots ›
               </Link>
             </div>
@@ -312,9 +318,11 @@ function SubmissionRow({ sub }: { sub: DocumentSubmission }) {
   );
 }
 
+const SELECTABLE_SUBMISSION_TYPES = SUBMISSION_TYPES.filter((t) => FLIGHTS_ENABLED || t.value !== 'flight');
+
 function SubmitModal({ onClose }: { onClose: () => void }) {
   const { proposeSubmission } = useApp();
-  const [type, setType] = useState<SubmissionType>('flight');
+  const [type, setType] = useState<SubmissionType>(FLIGHTS_ENABLED ? 'flight' : 'hotel');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -363,7 +371,7 @@ function SubmitModal({ onClose }: { onClose: () => void }) {
           <div>
             <div className="eyebrow mb-1.5">Type</div>
             <select value={type} onChange={(e) => setType(e.target.value as SubmissionType)} className={inputClass}>
-              {SUBMISSION_TYPES.map((t) => (
+              {SELECTABLE_SUBMISSION_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>

@@ -1,7 +1,9 @@
-// Lightweight mock token for shareable day-sheet links.
+// Lightweight token for shareable day-sheet links.
 // No server-side validation — tokens are URL-safe base64 of "share:<date>".
 // When a real auth backend exists, replace this module with server-issued JWTs
 // and move verification server-side.
+
+import type { ID } from '@/types';
 
 const PREFIX = 'share:';
 
@@ -18,7 +20,7 @@ export function verifyShareToken(date: string, token: string): boolean {
   }
 }
 
-export function buildShareUrl(date: string): string {
+export function buildShareUrl(tourId: ID, date: string): string {
   const token = generateShareToken(date);
-  return `${window.location.origin}/print/daysheet/${date}?token=${token}`;
+  return `${window.location.origin}/t/${tourId}/print/daysheet/${date}?token=${token}`;
 }

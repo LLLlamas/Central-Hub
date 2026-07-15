@@ -1,7 +1,6 @@
 // =============================================================
 // REAL DATA SOURCES REGISTRY
 // -------------------------------------------------------------
-// Mirror of sources.ts but for data that IS real (not mocked).
 // Lets the UI surface a small "(i)" indicator next to real
 // values with a click-to-popup showing exactly which document,
 // section, and page the data came from.
@@ -12,7 +11,27 @@
 // A few values are user-provided (e.g. the Tour Manager).
 // =============================================================
 
-import type { ProvenanceUrl } from '@/data/sources';
+import type { Tour } from '@/types';
+
+/** Tagged URL — resolved at render time by `<SourceTag>` against AppState.
+ *  Used when the artifact is the actively uploaded rider PDF (whose Blob URL
+ *  only exists at runtime). When the tag resolves to undefined (no rider
+ *  uploaded yet) the consumer hides the link entirely. */
+export type ProvenanceUrl = string | { kind: 'active_rider_pdf' };
+
+/** Resolve a `ProvenanceUrl` against the active tour. Tagged resolvers (today
+ *  just `active_rider_pdf`) map to `tour.riderImports[0].pdfObjectUrl`; plain
+ *  strings pass through. Returns undefined when the tag has no backing data
+ *  yet — consumers hide the open-PDF affordance in that case. */
+export function resolveProvenanceUrl(
+  url: ProvenanceUrl | undefined,
+  tour: Tour,
+): string | undefined {
+  if (url == null) return undefined;
+  if (typeof url === 'string') return url;
+  if (url.kind === 'active_rider_pdf') return tour.riderImports[0]?.pdfObjectUrl;
+  return undefined;
+}
 
 export interface RealSource {
   /** Originating document — for the rider, always the same; for user input, "User entry". */

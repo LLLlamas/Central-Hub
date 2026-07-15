@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
 import { Icon } from '@/components/ui/Icon';
-import { mockVenues } from '@/data/mockVenues';
+import { VENUE_DIRECTORY } from '@/data/venues';
 import { fmtDate, dayTypeLabel } from '@/lib/format';
 import type { Tour, CurrentUser, Visibility } from '@/types';
 import { resolveVisibility } from '@/lib/visibility';
@@ -84,19 +84,20 @@ function buildIndex(
   // Top-level pages. Manager-only pages are hidden for crew so the palette
   // can't navigate them somewhere they'd hit a not-authorized fallback.
   const pages: (PaletteItem & { managerOnly?: boolean })[] = [
-    { type: 'page', label: 'Today', to: '/', keywords: ['home', 'dashboard', 'overview'] },
-    { type: 'page', label: 'Calendar', to: '/calendar', keywords: ['dates'] },
-    { type: 'page', label: 'My Travel & Info', to: '/me', keywords: ['me', 'my', 'flights', 'hotel', 'travel', 'schedule', 'submit', 'document', 'personal'] },
-    { type: 'page', label: 'People', to: '/personnel', keywords: ['personnel', 'crew', 'roster'] },
-    { type: 'page', label: 'Plots', to: '/plots', keywords: ['plot', 'plots', 'stage plot', 'lightplot', 'cad', 'rider images', 'drawings'] },
-    { type: 'page', label: 'Supplies & Costs', to: '/gear', keywords: ['gear', 'equipment', 'supplies', 'backline', 'mics', 'catering', 'dressing room', 'cost', 'budget', 'inventory', 'flights', 'travel', 'hotel', 'rooms'] },
-    { type: 'page', label: 'Submissions', to: '/submissions', keywords: ['submissions', 'inbox', 'review', 'approve', 'documents', 'pending'], managerOnly: true },
-    { type: 'page', label: 'Schedule Permissions', to: '/schedule', keywords: ['visibility', 'abac', 'permissions', 'schedule'], managerOnly: true },
-    { type: 'page', label: 'App User Permissions', to: '/access', keywords: ['access', 'members', 'roles', 'invite', 'crew', 'revoke', 'team', 'users'], managerOnly: true },
-    { type: 'page', label: 'Day Sheets', to: '/daysheet', keywords: ['day sheet'] },
-    { type: 'page', label: 'More', to: '/more', keywords: ['tools', 'settings'] },
-    { type: 'page', label: 'Import route & travel', to: '/ingest/flights', keywords: ['flight', 'route', 'travel', 'csv', 'ingest'], managerOnly: true },
-    { type: 'page', label: 'Import rider', to: '/ingest/riders', keywords: ['rider', 'pdf', 'conflicts', 'ingest'], managerOnly: true },
+    { type: 'page', label: 'Today', to: '', keywords: ['home', 'dashboard', 'overview'] },
+    { type: 'page', label: 'Calendar', to: 'calendar', keywords: ['dates'] },
+    { type: 'page', label: 'My Travel & Info', to: 'me', keywords: ['me', 'my', 'hotel', 'travel', 'schedule', 'submit', 'document', 'personal'] },
+    { type: 'page', label: 'People', to: 'personnel', keywords: ['personnel', 'crew', 'roster'] },
+    { type: 'page', label: 'Plots', to: 'plots', keywords: ['plot', 'plots', 'stage plot', 'lightplot', 'cad', 'rider images', 'drawings'] },
+    { type: 'page', label: 'Supplies & Costs', to: 'gear', keywords: ['gear', 'equipment', 'supplies', 'backline', 'mics', 'catering', 'dressing room', 'cost', 'budget', 'inventory', 'travel', 'hotel', 'rooms'] },
+    { type: 'page', label: 'Venue advance', to: 'advance', keywords: ['venue', 'advance', 'negotiate', 'negotiation', 'reconcile', 'confirm', 'rider'] },
+    { type: 'page', label: 'Submissions', to: 'submissions', keywords: ['submissions', 'inbox', 'review', 'approve', 'documents', 'pending'], managerOnly: true },
+    { type: 'page', label: 'Schedule Permissions', to: 'schedule', keywords: ['visibility', 'abac', 'permissions', 'schedule'], managerOnly: true },
+    { type: 'page', label: 'App User Permissions', to: 'access', keywords: ['access', 'members', 'roles', 'invite', 'crew', 'revoke', 'team', 'users'], managerOnly: true },
+    { type: 'page', label: 'Day Sheets', to: 'daysheet', keywords: ['day sheet'] },
+    { type: 'page', label: 'More', to: 'more', keywords: ['tools', 'settings'] },
+    { type: 'page', label: 'Import route & hotels', to: 'ingest/flights', keywords: ['route', 'hotel', 'travel', 'csv', 'ingest'], managerOnly: true },
+    { type: 'page', label: 'Rider', to: 'rider', keywords: ['rider', 'rider builder', 'author the rider', 'table of contents', 'pdf', 'conflicts'], managerOnly: true },
   ];
   items.push(...pages.filter((p) => !p.managerOnly || managerView).map(({ managerOnly: _m, ...p }) => p));
 
@@ -107,7 +108,7 @@ function buildIndex(
       type: 'day',
       label,
       sublabel: dayTypeLabel(d.dayType),
-      to: d.dayType === 'show' || d.dayType === 'promo' ? `/daysheet/${d.date}` : `/calendar/${d.date}`,
+      to: d.dayType === 'show' || d.dayType === 'promo' ? `daysheet/${d.date}` : `calendar/${d.date}`,
       keywords: [d.date, d.city ?? '', d.country ?? '', d.dayType],
     });
   }
@@ -118,7 +119,7 @@ function buildIndex(
       type: 'person',
       label: p.person.name,
       sublabel: p.role,
-      to: '/personnel',
+      to: 'personnel',
       keywords: [p.person.name, p.role],
     });
   }
@@ -135,19 +136,19 @@ function buildIndex(
       type: 'schedule',
       label: si.title,
       sublabel: `${fmtDate(day.date, 'MMM d')} · ${si.startTime}${si.endTime ? ` → ${si.endTime}` : ''}${si.location ? ` · ${si.location}` : ''}`,
-      to: `/daysheet/${day.date}`,
+      to: `daysheet/${day.date}`,
       keywords: [si.title, si.location ?? '', si.type, day.date],
     });
   }
 
   // Venues.
-  for (const [vid, v] of Object.entries(mockVenues)) {
+  for (const [vid, v] of Object.entries(VENUE_DIRECTORY)) {
     const day = tour.days.find((d) => d.venueId === vid);
     items.push({
       type: 'venue',
       label: v.name,
       sublabel: `${v.city}${day ? ` · ${fmtDate(day.date, 'MMM d')}` : ''}`,
-      to: day ? `/daysheet/${day.date}` : '/calendar',
+      to: day ? `daysheet/${day.date}` : 'calendar',
       keywords: [v.name, v.city, v.promoter ?? '', v.country],
     });
   }

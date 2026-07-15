@@ -5,7 +5,7 @@
 // by the Node CLI at scripts/parse-rider.mjs).
 //
 // Exports:
-//   parseRiderPdf(file)  → RiderImport   (wired into RiderIngest upload handler)
+//   parseRiderPdf(file)  → RiderImport   (wired into RiderBuilder's upload handler)
 //   parseFlightPdf(file) → FlightImport  (wired into FlightIngest PDF handler)
 //   parseHotelPdf(file)  → { hotels, tasks } (wired into HotelImportSection)
 
@@ -33,6 +33,12 @@ GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.mjs',
   import.meta.url,
 ).href;
+
+// Stable per-section id for parser output — same `sec_` prefix convention as
+// `lib/riderBuilder.ts`'s authored-section ids (see `RiderSection.id`).
+function mintSectionId(): string {
+  return `sec_${crypto.randomUUID()}`;
+}
 
 // ─── PDF document loader ──────────────────────────────────────────────────────
 
@@ -726,7 +732,7 @@ export async function parseRiderPdf(file: File): Promise<RiderImport> {
 
   const partySize = { flightTickets, tourists: lodging?.totalOccupants, rooms: lodging?.totalRooms };
   const conflicts = detectConflicts({ sections, partySize });
-  if (conflicts.length) sections.push({ type: 'other', pages: [], status: 'extracted', confidence: 0.95, conflicts });
+  if (conflicts.length) sections.push({ id: mintSectionId(), type: 'other', pages: [], status: 'extracted', confidence: 0.95, conflicts });
 
   return {
     id: `ri_parsed_${Date.now()}`,
@@ -752,6 +758,7 @@ function buildTocSections(pages: PPage[], ranges: SectionRange[], language: stri
     const pageNums = pageRange(r.startPage, r.endPage);
     const plots = plotsInRange(pages, r);
     const base: RiderSection = {
+      id: mintSectionId(),
       type: r.type,
       tocIndex: r.tocIndex,
       title: r.title,
@@ -813,7 +820,7 @@ function buildLegacySections(pages: PPage[], language: string): RiderSection[] {
 
   const addSection = (type: RiderSectionType, pageNums: number[], extra: Partial<RiderSection>) => {
     if (!pageNums.length) return;
-    sections.push({ type, pages: pageNums, status: 'extracted', language, ...extra });
+    sections.push({ id: mintSectionId(), type, pages: pageNums, status: 'extracted', language, ...extra });
   };
 
   // Per-page chrome-stripped texts for a discontiguous page list. The legacy

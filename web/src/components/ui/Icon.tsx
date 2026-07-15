@@ -228,4 +228,32 @@ export const Icon = {
       <path d="M3 13.5c0-2.5 2.2-4 5-4s5 1.5 5 4" />
     </S>
   ),
+  Grid: (p: IconProps) => (
+    <S {...p}>
+      <rect x="2" y="2" width="5" height="5" rx="1" />
+      <rect x="9" y="2" width="5" height="5" rx="1" />
+      <rect x="2" y="9" width="5" height="5" rx="1" />
+      <rect x="9" y="9" width="5" height="5" rx="1" />
+    </S>
+  ),
+  Handshake: (p: IconProps) => (
+    <S {...p}>
+      <path d="M2 8.5l3.3-2.5c.5-.4 1.2-.4 1.7 0l1 .8" />
+      <path d="M14 8.5l-3.3-2.5c-.5-.4-1.2-.4-1.7 0l-1 .8" />
+      <path d="M6.7 7.4l1.1 1c.35.3.85.3 1.2 0l1.1-1" />
+      <path d="M2 8.5l1.4 2M14 8.5l-1.4 2" />
+    </S>
+  ),
+  Video: (p: IconProps) => (
+    <S {...p}>
+      <rect x="1.5" y="3.5" width="13" height="9" rx="1.5" />
+      <path d="M6.5 6l4 2.25-4 2.25z" fill="currentColor" stroke="none" />
+    </S>
+  ),
+  Link: (p: IconProps) => (
+    <S {...p}>
+      <rect x="2.2" y="6.2" width="6" height="3.6" rx="1.8" transform="rotate(-45 5.2 8)" />
+      <rect x="7.8" y="6.2" width="6" height="3.6" rx="1.8" transform="rotate(-45 10.8 8)" />
+    </S>
+  ),
 };

@@ -9,18 +9,15 @@ import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { EditableText, EditableSelect } from '@/components/ui/EditableText';
-import { MockBadge } from '@/components/provenance/MockBadge';
-import { MockTag } from '@/components/provenance/MockTag';
 import { SourceTag } from '@/components/provenance/SourceTag';
 import { SensitiveExplain } from '@/components/ExplainTag';
-import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { LobbyCallLadder } from '@/components/LobbyCallLadder';
 import { LastUpdated } from '@/components/LastUpdated';
-import { getMockVenue } from '@/data/mockVenues';
-import type { SourceKey } from '@/data/sources';
+import { getVenue } from '@/data/venues';
 import type { RealSourceKey } from '@/data/realSources';
 import type { Day, ScheduleItem, ScheduleItemType, ScheduleItemPatch, ScheduleItemEditRecord, UpdateStamp, DayLockRecord, CurrentUser } from '@/types';
 import { isValidHHMM } from '@/lib/time';
+import { FLIGHTS_ENABLED } from '@/lib/features';
 import {
   fmtFullDate,
   fmtDate,
@@ -31,6 +28,7 @@ import {
 } from '@/lib/format';
 import { resolveVisibility } from '@/lib/visibility';
 import { getTodayIso, getGeneratedAtLabel } from '@/lib/today';
+import { tourPath } from '@/lib/routing';
 import { cn } from '@/lib/cn';
 
 type Mode = 'edit' | 'personal';
@@ -72,7 +70,7 @@ export function DaySheets() {
   const [copiedShare, setCopiedShare] = useState(false);
   const handleCopyShareLink = useCallback(() => {
     if (!day) return;
-    navigator.clipboard.writeText(buildShareUrl(day.date)).then(() => {
+    navigator.clipboard.writeText(buildShareUrl(tour.id, day.date)).then(() => {
       setCopiedShare(true);
       setTimeout(() => setCopiedShare(false), 2000);
     });
@@ -109,7 +107,7 @@ export function DaySheets() {
               <Icon.Share size={14} /> {copiedShare ? 'Copied!' : 'Share'}
             </button>
             <Link
-              to={`/print/daysheet/${day.date}`}
+              to={tourPath(tour.id, `print/daysheet/${day.date}`)}
               target="_blank"
               rel="noopener noreferrer"
               className="min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] text-[var(--color-ink)] hover:border-[var(--color-ink-4)]"
@@ -195,7 +193,6 @@ export function DaySheets() {
               </button>
             )}
             {managerView && <ModeToggle mode={mode} setMode={setMode} />}
-            <MockBadge source="schedule_item" className="ml-auto hidden sm:inline-flex" />
           </div>
         }
       />
@@ -206,7 +203,7 @@ export function DaySheets() {
         nextDay={nextDay}
         days={tour.days}
         isDayLocked={isDayLocked}
-        onSelect={(d) => navigate(`/daysheet/${d.date}`)}
+        onSelect={(d) => navigate(tourPath(tour.id, `daysheet/${d.date}`))}
       />
 
       {managerView && showLockHistory && (
@@ -238,11 +235,6 @@ export function DaySheets() {
           viewAsUser={managerView && effectiveMode === 'personal' ? allUsers[previewUserKey] ?? user : undefined}
         />
       </div>
-
-      <DataSourcesPanel
-        sourceKeys={['schedule_item', 'travel', 'hotel', 'visibility', 'day_weather']}
-        intro="The day sheet pulls together schedule, movement, lodging, and visibility. Source tags stay visible throughout."
-      />
     </div>
   );
 }
@@ -456,12 +448,12 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
   } = useApp();
   const effectiveUser = viewAsUser ?? user;
   const allItems = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
-  const allTravel = getTravelForDay(day.id);
+  const allTravel = FLIGHTS_ENABLED ? getTravelForDay(day.id) : [];
   const allHotels = getHotelsForDay(day.id);
   const items = mode === 'edit' ? allItems : allItems.filter((it) => resolveVisibility(it.visibility, effectiveUser) !== 'blocked');
   const travel = mode === 'edit' ? allTravel : allTravel.filter((t) => resolveVisibility(t.visibility, effectiveUser) !== 'blocked');
   const hotels = mode === 'edit' ? allHotels : allHotels.filter((h) => resolveVisibility(h.visibility, effectiveUser) !== 'blocked');
-  const venue = getMockVenue(day.venueId);
+  const venue = getVenue(day.venueId);
   const flightsImported = tour.flightImports.some((f) => f.status === 'imported');
   const hotelsImported = tour.hotelImport != null;
 
@@ -475,7 +467,6 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Chip tone={day.dayType}>{dayTypeLabel(day.dayType)}</Chip>
           {day.city && <Chip tone="neutral" variant="outline">{day.city}</Chip>}
-          <MockTag source="tour_route" field="Mobile day sheet date / city" />
         </div>
         <div className="mt-2.5">
           <LastUpdated stamp={getDayLastUpdated(day)} />
@@ -485,10 +476,7 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
       <div className="p-5 space-y-6">
         {venue && (
           <section>
-            <div className="flex items-baseline justify-between gap-2">
-              <h3 className="text-[14px] font-semibold text-[var(--color-ink)]">Venue</h3>
-              <MockTag source="venue" field="Venue" />
-            </div>
+            <h3 className="text-[14px] font-semibold text-[var(--color-ink)]">Venue</h3>
             <div className="mt-2 text-[16px] font-semibold text-[var(--color-ink)]">{venue.name}</div>
             <a
               href={mapsHref(`${venue.name}, ${venue.address}, ${venue.city}`)}
@@ -519,7 +507,7 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
           </section>
         )}
 
-        <SheetSection title={mode === 'edit' ? 'Show clock' : 'Your day'} eyebrow={`${items.length} items`} mockSource="schedule_item">
+        <SheetSection title={mode === 'edit' ? 'Show clock' : 'Your day'} eyebrow={`${items.length} items`}>
           {mode === 'edit' ? (
             <ScheduleEditor day={day} items={items} />
           ) : items.length === 0 ? (
@@ -542,7 +530,7 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
         </SheetSection>
 
         {travel.length > 0 && (
-          <SheetSection title="Travel" eyebrow={`${travel.length} segment${travel.length === 1 ? '' : 's'}`} mockSource={flightsImported ? undefined : 'travel'} realSource={flightsImported ? 'flight_confirmation' : undefined}>
+          <SheetSection title="Travel" eyebrow={`${travel.length} segment${travel.length === 1 ? '' : 's'}`} realSource={flightsImported ? 'flight_confirmation' : undefined}>
             <ul className="space-y-3">
               {travel.map((t) => (
                 <li key={t.id} className="text-[13px]">
@@ -555,7 +543,7 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
         )}
 
         {hotels.length > 0 && (
-          <SheetSection title="Lodging" eyebrow={`${hotels.length} hotel${hotels.length === 1 ? '' : 's'}`} mockSource={hotelsImported ? undefined : 'hotel'} realSource={hotelsImported ? 'hotel_confirmation' : undefined}>
+          <SheetSection title="Lodging" eyebrow={`${hotels.length} hotel${hotels.length === 1 ? '' : 's'}`} realSource={hotelsImported ? 'hotel_confirmation' : undefined}>
             <ul className="space-y-3">
               {hotels.map((h) => (
                 <li key={h.id}>
@@ -586,10 +574,7 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
 
         {venue && (venue.housePM || venue.promoterRep) && (
           <section>
-            <div className="flex items-baseline justify-between gap-2 mb-3">
-              <h3 className="text-[14px] font-semibold text-[var(--color-ink)]">Contacts</h3>
-              <MockTag source="venue" field="Promoter contacts" />
-            </div>
+            <h3 className="text-[14px] font-semibold text-[var(--color-ink)] mb-3">Contacts</h3>
             <div className="space-y-3">
               {venue.housePM && <MobileContact label="House PM" name={venue.housePM} phone={venue.housePMPhone} />}
               {venue.promoterRep && <MobileContact label={venue.promoter ?? 'Promoter'} name={venue.promoterRep} phone={venue.promoterPhone} />}
@@ -600,7 +585,7 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
         {nextDay && (
           <section className="border-t border-[var(--color-rule-soft)] pt-5">
             <div className="eyebrow mb-2">Tomorrow</div>
-            <Link to={`/daysheet/${nextDay.date}`} className="min-h-11 flex items-center justify-between gap-3 rounded-[4px] border border-[var(--color-rule)] px-3 py-2">
+            <Link to={tourPath(tour.id, `daysheet/${nextDay.date}`)} className="min-h-11 flex items-center justify-between gap-3 rounded-[4px] border border-[var(--color-rule)] px-3 py-2">
               <span>
                 <span className="block text-[13px] font-semibold">{fmtDate(nextDay.date, 'EEE, MMM d')}</span>
                 <span className="block text-[12px] text-[var(--color-ink-3)]">{nextDay.city || dayTypeLabel(nextDay.dayType)}</span>
@@ -646,9 +631,9 @@ function DaySheet({ day, mode, viewAsUser }: { day: Day; mode: Mode; viewAsUser?
     getHotelsForDay,
   } = useApp();
   const effectiveUser = viewAsUser ?? user;
-  const venue = getMockVenue(day.venueId);
+  const venue = getVenue(day.venueId);
   const allItems = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
-  const allTravel = getTravelForDay(day.id);
+  const allTravel = FLIGHTS_ENABLED ? getTravelForDay(day.id) : [];
   const allHotels = getHotelsForDay(day.id);
 
   const items = mode === 'edit' ? allItems : allItems.filter((it) => resolveVisibility(it.visibility, effectiveUser) !== 'blocked');
@@ -668,7 +653,6 @@ function DaySheet({ day, mode, viewAsUser }: { day: Day; mode: Mode; viewAsUser?
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[14px] font-semibold text-[var(--color-ink-2)]">
               <span>{day.city ?? '-'}{venue ? ` · ${venue.name}` : ''}</span>
-              {venue && <MockTag source="venue" field="Venue name" />}
               {mode === 'personal' && (
                 <span className="text-[var(--color-ink-4)] font-normal">· For: {effectiveUser.role}</span>
               )}
@@ -691,7 +675,14 @@ function DaySheet({ day, mode, viewAsUser }: { day: Day; mode: Mode; viewAsUser?
           <Fact label="Tour day" value={`${tour.days.findIndex((d) => d.id === day.id) + 1} / ${tour.days.length}`} />
           {day.weather && <Fact label="Weather" value={`${day.weather.conditions} - ${day.weather.low}/${day.weather.high}C`} />}
           {day.sunrise && <Fact label="Sun" value={`${day.sunrise} / ${day.sunset}`} />}
-          <Fact label="Items visible" value={`${items.length} sched - ${travel.length} travel - ${hotels.length} hotel`} />
+          <Fact
+            label="Items visible"
+            value={
+              FLIGHTS_ENABLED
+                ? `${items.length} sched - ${travel.length} travel - ${hotels.length} hotel`
+                : `${items.length} sched - ${hotels.length} hotel`
+            }
+          />
         </div>
 
         <div className="mt-4">
@@ -700,12 +691,7 @@ function DaySheet({ day, mode, viewAsUser }: { day: Day; mode: Mode; viewAsUser?
       </header>
 
       <div className="px-8 py-6 space-y-7">
-        <SheetSection
-          title="Show clock"
-          eyebrow={`${items.length} items`}
-          mockSource="schedule_item"
-          mockNote="Every time shown here is mock. Load-in, soundcheck, doors, set, curfew, and load-out are negotiated with the venue PM during advance. Some constraints, like soundcheck being 6h after load-in, are real rider rules."
-        >
+        <SheetSection title="Show clock" eyebrow={`${items.length} items`}>
           {mode === 'edit' ? (
             <ScheduleEditor day={day} items={items} />
           ) : items.length === 0 ? (
@@ -742,8 +728,6 @@ function DaySheet({ day, mode, viewAsUser }: { day: Day; mode: Mode; viewAsUser?
           <SheetSection
             title="Travel"
             eyebrow={`${travel.length} segment${travel.length === 1 ? '' : 's'}`}
-            mockSource={flightsImported ? undefined : 'travel'}
-            mockNote={flightsImported ? undefined : "Flight and bus segments are mock placeholders. Production data would come from travel-agent confirmations."}
             realSource={flightsImported ? 'flight_confirmation' : undefined}
           >
             <ul className="space-y-3">
@@ -778,8 +762,6 @@ function DaySheet({ day, mode, viewAsUser }: { day: Day; mode: Mode; viewAsUser?
           <SheetSection
             title="Lodging"
             eyebrow={`${hotels.length} hotel${hotels.length === 1 ? '' : 's'}`}
-            mockSource={hotelsImported ? undefined : 'hotel'}
-            mockNote={hotelsImported ? undefined : "Hotel names, addresses, and check-in times are mock. The rider states rooming requirements, but the actual hotel comes from travel advance."}
             realSource={hotelsImported ? 'hotel_confirmation' : undefined}
           >
             <ul className="space-y-3">
@@ -1095,15 +1077,11 @@ function SheetSection({
   title,
   eyebrow,
   children,
-  mockSource,
-  mockNote,
   realSource,
 }: {
   title: string;
   eyebrow?: string;
   children: ReactNode;
-  mockSource?: SourceKey;
-  mockNote?: string;
   realSource?: RealSourceKey;
 }) {
   return (
@@ -1111,9 +1089,7 @@ function SheetSection({
       <div className="flex items-baseline justify-between mb-3 pb-2 border-b border-[var(--color-rule-soft)]">
         <h3 className="font-display text-[18px] font-bold text-[var(--color-ink)] inline-flex items-baseline gap-1">
           {title}
-          {realSource
-            ? <SourceTag source={realSource} field={title} />
-            : mockSource && <MockTag source={mockSource} field={title} note={mockNote} />}
+          {realSource && <SourceTag source={realSource} field={title} />}
         </h3>
         {eyebrow && <span className="eyebrow">{eyebrow}</span>}
       </div>

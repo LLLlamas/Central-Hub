@@ -2,7 +2,7 @@ import { cn } from '@/lib/cn';
 
 // Borderless inputs that read as plain text until hovered/focused, so a dense
 // review table or schedule list stays calm but every value is one click from
-// editable. Disabled renders as static, locked text. Shared by RiderIngest's
+// editable. Disabled renders as static, locked text. Shared by RiderBuilder's
 // rider-section tables and the day-sheet schedule editor.
 
 export function EditableText({

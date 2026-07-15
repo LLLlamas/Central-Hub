@@ -5,12 +5,17 @@
 // a page refresh. On boot, AppStateProvider rehydrates a Blob URL from these
 // bytes and assigns it to `RiderImport.pdfObjectUrl`.
 //
-// Keyed by `RiderImport.id` so re-uploads (which mint a new id) don't collide
-// with the prior rider's bytes — they're cleaned up explicitly via
-// `deleteRiderPdf` / `clearAllRiderPdfs`. Native IndexedDB only, no deps.
+// Keyed by a compound `[tourId, RiderImport.id]` array key so re-uploads
+// (which mint a new id) don't collide with the prior rider's bytes, and so
+// two different tours can never collide even when their ids happen to match
+// (e.g. timestamp-based ids). Cleaned up explicitly via `deleteRiderPdf` /
+// `clearAllRiderPdfs`. Native IndexedDB only, no deps.
 //
 // In non-browser environments (SSR, vitest jsdom-less) every call resolves
 // to a benign no-op / null so callers don't need to feature-detect.
+
+import type { ID } from '@/types';
+import { deleteAllForTour } from '@/lib/idbTourRange';
 
 const DB_NAME = 'tour-hub';
 // v2 adds the `documents` store (see lib/documentStore.ts). Both modules open
@@ -46,12 +51,12 @@ function txDone(tx: IDBTransaction): Promise<void> {
   });
 }
 
-export async function saveRiderPdf(id: string, bytes: ArrayBuffer): Promise<void> {
+export async function saveRiderPdf(tourId: ID, id: string, bytes: ArrayBuffer): Promise<void> {
   if (!hasIdb()) return;
   try {
     const db = await openDb();
     const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).put(bytes, id);
+    tx.objectStore(STORE).put(bytes, [tourId, id]);
     await txDone(tx);
     db.close();
   } catch (err) {
@@ -59,12 +64,12 @@ export async function saveRiderPdf(id: string, bytes: ArrayBuffer): Promise<void
   }
 }
 
-export async function loadRiderPdf(id: string): Promise<ArrayBuffer | null> {
+export async function loadRiderPdf(tourId: ID, id: string): Promise<ArrayBuffer | null> {
   if (!hasIdb()) return null;
   try {
     const db = await openDb();
     const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).get(id);
+    const req = tx.objectStore(STORE).get([tourId, id]);
     const value: unknown = await new Promise((resolve, reject) => {
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -77,12 +82,12 @@ export async function loadRiderPdf(id: string): Promise<ArrayBuffer | null> {
   }
 }
 
-export async function deleteRiderPdf(id: string): Promise<void> {
+export async function deleteRiderPdf(tourId: ID, id: string): Promise<void> {
   if (!hasIdb()) return;
   try {
     const db = await openDb();
     const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).delete(id);
+    tx.objectStore(STORE).delete([tourId, id]);
     await txDone(tx);
     db.close();
   } catch (err) {
@@ -90,13 +95,11 @@ export async function deleteRiderPdf(id: string): Promise<void> {
   }
 }
 
-export async function clearAllRiderPdfs(): Promise<void> {
+export async function clearAllRiderPdfs(tourId: ID): Promise<void> {
   if (!hasIdb()) return;
   try {
     const db = await openDb();
-    const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).clear();
-    await txDone(tx);
+    await deleteAllForTour(db, STORE, tourId);
     db.close();
   } catch (err) {
     console.warn('[riderPdfStore] clearAllRiderPdfs failed:', err);

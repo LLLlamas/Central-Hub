@@ -1,30 +1,23 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
-import { useTour, resetWalkthroughSeen } from '@/components/tour/TourProvider';
 import { Icon } from '@/components/ui/Icon';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 
 /**
  * Onboarding strip — shown above page content while the user is building a
- * tour from scratch. Carries the import checklist (route → rider → flights)
- * plus the Walkthrough and Reset controls. Not rendered in PrintLayout.
+ * tour from scratch. Carries the build checklist (route → rider → hotels)
+ * plus the Reset control. Not rendered in PrintLayout.
  */
 export function ScratchBanner() {
   const { tour, resetScratchTour } = useApp();
-  const { start: startTour } = useTour();
   const [confirmReset, setConfirmReset] = useState(false);
 
   const steps = [
-    { label: 'Import route', done: tour.days.length > 0, to: '/ingest/flights' },
-    { label: 'Import rider', done: tour.riderImports.length > 0, to: '/ingest/riders' },
-    {
-      label: 'Import flights',
-      done: tour.flightImports.some((f) => f.status === 'imported'),
-      to: '/ingest/flights',
-    },
-    { label: 'Import hotels', done: tour.hotels.length > 0, to: '/ingest/flights' },
+    { label: 'Import route', done: tour.days.length > 0, to: 'ingest/flights' },
+    { label: 'Build rider', done: tour.riderImports.length > 0, to: 'ingest/riders' },
+    { label: 'Import hotels', done: tour.hotels.length > 0, to: 'ingest/flights' },
   ];
 
   return (
@@ -55,13 +48,6 @@ export function ScratchBanner() {
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
-              onClick={startTour}
-              className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[var(--color-ocean)] hover:text-[var(--color-ink)]"
-            >
-              <Icon.Sparkle size={12} /> Walkthrough
-            </button>
-            <button
-              type="button"
               onClick={() => setConfirmReset(true)}
               className="text-[11.5px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-accent)]"
             >
@@ -79,7 +65,7 @@ export function ScratchBanner() {
         size="sm"
       >
         <p className="text-[12.5px] text-[var(--color-ink-3)] leading-relaxed">
-          This clears everything you've imported — route, rider, flights, and
+          This clears everything you've built so far — route, rider, and
           hotels — and starts the tour from an empty shell. This can't be undone.
         </p>
         <div className="mt-4 flex justify-end gap-2">
@@ -91,7 +77,6 @@ export function ScratchBanner() {
             size="sm"
             onClick={() => {
               resetScratchTour();
-              resetWalkthroughSeen();
               setConfirmReset(false);
             }}
           >

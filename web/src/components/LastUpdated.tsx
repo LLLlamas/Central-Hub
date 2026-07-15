@@ -1,4 +1,3 @@
-import { MockTag } from '@/components/provenance/MockTag';
 import { Icon } from '@/components/ui/Icon';
 import { fmtDate } from '@/lib/format';
 import { cn } from '@/lib/cn';
@@ -16,8 +15,7 @@ interface LastUpdatedProps {
  * where readers need to trust freshness — the day sheet, day detail, Today
  * screens (day-level), and approved rider sections ("Approved by …").
  *
- * The line itself prints (useful on a backstage-posted sheet); only the
- * MockTag self-hides in print.
+ * The line itself prints — useful on a backstage-posted sheet.
  */
 export function LastUpdated({ stamp, label = 'Last updated', className }: LastUpdatedProps) {
   if (!stamp) return null;
@@ -38,7 +36,6 @@ export function LastUpdated({ stamp, label = 'Last updated', className }: LastUp
         {' '}by{' '}
         <span className="font-semibold text-[var(--color-ink-2)]">{stamp.by}</span>
       </span>
-      <MockTag source="audit_trail" field={label} />
     </span>
   );
 }

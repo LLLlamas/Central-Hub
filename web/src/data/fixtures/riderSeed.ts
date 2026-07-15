@@ -1,102 +1,46 @@
 /* ============================================================
- * TOUR DATA — Elsa y Elmar · Full Band 2025
+ * RIDER SEED — Elsa y Elmar · Full Band 2025
  * ------------------------------------------------------------
- * This file mixes REAL data extracted from the rider PDF
- * (`RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf`)
- * with mock placeholders for everything not derivable from the
- * rider (tour route, calendar dates, flights, hotels, schedule
- * items). The UI flags mock values inline with <MockTag />.
+ * The content extracted from the project's canonical rider PDF
+ * (`RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf`,
+ * per docs/handoff-post-pdf-interpret.md) plus the personnel it
+ * names. `data/riderFixture.ts` clones `riderSeedImport` /
+ * `riderSeedPersonnel` into a fresh RiderImport + TourPerson list
+ * when a user's upload matches this rider (see
+ * `lib/fixtureMatcher.ts`) and the live PDF parser can't be used —
+ * the extraction fallback, not the primary authoring path.
  *
- * REAL (from rider PDF / docs/handoff-post-pdf-interpret.md):
+ * Extracted straight from the rider:
  *   - Artist name, production manager contact, band roster
  *   - Input list (44 channels) + monitor mixes (8) + FOH outputs (8)
  *   - Audio PA, stage specs, lighting equipment, backline,
  *     soundcheck rules, transport spec, rooming list, dressing
  *     rooms, catering menus, conflicts
  *
- * MOCK (no rider source — placeholders awaiting real data):
- *   - Tour dates and route (would come from agent deal memos)
- *   - Schedule item times (rider only says 6h soundcheck min)
- *   - Specific hotels and venues
- *   - Specific flight bookings (rider only gives counts)
- *   - Placeholder names for crew not named in the rider
+ * A few crew roles the rider names by role but not by name (Audio
+ * Engineer, Lighting Engineer, VJ, MUA, Personal Assistant, Staff)
+ * are placeholders (`isPlaceholder: true`) awaiting real names —
+ * see CLAUDE.md "Pending user-blocked items".
  * ============================================================
  */
 
-import type {
-  Tour,
-  Day,
-  Group,
-  GroupTag,
-  Person,
-  TourPerson,
-  ScheduleItem,
-  Travel,
-  Hotel,
-  Task,
-  Document,
-  FlightImport,
-  RiderImport,
-  RiderSection,
-  Conflict,
-  UpdateStamp,
-} from '@/types';
-import { vis } from '@/lib/visibility';
+import type { Person, TourPerson, RiderSection, RiderImport, Conflict } from '@/types';
 
 // ============================================================
-// REAL · Organization (artist's team)
-// Source: cover page of rider implies an artist team; we don't
-// know the official name. Using a plausible placeholder.
-// ============================================================
-export const mockOrgId = 'org_elsa_team';
-
-// ============================================================
-// MOCK · Tour shell
-// Real source: TM setup wizard after agent hand-off. The rider
-// PDF tells us this is the "Full Band 2025" tour but contains
-// NO route, NO dates, NO venues — that all comes from the
-// booking agent's deal memo + routing spreadsheet (Phase 1).
-// ============================================================
-const tourId = 'tour_full_band_2026';
-
-// ============================================================
-// REAL/MOCK MIXED · Groups
-// Mostly inferred from the rider's rooming list and monitor
-// outputs (which roles exist on this tour). Exact group names
-// are TM choice and would normally be copied from a prior tour.
-// ============================================================
-// Exported so the scratch tour (data/scratchTour.ts) reuses the exact same
-// group taxonomy — groups are a reusable template, not tour-specific data.
-export const groups: Group[] = [
-  { id: 'grp_artist', name: 'Artist', color: '#b8392b', description: 'The band itself.' },
-  { id: 'grp_aparty', name: 'A Party', color: '#d97a4a', description: 'Artist + close circle (MUA, personal).' },
-  { id: 'grp_mgmt', name: 'Management', color: '#a07a2e', description: 'Tour manager, artist manager.' },
-  { id: 'grp_production', name: 'Production', color: '#5a6638', description: 'PM, stage manager.' },
-  { id: 'grp_audio', name: 'Audio', color: '#3c5a6a', description: 'Front-of-house engineer (rider §6).' },
-  { id: 'grp_lighting', name: 'Lighting', color: '#7a5a8a', description: 'Lighting designer.' },
-  { id: 'grp_video', name: 'Video', color: '#2e6478', description: 'VJ / playback.' },
-  { id: 'grp_staff', name: 'Staff', color: '#6b665c', description: 'Touring staff (rooming list §12).' },
-];
-
-// Group tags — none in the rider for this tour size (1 audio engineer covers FOH+monitors).
-const groupTags: GroupTag[] = [];
-
-// ============================================================
-// PERSONNEL
-// Sources marked per-person below.
+// Personnel named (or role-placeholder'd) in the rider
 // ============================================================
 const persons: Person[] = [
-  // --- REAL from rider §6/§12
+  // --- Named in rider §6/§12
   { id: 'p_elsa', name: 'Elsa Carvajal' },
   { id: 'p_julian', name: 'Julian Bernal' },
-  // --- REAL first name only (rider §6 monitor mix); last name unknown
+  // --- First name only (rider §6 monitor mix); last name unknown
   { id: 'p_juan', name: 'Juan' },
   { id: 'p_daniel', name: 'Daniel' },
-  // --- REAL from rider cover page
+  // --- Named on rider cover page
   { id: 'p_manuel', name: 'Manuel González', email: 'magcs81@gmail.com', phone: '+52 55 54 74 70 48' },
-  // --- PLACEHOLDER · Tour Manager (real name TBD)
+  // --- Placeholder · Tour Manager (real name TBD)
   { id: 'p_lorenzo', name: 'Tour Manager' },
-  // --- PLACEHOLDERS for roles named in rider §12 but without names.
+  // --- Placeholders for roles named in rider §12 but without names.
   //     These will be replaced when the TM provides crew names.
   { id: 'p_audio', name: 'Audio Engineer' },
   { id: 'p_lighting', name: 'Lighting Engineer' },
@@ -108,8 +52,9 @@ const persons: Person[] = [
 ];
 const personById = Object.fromEntries(persons.map((p) => [p.id, p]));
 
-const TOUR_START = '2026-09-22';
-const TOUR_END = '2026-10-23';
+// Default membership span for the seeded personnel below.
+const MEMBERSHIP_START = '2026-09-22';
+const MEMBERSHIP_END = '2026-10-23';
 
 function tp(
   id: string,
@@ -126,314 +71,38 @@ function tp(
     role,
     groupId,
     tagIds,
-    startDate: opts.startDate ?? TOUR_START,
-    endDate: opts.endDate ?? TOUR_END,
+    startDate: opts.startDate ?? MEMBERSHIP_START,
+    endDate: opts.endDate ?? MEMBERSHIP_END,
     isPlaceholder: opts.isPlaceholder,
   };
 }
 
-const personnel: TourPerson[] = [
-  // REAL · Artist (from rider §6 + §12)
+/** The band + crew the rider identifies (by name or by role). */
+export const riderSeedPersonnel: TourPerson[] = [
+  // Artist (from rider §6 + §12)
   tp('tp_elsa', 'p_elsa', 'Lead Vocals', 'grp_artist'),
   tp('tp_julian', 'p_julian', 'Guitar & Backing Vox', 'grp_artist'),
   tp('tp_juan', 'p_juan', 'Drums', 'grp_artist', [], { isPlaceholder: true }),
   tp('tp_daniel', 'p_daniel', 'Bass', 'grp_artist', [], { isPlaceholder: true }),
-  // REAL · Production (from rider cover)
+  // Production (from rider cover page)
   tp('tp_manuel', 'p_manuel', 'Production Manager', 'grp_production'),
-  // PLACEHOLDER · Mgmt (TM name TBD, like the other unfilled crew roles)
+  // Placeholder · Mgmt (TM name TBD, like the other unfilled crew roles)
   tp('tp_lorenzo', 'p_lorenzo', 'Tour Manager', 'grp_mgmt', [], { isPlaceholder: true }),
-  // PLACEHOLDERS · technical crew (rider §12)
+  // Placeholders · technical crew (rider §12)
   tp('tp_audio', 'p_audio', 'Audio Engineer (FOH + Monitors)', 'grp_audio', [], { isPlaceholder: true }),
   tp('tp_lighting', 'p_lighting', 'Lighting Designer', 'grp_lighting', [], { isPlaceholder: true }),
   tp('tp_vj', 'p_vj', 'VJ / Playback', 'grp_video', [], { isPlaceholder: true }),
-  // PLACEHOLDERS · A Party (rider §12 — share a single room)
+  // Placeholders · A Party (rider §12 — share a single room)
   tp('tp_mua', 'p_mua', 'Makeup Artist', 'grp_aparty', [], { isPlaceholder: true }),
   tp('tp_personal', 'p_personal', 'Personal Assistant', 'grp_aparty', [], { isPlaceholder: true }),
-  // PLACEHOLDERS · Staff (rider §12 double room)
+  // Placeholders · Staff (rider §12 double room)
   tp('tp_staff1', 'p_staff1', 'Touring Staff', 'grp_staff', [], { isPlaceholder: true }),
   tp('tp_staff2', 'p_staff2', 'Touring Staff', 'grp_staff', [], { isPlaceholder: true }),
 ];
 
 // ============================================================
-// MOCK · Days (auto-generated from tour date range — the
-// route, cities, and DayTypes are all mock because the rider
-// contains no tour route.)
-// ============================================================
-// MOCK · In production every record carries audit columns (updated_at /
-// updated_by). Days created at calendar build-out default to this stamp;
-// the demo-zone days below override it with more recent edits.
-const TOUR_SETUP_STAMP: UpdateStamp = { at: '2026-07-05T16:20', by: 'Tour Manager' };
-
-type DaySeed = Omit<Day, 'id'> & { id?: string };
-function makeDay(seed: DaySeed): Day {
-  return {
-    id: seed.id ?? `day_${seed.date}`,
-    legId: seed.legId,
-    date: seed.date,
-    dayType: seed.dayType,
-    city: seed.city,
-    country: seed.country,
-    venueId: seed.venueId,
-    notes: seed.notes,
-    weather: seed.weather,
-    sunrise: seed.sunrise,
-    sunset: seed.sunset,
-    published: seed.published,
-    lastUpdated: seed.lastUpdated ?? TOUR_SETUP_STAMP,
-  };
-}
-
-const days: Day[] = [
-  // ---- MOCK Leg 1: Mexico ---------------------------------
-  makeDay({ date: '2026-09-22', dayType: 'travel', city: 'LAX → CDMX', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2026-09-21T18:30', by: 'Tour Manager' } }),
-  makeDay({ date: '2026-09-23', dayType: 'rehearsal', city: 'Mexico City', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2026-09-22T11:05', by: 'Manuel González' } }),
-  makeDay({ date: '2026-09-24', dayType: 'rehearsal', city: 'Mexico City', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2026-09-23T14:15', by: 'Manuel González' } }),
-  makeDay({ date: '2026-09-25', dayType: 'show', city: 'Mexico City', country: 'MX', venueId: 'v_auditorio_nacional', published: false, legId: 'leg_mx', weather: { high: 24, low: 13, conditions: 'Partly cloudy' }, lastUpdated: { at: '2026-09-24T19:40', by: 'Tour Manager' } }),
-  makeDay({ date: '2026-09-26', dayType: 'off', city: 'Mexico City', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2026-09-19T10:00', by: 'Tour Manager' } }),
-  makeDay({ date: '2026-09-27', dayType: 'travel', city: 'CDMX → MTY', country: 'MX', published: false, legId: 'leg_mx', lastUpdated: { at: '2026-09-24T16:20', by: 'Manuel González' } }),
-  makeDay({ date: '2026-09-28', dayType: 'show', city: 'Monterrey', country: 'MX', venueId: 'v_auditorio_banamex', published: false, legId: 'leg_mx', lastUpdated: { at: '2026-09-23T09:30', by: 'Manuel González' } }),
-  makeDay({ date: '2026-09-29', dayType: 'travel', city: 'MTY → GDL', country: 'MX', published: false, legId: 'leg_mx' }),
-  makeDay({ date: '2026-09-30', dayType: 'show', city: 'Guadalajara', country: 'MX', venueId: 'v_auditorio_telmex', published: false, legId: 'leg_mx' }),
-  makeDay({ date: '2026-10-01', dayType: 'off', city: 'Guadalajara', country: 'MX', published: false, legId: 'leg_mx' }),
-  makeDay({ date: '2026-10-02', dayType: 'travel', city: 'GDL → LAX', country: 'US', published: false, legId: 'leg_mx' }),
-
-  // ---- MOCK Leg 2: USA -----------------------------------
-  makeDay({ date: '2026-10-03', dayType: 'show', city: 'Los Angeles', country: 'US', venueId: 'v_greek', published: false, legId: 'leg_us', lastUpdated: { at: '2026-09-12T13:00', by: 'Tour Manager' } }),
-  makeDay({ date: '2026-10-04', dayType: 'off', city: 'Los Angeles', country: 'US', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2026-10-05', dayType: 'promo', city: 'Los Angeles', country: 'US', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2026-10-06', dayType: 'travel', city: 'LA → SF', country: 'US', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2026-10-07', dayType: 'show', city: 'Oakland', country: 'US', venueId: 'v_fox', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2026-10-08', dayType: 'travel', city: 'SFO → MIA', country: 'US', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2026-10-09', dayType: 'show', city: 'Miami', country: 'US', venueId: 'v_knight', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2026-10-10', dayType: 'off', city: 'Miami', country: 'US', published: false, legId: 'leg_us' }),
-  makeDay({ date: '2026-10-11', dayType: 'travel', city: 'MIA → BOG', country: 'CO', published: false, legId: 'leg_us' }),
-
-  // ---- MOCK Leg 3: South America -------------------------
-  makeDay({ date: '2026-10-12', dayType: 'show', city: 'Bogotá', country: 'CO', venueId: 'v_movistar_bog', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2026-10-13', dayType: 'off', city: 'Bogotá', country: 'CO', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2026-10-14', dayType: 'travel', city: 'BOG → LIM', country: 'PE', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2026-10-15', dayType: 'show', city: 'Lima', country: 'PE', venueId: 'v_anfiteatro_lim', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2026-10-16', dayType: 'off', city: 'Lima', country: 'PE', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2026-10-17', dayType: 'travel', city: 'LIM → SCL', country: 'CL', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2026-10-18', dayType: 'show', city: 'Santiago', country: 'CL', venueId: 'v_movistar_scl', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2026-10-19', dayType: 'off', city: 'Santiago', country: 'CL', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2026-10-20', dayType: 'travel', city: 'SCL → BUE', country: 'AR', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2026-10-21', dayType: 'show', city: 'Buenos Aires', country: 'AR', venueId: 'v_movistar_bue', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2026-10-22', dayType: 'off', city: 'Buenos Aires', country: 'AR', published: false, legId: 'leg_sa' }),
-  makeDay({ date: '2026-10-23', dayType: 'travel', city: 'BUE → LAX', country: 'US', published: false, legId: 'leg_sa' }),
-];
-
-const dayByDate = Object.fromEntries(days.map((d) => [d.date, d]));
-
-// ============================================================
-// MOCK · Schedule items
-// The rider specifies "6 hours soundcheck minimum from load-in"
-// and "closed-door soundcheck" — that's all the schedule data
-// it contains. Specific times below are mock.
-// ============================================================
-const scheduleItems: ScheduleItem[] = [
-  // --- Show day · Mexico City (Sep 25) — fully fleshed ---
-  { id: 'si_0925_busc', dayId: dayByDate['2026-09-25'].id, type: 'bus_call', title: 'Bus call (hotel lobby)', startTime: '08:30', visibility: vis.everyone('sees') },
-  { id: 'si_0925_load', dayId: dayByDate['2026-09-25'].id, type: 'load_in', title: 'Crew load-in', startTime: '09:00', endTime: '12:00', location: 'Auditorio Nacional · Stage door', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'sees') },
-  { id: 'si_0925_lunch', dayId: dayByDate['2026-09-25'].id, type: 'lunch', title: 'Crew lunch', startTime: '12:30', endTime: '13:30', location: 'Camerino 03 (Crew)', visibility: vis.everyone('sees') },
-  { id: 'si_0925_sndchk', dayId: dayByDate['2026-09-25'].id, type: 'soundcheck', title: 'Soundcheck — closed door (6h min from load-in)', startTime: '15:30', endTime: '17:30', location: 'Auditorio Nacional · Stage', notes: 'Closed door per rider §10', visibility: { default: 'sees', groups: { grp_artist: 'sees', grp_audio: 'owns', grp_lighting: 'sees' } } },
-  { id: 'si_0925_press', dayId: dayByDate['2026-09-25'].id, type: 'press', title: 'Press junket — Rolling Stone México', startTime: '16:00', endTime: '16:45', location: 'Camerino 01 (Elsa)', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
-  { id: 'si_0925_dinner', dayId: dayByDate['2026-09-25'].id, type: 'dinner', title: 'Band dinner', startTime: '18:00', endTime: '19:00', visibility: { default: 'sees', groups: { grp_artist: 'sees', grp_aparty: 'sees' } } },
-  { id: 'si_0925_doors', dayId: dayByDate['2026-09-25'].id, type: 'doors', title: 'Doors', startTime: '20:00', visibility: vis.everyone('sees') },
-  { id: 'si_0925_set', dayId: dayByDate['2026-09-25'].id, type: 'set', title: 'Elsa y Elmar — Full Band set', startTime: '21:30', endTime: '23:15', location: 'Auditorio Nacional · Stage', visibility: vis.everyone('sees') },
-  { id: 'si_0925_curfew', dayId: dayByDate['2026-09-25'].id, type: 'curfew', title: 'Curfew', startTime: '23:30', visibility: vis.everyone('sees') },
-  { id: 'si_0925_lout', dayId: dayByDate['2026-09-25'].id, type: 'load_out', title: 'Load-out', startTime: '23:45', endTime: '03:00', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'sees') },
-
-  // --- Show day · Los Angeles (Oct 3) — partial ---
-  { id: 'si_1003_busc', dayId: dayByDate['2026-10-03'].id, type: 'bus_call', title: 'Bus call', startTime: '09:00', visibility: vis.everyone('sees') },
-  { id: 'si_1003_load', dayId: dayByDate['2026-10-03'].id, type: 'load_in', title: 'Crew load-in', startTime: '09:30', endTime: '12:30', location: 'The Greek · Stage door', visibility: vis.onlyGroups(['grp_production', 'grp_audio', 'grp_lighting', 'grp_video'], 'sees') },
-  { id: 'si_1003_sndchk', dayId: dayByDate['2026-10-03'].id, type: 'soundcheck', title: 'Soundcheck — closed door', startTime: '15:00', endTime: '16:30', visibility: { default: 'sees', groups: { grp_artist: 'sees', grp_audio: 'owns' } } },
-  { id: 'si_1003_doors', dayId: dayByDate['2026-10-03'].id, type: 'doors', title: 'Doors', startTime: '19:00', visibility: vis.everyone('sees') },
-  { id: 'si_1003_set', dayId: dayByDate['2026-10-03'].id, type: 'set', title: 'Elsa y Elmar — Full Band set', startTime: '20:30', endTime: '22:30', visibility: vis.everyone('sees') },
-
-  // --- Promo day · LA (Oct 5) ---
-  { id: 'si_1005_p1', dayId: dayByDate['2026-10-05'].id, type: 'press', title: 'NPR Alt.Latino interview', startTime: '10:00', endTime: '11:00', location: 'NPR West · Culver City', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
-  { id: 'si_1005_p2', dayId: dayByDate['2026-10-05'].id, type: 'press', title: 'Billboard photoshoot', startTime: '14:00', endTime: '16:30', location: 'Quixote Studios', sensitive: true, visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
-  { id: 'si_1005_meet', dayId: dayByDate['2026-10-05'].id, type: 'meet_greet', title: 'VIP meet & greet', startTime: '18:00', endTime: '19:00', visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } } },
-
-  // --- Rehearsal day · CDMX (Sep 23) ---
-  { id: 'si_0923_call', dayId: dayByDate['2026-09-23'].id, type: 'lobby_call', title: 'Hotel lobby call', startTime: '10:00', visibility: vis.everyone('sees') },
-  { id: 'si_0923_reh', dayId: dayByDate['2026-09-23'].id, type: 'rehearsal', title: 'Production rehearsal', startTime: '11:00', endTime: '18:00', location: 'Foro Indie Rocks (rented)', visibility: vis.everyone('sees') },
-];
-
-// ============================================================
-// MOCK · Travel (rider §11 specifies 2 vans + 1 cargo + 8
-// flights but no specific flights/dates).
-// ============================================================
-const travel: Travel[] = [
-  {
-    id: 'tr_lax_cdmx',
-    dayId: dayByDate['2026-09-22'].id,
-    mode: 'flight',
-    carrier: 'Aeroméxico',
-    identifier: 'AM 19',
-    from: 'LAX',
-    to: 'MEX',
-    departTime: '09:35',
-    arriveTime: '15:20',
-    recordLocator: 'ABCD12',
-    passengers: [
-      { tourPersonId: 'tp_elsa', seat: '2A' },
-      { tourPersonId: 'tp_julian', seat: '2C' },
-      { tourPersonId: 'tp_juan', seat: '3A' },
-      { tourPersonId: 'tp_daniel', seat: '3C' },
-      { tourPersonId: 'tp_lorenzo', seat: '4A' },
-      { tourPersonId: 'tp_manuel', seat: '4C' },
-      { tourPersonId: 'tp_audio', seat: '5A' },
-      { tourPersonId: 'tp_mua', seat: '5C' },
-    ],
-    visibility: { default: 'sees', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } },
-  },
-  {
-    id: 'tr_cdmx_mty',
-    dayId: dayByDate['2026-09-27'].id,
-    mode: 'flight',
-    carrier: 'VivaAerobus',
-    identifier: 'VB 1014',
-    from: 'MEX',
-    to: 'MTY',
-    departTime: '11:00',
-    arriveTime: '12:35',
-    recordLocator: 'XYZ987',
-    passengers: personnel.map((p) => ({ tourPersonId: p.id })),
-    visibility: vis.everyone('sees'),
-  },
-  {
-    id: 'tr_la_oak',
-    dayId: dayByDate['2026-10-06'].id,
-    mode: 'bus',
-    carrier: 'Hemphill Brothers',
-    identifier: 'Bus 1',
-    from: 'Los Angeles',
-    to: 'Oakland',
-    departTime: '22:00',
-    arriveTime: '08:00',
-    passengers: personnel.filter((p) => ['grp_production', 'grp_audio', 'grp_lighting'].includes(p.groupId)).map((p) => ({ tourPersonId: p.id })),
-    visibility: vis.everyone('sees'),
-  },
-];
-
-// ============================================================
-// MOCK · Hotels (rider §12 gives rooming list + room-type
-// requirements but no specific hotel.)
-// ============================================================
-const hotels: Hotel[] = [
-  {
-    id: 'h_cdmx_st_regis',
-    dayId: dayByDate['2026-09-23'].id,
-    name: 'St. Regis Mexico City',
-    address: 'Paseo de la Reforma 439, Cuauhtémoc, 06500 Ciudad de México',
-    phone: '+52 55 5228 1818',
-    checkIn: '15:00',
-    checkOut: '12:00',
-    nights: 3,
-    occupants: [
-      { tourPersonId: 'tp_elsa', roomNumber: '2104', roomType: 'Junior Suite' },
-      { tourPersonId: 'tp_lorenzo', roomNumber: '2102', roomType: 'Single' },
-      { tourPersonId: 'tp_manuel', roomNumber: '2106', roomType: 'Single' },
-    ],
-    sensitive: true,
-    visibility: { default: 'blocked', groups: { grp_aparty: 'sees', grp_mgmt: 'sees' } },
-  },
-  {
-    id: 'h_cdmx_nh',
-    dayId: dayByDate['2026-09-23'].id,
-    name: 'NH Collection Mexico City Reforma',
-    address: 'Paseo de la Reforma 122, Juárez, 06600',
-    phone: '+52 55 5208 2222',
-    checkIn: '15:00',
-    checkOut: '12:00',
-    nights: 3,
-    occupants: [
-      { tourPersonId: 'tp_julian', roomType: 'Single' },
-      { tourPersonId: 'tp_juan', roomType: 'Single' },
-      { tourPersonId: 'tp_daniel', roomType: 'Single' },
-      { tourPersonId: 'tp_audio', roomType: 'Single' },
-      // MUA + Personal Asst share a single room per rider §12
-      { tourPersonId: 'tp_mua', roomNumber: '07', roomType: 'Single (shared)' },
-      { tourPersonId: 'tp_personal', roomNumber: '07', roomType: 'Single (shared)' },
-      { tourPersonId: 'tp_vj', roomType: 'Double' },
-      { tourPersonId: 'tp_lighting', roomType: 'Double' },
-      { tourPersonId: 'tp_staff1', roomType: 'Double' },
-      { tourPersonId: 'tp_staff2', roomType: 'Double' },
-    ],
-    sensitive: false,
-    visibility: vis.everyone('sees'),
-  },
-];
-
-// ============================================================
-// MOCK · Tasks
-// ============================================================
-const tasks: Task[] = [
-  { id: 't_carnet', title: 'Confirm carnet status with customs broker before MX entry', dayId: dayByDate['2026-09-22'].id, ownerTourPersonId: 'tp_manuel', due: '2026-09-15T17:00', status: 'doing', visibility: vis.onlyGroups(['grp_production', 'grp_mgmt'], 'sees') },
-  { id: 't_iems', title: 'Pick up 4 IEM packs returning from repair (Sennheiser SC)', ownerTourPersonId: 'tp_audio', due: '2026-09-20T17:00', status: 'todo', visibility: vis.onlyGroups(['grp_audio'], 'sees') },
-  { id: 't_passes', title: 'Print pass laminates for all crew before LAX departure', dayId: dayByDate['2026-09-22'].id, ownerTourPersonId: 'tp_manuel', due: '2026-09-21T17:00', status: 'doing', visibility: vis.onlyGroups(['grp_production'], 'sees') },
-];
-
-// ============================================================
-// REAL · Documents (the rider itself, with its revisions)
-// Source: cover page says "Updated: September 2025". The
-// "PLEASE IGNORE PREVIOUS VERSIONS" warning is captured.
-// ============================================================
-const documents: Document[] = [
-  {
-    id: 'doc_rider',
-    kind: 'rider',
-    title: 'Elsa y Elmar — Full Band 2025 Tech Rider',
-    liveLink: 'https://tour-hub.example.com/r/eye-fb-2026',
-    currentRevision: 2,
-    revisions: [
-      { id: 'rev_1', revision: 1, uploadedAt: '2026-07-03T14:22', uploadedBy: 'Manuel González', sourceUrl: '#', sourceLanguage: 'es', pageCount: 27, notes: 'Original release (filename: 030725)' },
-      { id: 'rev_2', revision: 2, uploadedAt: '2026-09-10T09:51', uploadedBy: 'Manuel González', sourceUrl: '#', sourceLanguage: 'es', pageCount: 27, notes: 'September 2025 update — supersedes all previous versions' },
-    ],
-    visibility: vis.everyone('sees'),
-  },
-];
-
-// ============================================================
-// MOCK · Flight Imports (AI ingest queue) — kept for demoing
-// the flight-ingest UI. Passenger names use real personnel.
-// ============================================================
-const flightImports: FlightImport[] = [
-  {
-    id: 'fi_lax_cdmx',
-    filename: 'AM19_Group_LAX-MEX_2026-09-22.pdf',
-    uploadedAt: '2026-09-01T11:24',
-    status: 'imported',
-    parsedFlights: [
-      {
-        airline: 'Aeroméxico',
-        flightNumber: 'AM 19',
-        departureAirport: 'LAX',
-        arrivalAirport: 'MEX',
-        departureTime: '2026-09-22T09:35',
-        arrivalTime: '2026-09-22T15:20',
-        recordLocator: 'ABCD12',
-        passengers: [
-          { name: 'Elsa Carvajal', seat: '2A', matchedTourPersonId: 'tp_elsa' },
-          { name: 'Julian Bernal', seat: '2C', matchedTourPersonId: 'tp_julian' },
-          { name: 'Juan', seat: '3A', matchedTourPersonId: 'tp_juan' },
-          { name: 'Daniel', seat: '3C', matchedTourPersonId: 'tp_daniel' },
-          { name: 'Tour Manager', seat: '4A', matchedTourPersonId: 'tp_lorenzo' },
-          { name: 'Manuel González', seat: '4C', matchedTourPersonId: 'tp_manuel' },
-          { name: 'Audio Engineer', seat: '5A', matchedTourPersonId: 'tp_audio' },
-          { name: 'MUA', seat: '5C', matchedTourPersonId: 'tp_mua' },
-        ],
-      },
-    ],
-    unmatchedNames: [],
-  },
-];
-
-// ============================================================
-// REAL · Rider Import — the 14 sections from the real PDF,
-// extracted per the schemas in docs/handoff-post-pdf-interpret.md.
+// Rider Import — the 14 sections from the real PDF, extracted
+// per the schemas in docs/handoff-post-pdf-interpret.md.
 // ============================================================
 
 // --- Input list (§6) — 44 channels ---
@@ -775,6 +444,7 @@ const conflicts: Conflict[] = [
 const riderSections: RiderSection[] = [
   // §1 Cover & contacts
   {
+    id: 'sec_cover_and_contacts',
     type: 'cover_and_contacts',
     pages: [1],
     status: 'approved',
@@ -787,6 +457,7 @@ const riderSections: RiderSection[] = [
   },
   // §2 Production control — verbatim from rider p.3
   {
+    id: 'sec_production_control',
     type: 'production_control',
     pages: [3],
     status: 'approved',
@@ -799,6 +470,7 @@ const riderSections: RiderSection[] = [
   },
   // §3 Permits — verbatim from rider p.3
   {
+    id: 'sec_permits',
     type: 'permits',
     pages: [3],
     status: 'approved',
@@ -811,6 +483,7 @@ const riderSections: RiderSection[] = [
   },
   // §4 Stage specs
   {
+    id: 'sec_stage_specs',
     type: 'stage_specs',
     pages: [4],
     status: 'review',
@@ -823,6 +496,7 @@ const riderSections: RiderSection[] = [
   },
   // §5 Audio PA
   {
+    id: 'sec_audio_pa',
     type: 'audio_pa',
     pages: [5],
     status: 'review',
@@ -835,6 +509,7 @@ const riderSections: RiderSection[] = [
   },
   // §6 Input list (44 ch)
   {
+    id: 'sec_input_list',
     type: 'input_list',
     pages: [6],
     status: 'review',
@@ -844,6 +519,7 @@ const riderSections: RiderSection[] = [
   },
   // §6 Monitor mix (8 stereo)
   {
+    id: 'sec_audio_monitors',
     type: 'audio_monitors',
     pages: [6, 7],
     status: 'review',
@@ -853,6 +529,7 @@ const riderSections: RiderSection[] = [
   },
   // §6 FOH output patch
   {
+    id: 'sec_output_patch',
     type: 'output_patch',
     pages: [7],
     status: 'review',
@@ -862,6 +539,7 @@ const riderSections: RiderSection[] = [
   },
   // §7 Stage plot
   {
+    id: 'sec_stage_plot',
     type: 'stage_plot',
     pages: [8],
     status: 'pending',
@@ -872,6 +550,7 @@ const riderSections: RiderSection[] = [
   },
   // §8 Lighting equipment
   {
+    id: 'sec_lighting_equipment',
     type: 'lighting_equipment',
     pages: [9, 10],
     status: 'review',
@@ -884,6 +563,7 @@ const riderSections: RiderSection[] = [
   },
   // §8 Lighting plot (CAD pages — stored, not extracted)
   {
+    id: 'sec_lighting_plot',
     type: 'lighting_plot',
     pages: [11, 12, 13, 14, 15, 16, 17, 18],
     status: 'pending',
@@ -894,6 +574,7 @@ const riderSections: RiderSection[] = [
   },
   // §9 Backline
   {
+    id: 'sec_backline',
     type: 'backline',
     pages: [19, 20],
     status: 'review',
@@ -903,6 +584,7 @@ const riderSections: RiderSection[] = [
   },
   // §10 Soundcheck
   {
+    id: 'sec_soundcheck',
     type: 'soundcheck',
     pages: [21],
     status: 'approved',
@@ -913,6 +595,7 @@ const riderSections: RiderSection[] = [
   },
   // §11 Ground transport
   {
+    id: 'sec_ground_transport',
     type: 'ground_transport',
     pages: [22],
     status: 'approved',
@@ -923,6 +606,7 @@ const riderSections: RiderSection[] = [
   },
   // §11 Air transport
   {
+    id: 'sec_air_transport',
     type: 'air_transport',
     pages: [22],
     status: 'review',
@@ -935,6 +619,7 @@ const riderSections: RiderSection[] = [
   },
   // §12 Lodging
   {
+    id: 'sec_lodging',
     type: 'lodging',
     pages: [23],
     status: 'review',
@@ -944,6 +629,7 @@ const riderSections: RiderSection[] = [
   },
   // §13 Dressing rooms
   {
+    id: 'sec_dressing_rooms',
     type: 'dressing_rooms',
     pages: [24],
     status: 'review',
@@ -956,6 +642,7 @@ const riderSections: RiderSection[] = [
   },
   // §14 Catering
   {
+    id: 'sec_catering',
     type: 'catering',
     pages: [25, 26],
     status: 'review',
@@ -965,6 +652,7 @@ const riderSections: RiderSection[] = [
   },
   // Conflicts (derived)
   {
+    id: 'sec_other',
     type: 'other',
     pages: [],
     status: 'review',
@@ -974,62 +662,27 @@ const riderSections: RiderSection[] = [
   },
 ];
 
-const riderImports: RiderImport[] = [
-  {
-    id: 'ri_001',
-    filename: 'RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf',
-    uploadedAt: '2026-09-10T10:14',
-    uploadedBy: 'Tour Manager',
-    sourceLanguage: 'es',
-    pageCount: 27,
-    status: 'review',
-    revision: 2,
-    artistName: 'Elsa y Elmar',
-    revisionInfo: {
-      version: 'September 2025',
-      date: '2025-09',
-      warning: 'PLEASE IGNORE PREVIOUS VERSIONS (Favor omitir versiones anteriores)',
-    },
-    productionManager: {
-      name: 'Manuel González',
-      email: 'magcs81@gmail.com',
-      phone: '+52 55 54 74 70 48',
-    },
-    partySize: { tourists: 11, rooms: 10, flightTickets: 8 }, // rider-stated; flagged in conflicts
-    sections: riderSections,
-  },
-];
-
-// ============================================================
-// The Tour object (composed)
-// ============================================================
-export const mockTour: Tour = {
-  id: tourId,
-  organizationId: mockOrgId,
-  name: 'Full Band 2025',
+/** The extracted rider content, ready to clone into a fresh RiderImport. */
+export const riderSeedImport: RiderImport = {
+  id: 'ri_001',
+  filename: 'RIDER ELSA Y ELMAR 2025 -FULL BAND - Venue Shows 030725.pdf',
+  uploadedAt: '2026-09-10T10:14',
+  uploadedBy: 'Tour Manager',
+  sourceLanguage: 'es',
+  pageCount: 27,
+  status: 'review',
+  revision: 2,
   artistName: 'Elsa y Elmar',
-  status: 'in_progress',
-  startDate: TOUR_START,
-  endDate: TOUR_END,
-  legs: [
-    { id: 'leg_mx', name: 'Mexico Leg', startDate: '2026-09-22', endDate: '2026-10-02' },
-    { id: 'leg_us', name: 'USA Leg', startDate: '2026-10-03', endDate: '2026-10-11' },
-    { id: 'leg_sa', name: 'South America Leg', startDate: '2026-10-12', endDate: '2026-10-23' },
-  ],
-  groups,
-  groupTags,
-  personnel,
-  days,
-  scheduleItems,
-  travel,
-  hotels,
-  tasks,
-  documents,
-  flightImports,
-  riderImports,
+  revisionInfo: {
+    version: 'September 2025',
+    date: '2025-09',
+    warning: 'PLEASE IGNORE PREVIOUS VERSIONS (Favor omitir versiones anteriores)',
+  },
+  productionManager: {
+    name: 'Manuel González',
+    email: 'magcs81@gmail.com',
+    phone: '+52 55 54 74 70 48',
+  },
+  partySize: { tourists: 11, rooms: 10, flightTickets: 8 }, // rider-stated; flagged in conflicts
+  sections: riderSections,
 };
-
-// Tour query helpers (getDay, getScheduleItemsForDay, …) previously lived here
-// and read mockTour directly. They moved to lib/tourQueries.ts as pure
-// functions over an explicit `tour`, and are re-exposed (bound to the active
-// tour) from state/AppState.tsx — call them via useApp().

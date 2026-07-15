@@ -38,8 +38,9 @@ usePdfViewer().openPdf({ url, page?, title? })
 
 - `RiderRef` (`components/RiderRef.tsx`) — §N / p.N links → rider PDF at the section's page.
 - `SourceTag` (`components/provenance/SourceTag.tsx`) — the "View" artifact button → rider PDF at the cited page.
-- `MockTag` (`components/provenance/MockTag.tsx`) — artifacts with `kind: 'pdf'`.
-- Rider filename chip — `routes/RiderIngest.tsx`. Flight filename chips — `routes/FlightIngest.tsx`.
+- Rider filename chip — `routes/RiderBuilder.tsx`. Flight filename chips — `routes/FlightIngest.tsx`.
+
+(The old `MockTag`/`MockBadge`/`DataSourcesPanel` mock-provenance system, which also routed PDF artifacts through this viewer, was deleted entirely — see CLAUDE.md's "Provenance system".)
 
 ## Why highlighting isn't built
 

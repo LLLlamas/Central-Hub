@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { getRealSource, type RealSourceKey } from '@/data/realSources';
-import { resolveProvenanceUrl } from '@/data/sources';
+import { getRealSource, resolveProvenanceUrl, type RealSourceKey } from '@/data/realSources';
 import { Modal } from '@/components/ui/Modal';
 import { Icon } from '@/components/ui/Icon';
 import { linkifyRiderRefs } from '@/components/RiderRef';
@@ -16,14 +15,12 @@ interface SourceTagProps {
 }
 
 /**
- * Tiny inline "(i)" indicator placed next to any REAL value that came from
+ * Tiny inline "(i)" indicator placed next to any real value that came from
  * the rider PDF or a user entry. Click to open a popup showing exactly
  * which document, section, and page the value originated from — plus a
  * link to open the source artifact.
  *
- * Symmetric counterpart to <MockTag /> — same modal pattern, ocean-blue
- * theme instead of mock-purple. Together they make every value on screen
- * traceable to its origin.
+ * Ocean-blue theme. Makes every value on screen traceable to its origin.
  */
 export function SourceTag({ source, field, className }: SourceTagProps) {
   const [open, setOpen] = useState(false);

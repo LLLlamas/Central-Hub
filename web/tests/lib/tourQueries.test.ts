@@ -16,7 +16,7 @@ import { vis } from '@/lib/visibility';
 import type { Tour } from '@/types';
 
 function makeTour(): Tour {
-  const t = createScratchTour();
+  const t = createScratchTour('tour_test-1');
   t.days = [
     { id: 'day_a', date: '2026-09-23', dayType: 'rehearsal', published: false },
     { id: 'day_b', date: '2026-09-25', dayType: 'show', published: false },
@@ -46,13 +46,13 @@ function makeTour(): Tour {
       sourceLanguage: 'es', pageCount: 1, status: 'review', revision: 1,
       sections: [
         {
-          type: 'other', pages: [], status: 'review',
+          id: 'sec_other', type: 'other', pages: [], status: 'review',
           conflicts: [
             { id: 'c1', type: 'duplicate', severity: 'low', description: 'x', sectionsInvolved: [], values: [] },
             { id: 'c2', type: 'duplicate', severity: 'high', description: 'y', sectionsInvolved: [], values: [] },
           ],
         },
-        { type: 'stage_specs', pages: [4], status: 'review' },
+        { id: 'sec_stage_specs', type: 'stage_specs', pages: [4], status: 'review' },
       ],
     },
   ];
@@ -116,6 +116,6 @@ describe('tourQueries â€” getAllConflicts', () => {
     expect(ids).toEqual(['c1', 'c2']);
   });
   it('returns [] when there are no rider imports', () => {
-    expect(getAllConflicts(createScratchTour())).toEqual([]);
+    expect(getAllConflicts(createScratchTour('tour_test-1'))).toEqual([]);
   });
 });

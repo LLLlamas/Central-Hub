@@ -33,9 +33,9 @@ export interface Backend {
   saveOverlays(tourId: ID | null, bundle: OverlayBundle): Promise<void>;
 
   // PDF + document bytes (IndexedDB locally, Supabase Storage on supabase).
-  loadPdf(scope: PdfScope, id: string): Promise<ArrayBuffer | null>;
-  savePdf(scope: PdfScope, id: string, bytes: ArrayBuffer): Promise<void>;
-  deletePdf(scope: PdfScope, id: string): Promise<void>;
+  loadPdf(tourId: ID, scope: PdfScope, id: string): Promise<ArrayBuffer | null>;
+  savePdf(tourId: ID, scope: PdfScope, id: string, bytes: ArrayBuffer): Promise<void>;
+  deletePdf(tourId: ID, scope: PdfScope, id: string): Promise<void>;
 
   clearAll(tourId: ID | null): Promise<void>;
 

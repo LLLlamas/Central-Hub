@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
 import { useAuth } from '@/state/AuthProvider';
 import { useCommandPalette } from '@/components/CommandPalette';
@@ -44,10 +45,18 @@ export function TopBar() {
         </div>
 
         <div className="flex items-center gap-2 md:gap-3">
+          <Link
+            to="/"
+            className="inline-flex items-center justify-center h-11 w-11 md:h-9 md:w-9 rounded-[4px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] transition-colors bg-[var(--color-card)] text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+            title="My Shows"
+            aria-label="My Shows"
+          >
+            <Icon.Grid size={15} />
+          </Link>
+
           <div className="relative">
             <button
               type="button"
-              data-tour="viewer-switcher"
               onClick={() => managerView && setOpen((v) => !v)}
               className="flex items-center gap-2.5 h-11 md:h-9 pl-1.5 pr-2.5 rounded-[4px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] transition-colors bg-[var(--color-card)] disabled:cursor-default"
               title={managerView ? 'Switch viewer' : undefined}

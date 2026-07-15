@@ -20,7 +20,9 @@ Then open http://localhost:5173. Tests: `npm test` (vitest). Build: `npm run bui
 
 ## How it works
 
-The app boots into an **empty tour shell** and a guided walkthrough leads you through four uploads (route CSV → rider PDF → flights → hotels) using the sample files in `web/public/`. Everything is parsed in-browser (`web/src/lib/pdfParser.ts`, no server) with fixture fallbacks for the known sample files.
+`/` is **My Shows** — every tour you run, grouped by status, with a map and a "+ New show" button. Pick or create a tour and everything else lives under `/t/:tourId/...`.
+
+Inside a tour, the TM/PM **authors the rider directly in-app** from a 14-section consensus template — add, remove, reorder, and rename sections, with real inline editors for every section type — or falls back to uploading an existing rider PDF, parsed in-browser (`web/src/lib/pdfParser.ts`, no server) with fixture fallbacks for the known sample files. The route (CSV) and hotel bookings (PDF) are still uploaded and parsed the same way. Once the rider is in shape, it goes to each show's venue for negotiation on the **advance board** — the venue responds item by item and the TM reconciles any gaps until everything's confirmed.
 
 **Backends:** the default is `local` (localStorage + IndexedDB, per-browser, no login). A **Supabase** backend (Google/magic-link auth, one shared tour, role-gated membership, cloud sync) is available behind `VITE_BACKEND=supabase` — see [docs/backend.md](docs/backend.md).
 

@@ -1,12 +1,13 @@
-// Rider fixture for scratch mode.
+// Rider fixture used when a user's upload matches the project's canonical
+// rider PDF (see lib/fixtureMatcher.ts) and the live parser can't be used —
+// the extraction fallback, not the primary rider-authoring path.
 //
-// The scratch-mode rider IS the Elsa y Elmar rider — the same PDF the demo
-// tour uses. The mockTour rider section list pre-dates the TOC-driven model
-// and over-splits sections (§6 is three rows; §8 is two). Here we collapse it
-// to the 14 TOC entries the new review surface expects, hand-authoring the
-// titles + tocIndex + endPage fields the parser would otherwise produce.
+// The fixture rider content pre-dates the TOC-driven model and over-splits
+// sections (§6 is three rows; §8 is two). Here we collapse it to the 14 TOC
+// entries the review surface expects, hand-authoring the titles + tocIndex +
+// endPage fields the parser would otherwise produce.
 
-import { mockTour } from '@/data/mockTour';
+import { riderSeedImport, riderSeedPersonnel } from '@/data/fixtures/riderSeed';
 import { getNowIso } from '@/lib/today';
 import { RIDER_PDF_PATH } from '@/lib/riderSections';
 import { renderPlotImagesFromUrl } from '@/lib/pdfParser';
@@ -54,7 +55,7 @@ const LIGHT_PLOT_IMAGES: PlotImage[] = [
  * sections; §8 inherits the lightplot pages as `plots`.
  */
 function buildTocSections(): RiderSection[] {
-  const src = mockTour.riderImports[0].sections;
+  const src = riderSeedImport.sections;
   const byType = (...types: RiderSection['type'][]) =>
     src.filter((s) => types.includes(s.type));
 
@@ -80,6 +81,7 @@ function buildTocSections(): RiderSection[] {
   const sections: RiderSection[] = TOC_TITLES.map((toc): RiderSection => {
     const endPage = toc.pages[toc.pages.length - 1];
     const base: RiderSection = {
+      id: `sec_${toc.type}`,
       type: toc.type,
       tocIndex: toc.num,
       title: toc.title,
@@ -138,14 +140,14 @@ function buildTocSections(): RiderSection[] {
 
   // The trailing "Conflicts & Notes" pseudo-section was removed from the
   // rider-ingest rail (it was overkill at the section-review altitude). The
-  // conflict data itself still lives in mockTour and is surfaced by the
-  // Tour Overview's ConflictFeed via AppState — only the rail entry is gone.
+  // conflict data itself still lives in the rider seed and is surfaced by
+  // the Tour Overview's ConflictFeed via AppState — only the rail entry is gone.
   return clone(sections);
 }
 
-/** A fresh RiderImport for the scratch tour — the demo rider, collapsed to 14 TOC sections. */
+/** A fresh RiderImport for the scratch tour — the fixture rider, collapsed to 14 TOC sections. */
 export function buildScratchRiderImport(): RiderImport {
-  const ri = clone(mockTour.riderImports[0]);
+  const ri = clone(riderSeedImport);
   ri.uploadedBy = 'Tour Manager';
   ri.uploadedAt = getNowIso();
   ri.sections = buildTocSections();
@@ -187,9 +189,10 @@ export async function hydrateRiderPlotImages(
 }
 
 /**
- * The personnel the rider names — the band + crew. Excludes the demo Tour
- * Manager (`tp_lorenzo`): the scratch tour already has its own TM.
+ * The personnel the rider names — the band + crew. Excludes the fixture's
+ * own Tour Manager placeholder (`tp_lorenzo`): the scratch tour already has
+ * its own TM.
  */
 export function buildScratchRiderPersonnel(): TourPerson[] {
-  return clone(mockTour.personnel.filter((p) => p.id !== 'tp_lorenzo'));
+  return clone(riderSeedPersonnel.filter((p) => p.id !== 'tp_lorenzo'));
 }

@@ -11,8 +11,6 @@ interface FileDropZoneProps {
   title: string;
   hint: string;
   icon?: ReactNode;
-  /** `data-tour` anchor id, so the walkthrough can spotlight this zone. */
-  tourAnchor?: string;
 }
 
 /**
@@ -28,7 +26,6 @@ export function FileDropZone({
   title,
   hint,
   icon,
-  tourAnchor,
 }: FileDropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -42,7 +39,6 @@ export function FileDropZone({
     <div
       role="button"
       tabIndex={0}
-      data-tour={tourAnchor}
       onClick={() => inputRef.current?.click()}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {

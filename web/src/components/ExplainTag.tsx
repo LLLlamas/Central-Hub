@@ -36,7 +36,7 @@ interface ExplainTagProps {
  * English — so a non-expert user understands what they're looking at and why
  * it matters.
  *
- * Same modal pattern as <SourceTag /> / <MockTag />, neutral-amber theme.
+ * Same modal pattern as <SourceTag />, neutral-amber theme.
  * stopPropagation + preventDefault let it sit inside parent <Link> rows.
  */
 export function ExplainTag({

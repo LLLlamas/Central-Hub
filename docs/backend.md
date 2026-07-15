@@ -244,7 +244,9 @@ without an assigned role:
   stripped). `AuthProvider` resolves membership; `AuthGate` → `WaitingForAccess`
   until active. `/access` `AppUserPermissions` manager screen. `local` byte-identical.
 - **Mock provenance removed** (`MockTag`/`MockBadge`/`DataSourcesPanel` → null;
-  `SourceTag` kept). "Copy from prior tour" removed.
+  `SourceTag` kept). "Copy from prior tour" removed. (Dated status entry — a
+  later phase deleted these components entirely rather than null'ing them; see
+  CLAUDE.md's "Provenance system" for the current end-state.)
 - Verified: `typecheck` clean · `npm test` 89/89 · `build` succeeds.
 - *Build-validated only* — run the migration + bootstrap seed (§8) then test live.
 

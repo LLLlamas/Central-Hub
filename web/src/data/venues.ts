@@ -1,44 +1,20 @@
 /* ============================================================
- * MOCK · Venue directory
+ * Venue directory
  * ------------------------------------------------------------
  * The rider PDF never contains venue addresses or local promoter
  * contacts — those come from the booking agent's deal memos and
  * the PM's advance work with the venue's house production team.
  *
- * In production this would be a reusable Venue DB (Master Tour
- * has 15k+ venue records globally; ours would grow as TMs use
- * the hub). For the prototype, we mock the venues referenced by
- * `day.venueId` in mockTour.ts so the printable day sheet can
- * show realistic local info.
+ * This is the current (still small) real venue directory: the
+ * static seed below covers the sample tour's cities, and grows as
+ * TMs use the hub. `Tour.venues` can hold per-tour overrides on top
+ * of this — see `getVenueForTour`.
  * ============================================================
  */
 
-export interface MockVenue {
-  name: string;
-  address: string;
-  city: string;
-  country: string;
-  phone?: string;
-  capacity?: number;
-  /** Local power voltage (mains) — relevant for backline. */
-  voltage?: string;
-  /** Local currency for settlement. */
-  currency?: string;
-  /** Local primary language. */
-  language?: string;
-  /** Promoter org (e.g. "OCESA"). */
-  promoter?: string;
-  promoterRep?: string;
-  promoterPhone?: string;
-  promoterEmail?: string;
-  /** Venue's own production manager (the "house PM" the tour PM advances with). */
-  housePM?: string;
-  housePMPhone?: string;
-  /** Stage door street/entrance — what the bus driver needs. */
-  stageDoor?: string;
-}
+import type { ID, Tour, Venue } from '@/types';
 
-export const mockVenues: Record<string, MockVenue> = {
+export const VENUE_DIRECTORY: Record<string, Venue> = {
   v_auditorio_nacional: {
     name: 'Auditorio Nacional',
     address: 'Paseo de la Reforma 50, Polanco, Miguel Hidalgo',
@@ -128,7 +104,15 @@ export const mockVenues: Record<string, MockVenue> = {
   },
 };
 
-export function getMockVenue(venueId?: string): MockVenue | undefined {
+export function getVenue(venueId?: string): Venue | undefined {
   if (!venueId) return undefined;
-  return mockVenues[venueId];
+  return VENUE_DIRECTORY[venueId];
+}
+
+/** Venue lookup for venue-negotiation surfaces: prefers a tour's own
+ *  per-tour override (`Tour.venues`), falling back to the static
+ *  seeded directory when the venueId isn't present there. */
+export function getVenueForTour(tour: Tour, venueId?: ID): Venue | undefined {
+  if (!venueId) return undefined;
+  return tour.venues?.[venueId] ?? VENUE_DIRECTORY[venueId];
 }

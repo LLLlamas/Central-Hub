@@ -1,30 +1,9 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
-import { MockTag } from '@/components/provenance/MockTag';
 import { fmtDate } from '@/lib/format';
 import { cn } from '@/lib/cn';
-
-interface CityCoord {
-  lat: number;
-  lng: number;
-}
-
-// Approximate lat/lng for each show city on the tour. Linear projection is
-// fine at this resolution — this is an illustrative routing map, not a
-// navigation chart.
-const CITY_COORDS: Record<string, CityCoord> = {
-  'Mexico City': { lat: 19.43, lng: -99.13 },
-  Monterrey: { lat: 25.67, lng: -100.31 },
-  Guadalajara: { lat: 20.67, lng: -103.35 },
-  'Los Angeles': { lat: 34.05, lng: -118.24 },
-  Oakland: { lat: 37.8, lng: -122.27 },
-  Miami: { lat: 25.76, lng: -80.19 },
-  'Bogotá': { lat: 4.71, lng: -74.07 },
-  Lima: { lat: -12.05, lng: -77.04 },
-  Santiago: { lat: -33.45, lng: -70.67 },
-  'Buenos Aires': { lat: -34.61, lng: -58.38 },
-};
+import { CITY_COORDS, computeBounds, project, type CityCoord } from '@/lib/mapProjection';
 
 const LEG_COLOR: Record<string, string> = {
   leg_mx: 'var(--color-day-show)',
@@ -98,19 +77,9 @@ export function RouteMap({ embedded = false }: { embedded?: boolean } = {}) {
   const innerW = W - pad.left - pad.right;
   const innerH = H - pad.top - pad.bottom;
 
-  const lats = stops.map((s) => s.coord.lat);
-  const lngs = stops.map((s) => s.coord.lng);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  const latRange = Math.max(0.0001, maxLat - minLat);
-  const lngRange = Math.max(0.0001, maxLng - minLng);
-
-  const project = (lat: number, lng: number) => ({
-    x: pad.left + ((lng - minLng) / lngRange) * innerW,
-    y: pad.top + ((maxLat - lat) / latRange) * innerH,
-  });
+  const bounds = computeBounds(stops.map((s) => s.coord));
+  const { minLat, maxLat, minLng } = bounds;
+  const projectPoint = (lat: number, lng: number) => project(lat, lng, bounds, W, H, pad);
 
   return (
     <section className={embedded ? 'overflow-hidden' : 'card overflow-hidden'}>
@@ -119,10 +88,7 @@ export function RouteMap({ embedded = false }: { embedded?: boolean } = {}) {
         embedded ? 'pb-3' : 'px-6 pt-5 pb-3',
       )}>
         <div>
-          <div className="eyebrow mb-1 inline-flex items-center gap-1">
-            {embedded ? 'Stops' : 'Route map'}
-            <MockTag source="tour_route" field="Tour route" />
-          </div>
+          <div className="eyebrow mb-1">{embedded ? 'Stops' : 'Route map'}</div>
           <h3 className="font-display text-[18px] font-bold tracking-tight text-[var(--color-ink)]">
             {stops.length} cities · {tour.legs.length} legs
           </h3>
@@ -183,9 +149,9 @@ export function RouteMap({ embedded = false }: { embedded?: boolean } = {}) {
             {minLat < 0 && maxLat > 0 && (
               <line
                 x1={pad.left}
-                y1={project(0, minLng).y}
+                y1={projectPoint(0, minLng).y}
                 x2={pad.left + innerW}
-                y2={project(0, minLng).y}
+                y2={projectPoint(0, minLng).y}
                 stroke="var(--color-rule)"
                 strokeWidth="0.6"
                 strokeDasharray="2 3"
@@ -195,8 +161,8 @@ export function RouteMap({ embedded = false }: { embedded?: boolean } = {}) {
             {/* Connecting lines between consecutive stops */}
             {stops.slice(0, -1).map((s, i) => {
               const next = stops[i + 1];
-              const from = project(s.coord.lat, s.coord.lng);
-              const to = project(next.coord.lat, next.coord.lng);
+              const from = projectPoint(s.coord.lat, s.coord.lng);
+              const to = projectPoint(next.coord.lat, next.coord.lng);
               const sameLeg = s.legId === next.legId;
               const color = LEG_COLOR[s.legId] ?? 'var(--color-ink-3)';
               return (
@@ -216,7 +182,7 @@ export function RouteMap({ embedded = false }: { embedded?: boolean } = {}) {
 
             {/* Numbered city dots */}
             {stops.map((s) => {
-              const p = project(s.coord.lat, s.coord.lng);
+              const p = projectPoint(s.coord.lat, s.coord.lng);
               const color = LEG_COLOR[s.legId] ?? 'var(--color-ink-3)';
               return (
                 <g key={`d${s.n}`}>
@@ -243,7 +209,7 @@ export function RouteMap({ embedded = false }: { embedded?: boolean } = {}) {
           {stops.map((s) => (
             <li key={`leg-${s.n}`}>
               <Link
-                to={`/daysheet/${s.firstDate}`}
+                to={`daysheet/${s.firstDate}`}
                 className="flex items-baseline gap-2.5 px-3 py-1.5 rounded-[3px] hover:bg-[var(--color-paper-2)] transition-colors"
               >
                 <span

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { PdfViewerInline } from '@/components/PdfViewer';
 import { parseFlightPdf, parseHotelPdf } from '@/lib/pdfParser';
+import { tourPath } from '@/lib/routing';
 import { cn } from '@/lib/cn';
 import type { DocumentSubmission, SubmissionStatus, DocumentKind } from '@/types';
 
@@ -193,7 +194,7 @@ function SubmissionDetail({ sub }: { sub: DocumentSubmission }) {
             const fi = await parseFlightPdf(file, tour.personnel);
             if (fi.status !== 'failed' && fi.parsedFlights.length > 0) {
               addFlightImportToScratch(fi);
-              routeTo = '/ingest/flights';
+              routeTo = tourPath(tour.id, 'ingest/flights');
             }
           } catch {
             /* parse failed — still attach as a document below */
@@ -203,7 +204,7 @@ function SubmissionDetail({ sub }: { sub: DocumentSubmission }) {
             const { hotels, tasks } = await parseHotelPdf(file, tour.personnel, tour.days);
             if (hotels.length > 0) {
               addHotelImportToScratch(hotels, tasks, sub.filename);
-              routeTo = '/ingest/flights';
+              routeTo = tourPath(tour.id, 'ingest/flights');
             }
           } catch {
             /* parse failed — still attach as a document below */

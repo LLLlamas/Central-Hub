@@ -8,9 +8,7 @@ import { Card, EmptyState } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
-import { MockTag } from '@/components/provenance/MockTag';
 import { PersonName } from '@/components/provenance/PersonName';
-import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { TourPerson, Group } from '@/types';
@@ -71,13 +69,10 @@ export function Personnel() {
         }
         description="The crew roster grouped by department, with placeholders clearly marked until real crew names land."
         meta={
-          <div className="flex items-center gap-2 text-[12px] text-[var(--color-ink-3)]">
-            <span>
-              {tour.personnel.filter((p) => !p.isPlaceholder).length} named ·{' '}
-              {tour.personnel.filter((p) => p.isPlaceholder).length} placeholder
-            </span>
-            <MockTag source="tour_person" field="Crew roster" />
-          </div>
+          <span className="text-[12px] text-[var(--color-ink-3)]">
+            {tour.personnel.filter((p) => !p.isPlaceholder).length} named ·{' '}
+            {tour.personnel.filter((p) => p.isPlaceholder).length} placeholder
+          </span>
         }
         actions={
           managerView && (
@@ -190,11 +185,6 @@ export function Personnel() {
           </>
         )}
       </Card>
-
-      <DataSourcesPanel
-        sourceKeys={['tour_person', 'person', 'group', 'group_tag', 'visibility']}
-        intro="Personnel is a tour-scoped projection of two underlying global tables — Person (reused across tours) and Group (per-tour, almost always copied). TourPerson is the linker, with role + dates + tags. In v1: manual entry, CSV import, or copy-from-previous-tour."
-      />
 
       {personModal && (
         <PersonModal

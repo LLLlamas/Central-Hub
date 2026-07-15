@@ -7,15 +7,29 @@ import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { SourceTag } from '@/components/provenance/SourceTag';
-import { SectionPlotCard, PlotImageLightbox, collectPlotsBySection } from '@/routes/RiderIngest';
+import { LastUpdated } from '@/components/LastUpdated';
+import { tourPath } from '@/lib/routing';
+import { SectionPlotCard, PlotImageLightbox, collectPlotsBySection } from '@/routes/RiderBuilder';
+import type { UpdateStamp } from '@/types';
 
 export function Plots() {
-  const { tour } = useApp();
+  const { tour, getSectionHistory, getSectionApproval } = useApp();
   const navigate = useNavigate();
   const imp = tour.riderImports[0];
   const sectionPlots = imp ? collectPlotsBySection(imp) : [];
   const totalPages = sectionPlots.reduce((n, sp) => n + sp.plots.length, 0);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+
+  // Freshness line: the most recent edit or approval stamp across the plot-bearing
+  // sections this page already iterates for its grid — not a new AppState mutator.
+  let lastUpdatedStamp: UpdateStamp | undefined;
+  for (const { sectionKey } of sectionPlots) {
+    for (const record of getSectionHistory(sectionKey)) {
+      if (!lastUpdatedStamp || record.resolvedAt.at > lastUpdatedStamp.at) lastUpdatedStamp = record.resolvedAt;
+    }
+    const approval = getSectionApproval(sectionKey);
+    if (approval && (!lastUpdatedStamp || approval.at > lastUpdatedStamp.at)) lastUpdatedStamp = approval;
+  }
 
   if (!imp || sectionPlots.length === 0) {
     return (
@@ -31,15 +45,15 @@ export function Plots() {
             <div>
               <p className="text-[13.5px] font-semibold text-[var(--color-ink)]">No plots yet</p>
               <p className="mt-1 text-[12px] text-[var(--color-ink-3)] max-w-md">
-                Import a rider with stage plot or lightplot pages and they will show up here. The parser flags image-only pages and attaches them to their owning section.
+                Import a rider PDF with stage plot or lightplot pages and they will show up here (an authored rider has none to extract — on the Rider page, open "Import a rider PDF instead"). The parser flags image-only pages and attaches them to their owning section. Photos and video added via the rider's Stage design section live there for now — this page covers PDF-extracted plot pages only.
               </p>
             </div>
             <Button
               variant="primary"
               leading={<Icon.Sparkle size={14} />}
-              onClick={() => navigate('/ingest/riders')}
+              onClick={() => navigate(tourPath(tour.id, 'rider'))}
             >
-              Import rider
+              Go to Rider
             </Button>
           </div>
         </Card>
@@ -64,7 +78,7 @@ export function Plots() {
           <Button
             variant="outline"
             leading={<Icon.Sparkle size={14} />}
-            onClick={() => navigate('/ingest/riders')}
+            onClick={() => navigate(tourPath(tour.id, 'ingest/riders'))}
           >
             View rider
           </Button>
@@ -74,9 +88,12 @@ export function Plots() {
             <Chip tone="neutral" variant="outline">
               <Icon.Image size={10} /> {totalPages} image{totalPages === 1 ? '' : 's'}
             </Chip>
-            <Chip tone="travel" variant="outline">
-              Source: {imp.sourceLanguage.toUpperCase()}
-            </Chip>
+            {imp.sourceLanguage && (
+              <Chip tone="travel" variant="outline">
+                Source: {imp.sourceLanguage.toUpperCase()}
+              </Chip>
+            )}
+            {lastUpdatedStamp && <LastUpdated stamp={lastUpdatedStamp} />}
           </div>
         }
       />

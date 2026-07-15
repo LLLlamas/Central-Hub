@@ -1,19 +1,34 @@
 import { NavLink } from 'react-router-dom';
+import { useApp } from '@/state/AppState';
 import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/lib/cn';
+import { isVenuePersona } from '@/lib/access';
 
 const tabs = [
-  { to: '/', label: 'Today', icon: Icon.Home, end: true },
-  { to: '/calendar', label: 'Calendar', icon: Icon.Calendar },
-  { to: '/personnel', label: 'People', icon: Icon.Users },
-  { to: '/more', label: 'More', icon: Icon.Settings },
+  { to: '', label: 'Today', icon: Icon.Home, end: true },
+  { to: 'calendar', label: 'Calendar', icon: Icon.Calendar },
+  { to: 'personnel', label: 'People', icon: Icon.Users },
+  { to: 'more', label: 'More', icon: Icon.Settings },
 ];
 
+// A grp_venue persona is single-purpose: swap the whole tab bar for just the
+// advance board rather than filtering the standard tabs down (the tour-exit
+// "My Shows" link still shows — it lives ungated in TopBar, not here).
+const venueTabs = [{ to: 'advance', label: 'Advance', icon: Icon.Handshake, end: true }];
+
 export function BottomNav() {
+  const { user } = useApp();
+  const visibleTabs = isVenuePersona(user) ? venueTabs : tabs;
+
   return (
     <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t border-[var(--color-rule)] bg-[var(--color-paper)]/95 backdrop-blur">
-      <div className="grid grid-cols-4 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5">
-        {tabs.map((tab) => {
+      <div
+        className={cn(
+          'grid px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5',
+          visibleTabs.length === 1 ? 'grid-cols-1' : 'grid-cols-4',
+        )}
+      >
+        {visibleTabs.map((tab) => {
           const I = tab.icon;
           return (
             <NavLink

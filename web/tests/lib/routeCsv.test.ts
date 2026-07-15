@@ -1,7 +1,7 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { parseRouteCsv } from '@/lib/routeCsv';
 
-// Mirrors web/public/mock-tour-route-mexico-7day.csv â€” the rehearsal/show rows
+// Mirrors web/public/sample-tour-route-mexico-7day.csv â€” the rehearsal/show rows
 // carry quoted addresses containing commas, which the parser must respect.
 const CSV = `date,leg,day_type,city,country,venue,venue_address,capacity,guarantee_usd,doors_local,set_time_local,curfew_local,promoter,promoter_rep,notes
 2026-09-22,leg_mx,travel,LAX â†’ CDMX,MX,,,,,,,,,,Tour kickoff. Group flight AM 19.

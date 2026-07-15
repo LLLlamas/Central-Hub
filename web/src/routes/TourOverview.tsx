@@ -5,13 +5,10 @@ import { Card } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
-import { MockTag } from '@/components/provenance/MockTag';
 import { SourceTag } from '@/components/provenance/SourceTag';
-import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { ConflictFeed } from '@/components/ConflictFeed';
 import { RouteMap } from '@/components/RouteMap';
 import { TodaySurface } from '@/components/TodaySurface';
-import { useTour } from '@/components/tour/TourProvider';
 import type { RealSourceKey } from '@/data/realSources';
 import { fixturesOfKind } from '@/lib/fixtureMatcher';
 import { fmtDate, dayTypeLabel } from '@/lib/format';
@@ -44,7 +41,7 @@ export function TourOverview() {
         description="The app opens on the operational day first. Everything else is still here, but the daily picture leads."
         actions={
           <Link
-            to="/calendar"
+            to="calendar"
             className="min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]"
           >
             <Icon.Calendar size={14} /> Calendar
@@ -55,7 +52,6 @@ export function TourOverview() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 text-[12px] text-[var(--color-ink-2)]">
                 {fmtDate(tour.startDate, 'MMM d')} - {fmtDate(tour.endDate, 'MMM d, yyyy')}
-                <MockTag source="tour_route" field="Tour dates" />
               </span>
             </div>
           ) : undefined
@@ -65,10 +61,10 @@ export function TourOverview() {
       {scratchEmpty ? <ScratchGetStarted /> : <TodaySurface />}
 
       <div className="mt-5 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label="Total days" value={totalDays} sublabel={`${tour.legs.length} legs`} mockSource="tour_route" />
-        <Stat label="Shows" value={showDays} tone="show" mockSource="tour_route" />
-        <Stat label="Travel" value={travelDays} tone="travel" mockSource="tour_route" />
-        <Stat label="Off" value={offDays} tone="off" mockSource="tour_route" />
+        <Stat label="Total days" value={totalDays} sublabel={`${tour.legs.length} legs`} />
+        <Stat label="Shows" value={showDays} tone="show" />
+        <Stat label="Travel" value={travelDays} tone="travel" />
+        <Stat label="Off" value={offDays} tone="off" />
         <Stat label="Locked" value={`${lockedCount}/${totalDays}`} sublabel="Closed out" />
         <Stat label="Conflicts" value={unresolvedCount} sublabel={unresolvedCount === 0 ? 'All clear' : 'Need decision'} />
       </div>
@@ -110,7 +106,7 @@ export function TourOverview() {
           eyebrow={`Next ${upcoming.length} days`}
           defaultOpen={false}
           badge={
-            <Link to="/calendar" className="text-[12px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]">
+            <Link to="calendar" className="text-[12px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]">
               View calendar
             </Link>
           }
@@ -125,11 +121,6 @@ export function TourOverview() {
           </div>
         </CollapsibleSection>
       </div>
-
-      <DataSourcesPanel
-        sourceKeys={['tour', 'tour_route', 'leg', 'day', 'tour_person', 'group', 'rider_cover_contacts']}
-        intro="The overview blends real rider data with mocked route, venue, and schedule data. Source tags stay visible while this prototype is being built."
-      />
     </div>
   );
 }
@@ -144,7 +135,7 @@ function UpcomingDays({ days, flush = false }: { days: ReturnType<typeof useApp>
       {days.map((d) => (
         <li key={d.id}>
           <Link
-            to={`/calendar/${d.date}`}
+            to={`calendar/${d.date}`}
             className={cnList(
               'flex items-center gap-4 py-3 hover:bg-[var(--color-paper)]/50',
               flush ? 'px-6' : 'px-0',
@@ -175,7 +166,6 @@ function UpcomingDays({ days, flush = false }: { days: ReturnType<typeof useApp>
                     {d.city}
                   </span>
                 )}
-                <MockTag source="tour_route" field="City / venue" />
               </div>
               {d.notes && (
                 <div className="mt-0.5 text-[12px] text-[var(--color-ink-3)]">{d.notes}</div>
@@ -220,13 +210,11 @@ function Stat({
   value,
   sublabel,
   tone,
-  mockSource,
 }: {
   label: string;
   value: string | number;
   sublabel?: string;
   tone?: 'show' | 'travel' | 'off';
-  mockSource?: 'tour_route' | 'schedule_item';
 }) {
   const color =
     tone === 'show'
@@ -238,10 +226,7 @@ function Stat({
       : 'var(--color-ink)';
   return (
     <div className="card px-4 py-3">
-      <div className="eyebrow flex items-center justify-between">
-        <span>{label}</span>
-        {mockSource && <MockTag source={mockSource} field={label} />}
-      </div>
+      <div className="eyebrow">{label}</div>
       <div className="font-display text-[32px] leading-none font-bold mt-1.5 tabular" style={{ color }}>
         {value}
       </div>
@@ -281,14 +266,13 @@ function cnList(...classes: Array<string | false | undefined>): string {
   return classes.filter(Boolean).join(' ');
 }
 
-// Guided intro shown on the scratch overview before any route is imported.
-// Frames the scenario, offers the coach-mark walkthrough, and lists the three
-// import steps with the exact sample file each one expects.
+// Intro shown on the scratch overview before any route is imported. Frames
+// the scenario and lists the first few build steps — route and hotels are
+// file imports, the rider is authored in-app (with import as a fallback) —
+// each with the relevant sample file where one applies.
 function ScratchGetStarted() {
-  const { start } = useTour();
   const route = fixturesOfKind('route')[0];
   const rider = fixturesOfKind('rider')[0];
-  const flight = fixturesOfKind('flight')[0];
   const hotel = fixturesOfKind('hotel')[0];
   const steps = [
     {
@@ -296,28 +280,21 @@ function ScratchGetStarted() {
       title: 'Import the tour route',
       file: route?.filename,
       hint: 'Builds a day for every date — shows, travel, off days — plus each show’s schedule.',
-      to: '/ingest/flights',
+      to: 'ingest/flights',
     },
     {
       n: 2,
-      title: 'Import the rider',
+      title: 'Build the rider',
       file: rider?.filename,
-      hint: 'Every rider section is pulled out for you to review, correct and approve.',
-      to: '/ingest/riders',
+      hint: 'Fill in the standard 14-section template yourself — or skip typing and import a rider PDF like the sample below.',
+      to: 'ingest/riders',
     },
     {
       n: 3,
-      title: 'Import the flights',
-      file: flight?.filename,
-      hint: 'Review the passenger matches, then approve them onto each day as travel.',
-      to: '/ingest/flights',
-    },
-    {
-      n: 4,
       title: 'Import the hotels',
       file: hotel?.filename,
       hint: 'One PDF per hotel — each lands on its check-in day with the rooming list matched to your roster.',
-      to: '/ingest/flights',
+      to: 'ingest/flights',
     },
   ];
   return (
@@ -325,27 +302,19 @@ function ScratchGetStarted() {
       <div className="p-5 sm:p-7 border-b border-[var(--color-rule-soft)]">
         <div className="eyebrow inline-flex items-center gap-1">
           Start from scratch
-          <MockTag source="scratch_tour" field="Start From Scratch" />
         </div>
         <h2 className="mt-2 font-display text-[26px] sm:text-[32px] leading-tight font-bold text-[var(--color-ink)]">
           You’re the new Tour Manager
         </h2>
         <p className="mt-2 text-[13px] text-[var(--color-ink-3)] leading-relaxed max-w-xl">
-          Elsa y Elmar are about to tour. Four documents are waiting in your inbox —
-          a routing spreadsheet from the booking agent, the band’s tech rider,
-          flight confirmations from the travel agent, and hotel bookings. Import
-          them in order and the hub builds the tour around you.
+          Elsa y Elmar are about to tour. A routing spreadsheet from the booking
+          agent and the hotel bookings are waiting in your inbox. Import those
+          below, then build the band’s tech rider right here in the hub —
+          or import one instead if a PDF already exists.
         </p>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={start}
-            className="inline-flex items-center gap-1.5 h-9 px-4 text-[13px] font-semibold rounded-[4px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]"
-          >
-            <Icon.Sparkle size={14} /> Start the walkthrough
-          </button>
+        <div className="mt-4">
           <span className="text-[12px] text-[var(--color-ink-3)]">
-            or follow the steps below at your own pace.
+            Follow the steps below to get started.
           </span>
         </div>
       </div>

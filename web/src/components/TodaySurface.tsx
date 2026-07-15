@@ -3,10 +3,10 @@ import type { ReactNode } from 'react';
 import { useApp } from '@/state/AppState';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
-import { MockTag } from '@/components/provenance/MockTag';
-import { SourceTag } from '@/components/provenance/SourceTag';
 import { LastUpdated } from '@/components/LastUpdated';
-import { getMockVenue } from '@/data/mockVenues';
+import { UpdatesFeed } from '@/components/UpdatesFeed';
+import { getVenue } from '@/data/venues';
+import { FLIGHTS_ENABLED } from '@/lib/features';
 import { getTodayIso, getNowIso } from '@/lib/today';
 import { cn } from '@/lib/cn';
 import {
@@ -39,7 +39,7 @@ export function TodaySurface({ className }: { className?: string }) {
   }
 
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
-  const venue = getMockVenue(day.venueId);
+  const venue = getVenue(day.venueId);
   const locked = isDayLocked(day.id);
   const allSchedule = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
   const visibleSchedule = managerView
@@ -48,7 +48,9 @@ export function TodaySurface({ className }: { className?: string }) {
   const scheduleToShow = visibleSchedule;
   const currentClock = getNowIso().slice(11, 16);
   const nextItem = visibleSchedule.find((it) => it.startTime >= currentClock) ?? visibleSchedule[0];
-  const travel = getTravelForDay(day.id).filter((t) => managerView || resolveVisibility(t.visibility, user) !== 'blocked');
+  const travel = FLIGHTS_ENABLED
+    ? getTravelForDay(day.id).filter((t) => managerView || resolveVisibility(t.visibility, user) !== 'blocked')
+    : [];
   const hotels = getHotelsForDay(day.id).filter((h) => managerView || resolveVisibility(h.visibility, user) !== 'blocked');
 
   return (
@@ -64,16 +66,10 @@ export function TodaySurface({ className }: { className?: string }) {
               <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px] text-[var(--color-ink-2)]">
                 <Chip tone={day.dayType}>{dayTypeLabel(day.dayType)}</Chip>
                 {day.city && (
-                  <span className="inline-flex items-baseline gap-1 font-semibold">
-                    {day.city}
-                    <MockTag source="tour_route" field="Today city" />
-                  </span>
+                  <span className="font-semibold">{day.city}</span>
                 )}
                 {venue && (
-                  <span className="inline-flex items-baseline gap-1 text-[var(--color-ink-3)]">
-                    {venue.name}
-                    <MockTag source="venue" field="Venue" />
-                  </span>
+                  <span className="text-[var(--color-ink-3)]">{venue.name}</span>
                 )}
               </div>
               <div className="mt-2.5">
@@ -83,7 +79,7 @@ export function TodaySurface({ className }: { className?: string }) {
 
             <div className="shrink-0 flex flex-wrap gap-2">
               <Link
-                to={`/daysheet/${day.date}`}
+                to={`daysheet/${day.date}`}
                 className="min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]"
               >
                 <Icon.Document size={14} /> Day sheet
@@ -107,9 +103,8 @@ export function TodaySurface({ className }: { className?: string }) {
 
           <div className="mt-6 border-t border-[var(--color-rule-soft)] pt-5">
             <div className="flex items-center justify-between gap-3 mb-3">
-              <h3 className="text-[14px] font-semibold text-[var(--color-ink)] inline-flex items-baseline gap-1">
+              <h3 className="text-[14px] font-semibold text-[var(--color-ink)]">
                 {managerView ? 'Show clock' : 'Your call times'}
-                <MockTag source="schedule_item" field="Today schedule" />
               </h3>
               {nextItem && (
                 <span className="text-[11px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-3)]">
@@ -150,12 +145,7 @@ export function TodaySurface({ className }: { className?: string }) {
 
           {(travel.length > 0 || hotels.length > 0) && (
             <div className="border-t border-[var(--color-rule-soft)] pt-5">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-[13px] font-semibold text-[var(--color-ink)]">Movement</h3>
-                {tour.flightImports.some((f) => f.status === 'imported')
-                  ? <SourceTag source="flight_confirmation" field="Travel and lodging" />
-                  : <MockTag source="travel" field="Travel and lodging" />}
-              </div>
+              <h3 className="text-[13px] font-semibold text-[var(--color-ink)]">Movement</h3>
               {travel.length > 0 && (
                 <ul className="mt-3 space-y-2">
                   {travel.map((t) => (
@@ -178,6 +168,10 @@ export function TodaySurface({ className }: { className?: string }) {
               )}
             </div>
           )}
+
+          <div className="border-t border-[var(--color-rule-soft)] pt-5">
+            <UpdatesFeed bare />
+          </div>
 
           <div className="border-t border-[var(--color-rule-soft)] pt-5">
             <div className="eyebrow mb-2">Viewing as</div>
@@ -231,17 +225,21 @@ function OffTourCard({ className }: { className?: string }) {
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Link
-            to={`/daysheet/${(firstShow ?? first).date}`}
+            to={`daysheet/${(firstShow ?? first).date}`}
             className="min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]"
           >
             <Icon.Document size={14} /> {preTour ? 'First day sheet' : 'Day sheets'}
           </Link>
           <Link
-            to="/calendar"
+            to="calendar"
             className="min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] text-[var(--color-ink)] hover:border-[var(--color-ink-4)]"
           >
             <Icon.Calendar size={14} /> Calendar
           </Link>
+        </div>
+
+        <div className="mt-6 border-t border-[var(--color-rule-soft)] pt-5">
+          <UpdatesFeed bare />
         </div>
       </div>
     </section>
@@ -252,7 +250,7 @@ function VenuePanel({
   venue,
   dayCity,
 }: {
-  venue: ReturnType<typeof getMockVenue>;
+  venue: ReturnType<typeof getVenue>;
   dayCity?: string;
 }) {
   if (!venue) {
@@ -268,10 +266,7 @@ function VenuePanel({
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-2">
-        <div className="eyebrow">Venue</div>
-        <MockTag source="venue" field="Venue directory" />
-      </div>
+      <div className="eyebrow">Venue</div>
       <div className="mt-2 text-[16px] font-semibold text-[var(--color-ink)]">{venue.name}</div>
       <div className="text-[12.5px] text-[var(--color-ink-3)] leading-snug">
         {venue.address}

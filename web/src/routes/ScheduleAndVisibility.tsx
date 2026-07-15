@@ -9,8 +9,6 @@ import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { MockBadge } from '@/components/provenance/MockBadge';
-import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { SensitiveExplain } from '@/components/ExplainTag';
 import { LastUpdated } from '@/components/LastUpdated';
 import { VisibilityEditor } from '@/components/VisibilityEditor';
@@ -18,6 +16,7 @@ import { TypeDefaultsEditor } from '@/components/TypeDefaultsEditor';
 import { fmtDate, dayTypeLabel, scheduleItemLabel } from '@/lib/format';
 import { resolveVisibility } from '@/lib/visibility';
 import { isValidHHMM } from '@/lib/time';
+import { tourPath } from '@/lib/routing';
 import type { Day, ScheduleItem, ScheduleItemType, Visibility, VisibilityLevel } from '@/types';
 import { cn } from '@/lib/cn';
 
@@ -132,7 +131,6 @@ export function ScheduleAndVisibility() {
             </Button>
           </div>
         }
-        meta={<MockBadge source="schedule_item" />}
       />
       <TypeDefaultsEditor open={defaultsOpen} onClose={() => setDefaultsOpen(false)} />
       <NewScheduleItemModal
@@ -249,7 +247,7 @@ export function ScheduleAndVisibility() {
                 ]
                   .filter(Boolean)
                   .join(' · ');
-                const dayHref = selectedDay ? `/daysheet/${selectedDay.date}` : null;
+                const dayHref = selectedDay ? tourPath(tour.id, `daysheet/${selectedDay.date}`) : null;
                 const cardInner = (
                   <div className="flex items-start justify-between gap-3 flex-wrap px-6 py-5">
                     <div className="min-w-0">
@@ -347,7 +345,6 @@ export function ScheduleAndVisibility() {
                           : 'Save'
                         : 'Propose changes'}
                     </Button>
-                    <MockBadge source="visibility" />
                   </div>
                 }
               >
@@ -419,10 +416,6 @@ export function ScheduleAndVisibility() {
           </Card>
         </div>
       </div>
-
-      <DataSourcesPanel
-        sourceKeys={['schedule_item', 'visibility', 'group', 'group_tag']}
-      />
     </div>
   );
 }

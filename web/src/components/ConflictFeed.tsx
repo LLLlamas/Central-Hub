@@ -57,7 +57,7 @@ export function ConflictFeed({ limit, compact = false }: { limit?: number; compa
         }
         action={
           <Link
-            to="/ingest/riders"
+            to="ingest/riders"
             className="text-[12px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
           >
             Review all →
@@ -101,7 +101,7 @@ export function ConflictFeed({ limit, compact = false }: { limit?: number; compa
 
         {hiddenUnresolved > 0 && (
           <div className="pt-2 mt-2 text-[11.5px] text-[var(--color-ink-3)] text-center border-t border-[var(--color-rule-soft)]">
-            + {hiddenUnresolved} more unresolved — <Link to="/ingest/riders" className="underline">review all</Link>
+            + {hiddenUnresolved} more unresolved — <Link to="ingest/riders" className="underline">review all</Link>
           </div>
         )}
 

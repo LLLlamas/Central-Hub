@@ -7,12 +7,11 @@ import { Card, SectionCard, EmptyState } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
-import { MockTag } from '@/components/provenance/MockTag';
 import { PersonName } from '@/components/provenance/PersonName';
 import { SensitiveExplain } from '@/components/ExplainTag';
-import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { LastUpdated } from '@/components/LastUpdated';
-import { getMockVenue } from '@/data/mockVenues';
+import { getVenue } from '@/data/venues';
+import { FLIGHTS_ENABLED } from '@/lib/features';
 import {
   fmtFullDate,
   dayTypeLabel,
@@ -21,6 +20,7 @@ import {
   initials,
 } from '@/lib/format';
 import { resolveVisibility } from '@/lib/visibility';
+import { tourPath } from '@/lib/routing';
 import type { TourPerson, Group } from '@/types';
 
 type PersonPopoverTarget = {
@@ -52,7 +52,7 @@ export function DayDetail() {
           title="That date isn't on this tour"
           hint="Pick a date from the calendar."
           action={
-            <Link to="/calendar" className="text-[13px] underline">
+            <Link to={tourPath(tour.id, 'calendar')} className="text-[13px] underline">
               ← Back to calendar
             </Link>
           }
@@ -67,12 +67,12 @@ export function DayDetail() {
   const nextDay = dayIndex < tour.days.length - 1 ? tour.days[dayIndex + 1] : undefined;
   const allItems = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
   const items = managerView ? allItems : allItems.filter((it) => resolveVisibility(it.visibility, user) !== 'blocked');
-  const travel = getTravelForDay(day.id);
+  const travel = FLIGHTS_ENABLED ? getTravelForDay(day.id) : [];
   const hotels = getHotelsForDay(day.id);
   const tasks = getTasksForDay(day.id).filter(
     (t) => managerView || resolveVisibility(t.visibility, user) !== 'blocked',
   );
-  const venue = getMockVenue(day.venueId);
+  const venue = getVenue(day.venueId);
 
   return (
     <div>
@@ -85,7 +85,7 @@ export function DayDetail() {
             <div className="inline-flex rounded-[3px] border border-[var(--color-rule)] overflow-hidden">
               {prevDay ? (
                 <Link
-                  to={`/calendar/${prevDay.date}`}
+                  to={tourPath(tour.id, `calendar/${prevDay.date}`)}
                   className="inline-flex items-center gap-1 h-9 px-2.5 text-[12px] font-semibold text-[var(--color-ink-2)] bg-[var(--color-card)] hover:bg-[var(--color-paper-2)] border-r border-[var(--color-rule)] transition-colors"
                 >
                   <Icon.Chevron size={10} className="rotate-180" /> Yesterday
@@ -96,14 +96,14 @@ export function DayDetail() {
                 </span>
               )}
               <Link
-                to="/calendar"
+                to={tourPath(tour.id, 'calendar')}
                 className="inline-flex items-center h-9 px-3 text-[12px] font-semibold text-[var(--color-ink-2)] bg-[var(--color-card)] hover:bg-[var(--color-paper-2)] border-r border-[var(--color-rule)] transition-colors"
               >
                 Calendar
               </Link>
               {nextDay ? (
                 <Link
-                  to={`/calendar/${nextDay.date}`}
+                  to={tourPath(tour.id, `calendar/${nextDay.date}`)}
                   className="inline-flex items-center gap-1 h-9 px-2.5 text-[12px] font-semibold text-[var(--color-ink-2)] bg-[var(--color-card)] hover:bg-[var(--color-paper-2)] transition-colors"
                 >
                   Tomorrow <Icon.Chevron size={10} />
@@ -115,7 +115,7 @@ export function DayDetail() {
               )}
             </div>
             <Link
-              to={`/daysheet/${day.date}`}
+              to={tourPath(tour.id, `daysheet/${day.date}`)}
               className="inline-flex items-center gap-1.5 h-9 px-3.5 text-[13px] font-semibold rounded-[3px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]"
             >
               <Icon.Document size={14} /> Day sheet
@@ -125,14 +125,10 @@ export function DayDetail() {
         meta={
           <div className="flex flex-wrap items-center gap-2">
             <Chip tone={day.dayType}>{dayTypeLabel(day.dayType)}</Chip>
-            <MockTag source="tour_route" field="DayType + city" />
             {day.weather && (
-              <span className="inline-flex items-center gap-1">
-                <Chip tone="neutral" variant="outline">
-                  {day.weather.conditions} · {day.weather.low}°/{day.weather.high}°C
-                </Chip>
-                <MockTag source="day_weather" field="Weather forecast" />
-              </span>
+              <Chip tone="neutral" variant="outline">
+                {day.weather.conditions} · {day.weather.low}°/{day.weather.high}°C
+              </Chip>
             )}
             {day.sunrise && day.sunset && (
               <Chip tone="neutral" variant="outline">
@@ -154,16 +150,13 @@ export function DayDetail() {
           title="Schedule"
           eyebrow={`${items.length} items today`}
           action={
-            <div className="flex items-center gap-2">
-              <MockTag source="schedule_item" field="Schedule items + times" />
-              {managerView && (
-                <Link to={`/daysheet/${day.date}`}>
-                  <Button size="sm" variant="outline" leading={<Icon.Plus size={12} />}>
-                    Add item
-                  </Button>
-                </Link>
-              )}
-            </div>
+            managerView && (
+              <Link to={tourPath(tour.id, `daysheet/${day.date}`)}>
+                <Button size="sm" variant="outline" leading={<Icon.Plus size={12} />}>
+                  Add item
+                </Button>
+              </Link>
+            )
           }
         >
           {items.length === 0 ? (
@@ -224,11 +217,7 @@ export function DayDetail() {
         <div className="space-y-5">
           {/* Venue */}
           {venue && (
-            <SectionCard
-              title="Venue"
-              eyebrow={venue.city}
-              action={<MockTag source="venue" field="Venue details" />}
-            >
+            <SectionCard title="Venue" eyebrow={venue.city}>
               <div className="space-y-3 text-[12.5px]">
                 <div>
                   <div className="font-semibold text-[var(--color-ink)]">{venue.name}</div>
@@ -280,51 +269,51 @@ export function DayDetail() {
           )}
 
           {/* Travel */}
-          <SectionCard
-            title="Travel"
-            eyebrow={`${travel.length} segment${travel.length === 1 ? '' : 's'}`}
-            action={<MockTag source="travel" field="Travel segments" />}
-          >
-            {travel.length === 0 ? (
-              <p className="text-[12.5px] text-[var(--color-ink-3)]">No travel today.</p>
-            ) : (
-              <ul className="space-y-3 -my-1">
-                {travel.map((t) => {
-                  const lvl = resolveVisibility(t.visibility, user);
-                  if (lvl === 'blocked') return null;
-                  return (
-                    <li key={t.id} className="border-l-2 pl-3 py-1" style={{ borderColor: 'var(--color-day-travel)' }}>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[14px] text-[var(--color-day-travel)]">
-                          {travelModeIcon(t.mode)}
-                        </span>
-                        <span className="text-[12.5px] font-semibold">
-                          {travelModeLabel(t.mode)} · {t.carrier} {t.identifier}
-                        </span>
-                      </div>
-                      <div className="mt-0.5 font-mono text-[12px] tabular text-[var(--color-ink-2)]">
-                        {t.from} {t.departTime} → {t.to} {t.arriveTime}
-                      </div>
-                      {t.recordLocator && (
-                        <div className="font-mono text-[10.5px] tracking-[0.08em] uppercase text-[var(--color-ink-4)] mt-1">
-                          PNR {t.recordLocator}
+          {FLIGHTS_ENABLED && (
+            <SectionCard
+              title="Travel"
+              eyebrow={`${travel.length} segment${travel.length === 1 ? '' : 's'}`}
+            >
+              {travel.length === 0 ? (
+                <p className="text-[12.5px] text-[var(--color-ink-3)]">No travel today.</p>
+              ) : (
+                <ul className="space-y-3 -my-1">
+                  {travel.map((t) => {
+                    const lvl = resolveVisibility(t.visibility, user);
+                    if (lvl === 'blocked') return null;
+                    return (
+                      <li key={t.id} className="border-l-2 pl-3 py-1" style={{ borderColor: 'var(--color-day-travel)' }}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[14px] text-[var(--color-day-travel)]">
+                            {travelModeIcon(t.mode)}
+                          </span>
+                          <span className="text-[12.5px] font-semibold">
+                            {travelModeLabel(t.mode)} · {t.carrier} {t.identifier}
+                          </span>
                         </div>
-                      )}
-                      <div className="text-[11.5px] text-[var(--color-ink-3)] mt-1">
-                        {t.passengers.length} passenger{t.passengers.length === 1 ? '' : 's'}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </SectionCard>
+                        <div className="mt-0.5 font-mono text-[12px] tabular text-[var(--color-ink-2)]">
+                          {t.from} {t.departTime} → {t.to} {t.arriveTime}
+                        </div>
+                        {t.recordLocator && (
+                          <div className="font-mono text-[10.5px] tracking-[0.08em] uppercase text-[var(--color-ink-4)] mt-1">
+                            PNR {t.recordLocator}
+                          </div>
+                        )}
+                        <div className="text-[11.5px] text-[var(--color-ink-3)] mt-1">
+                          {t.passengers.length} passenger{t.passengers.length === 1 ? '' : 's'}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </SectionCard>
+          )}
 
           {/* Hotel */}
           <SectionCard
             title="Hotel"
             eyebrow={`${hotels.length} block${hotels.length === 1 ? '' : 's'}`}
-            action={<MockTag source="hotel" field="Hotel block" />}
           >
             {hotels.length === 0 ? (
               <p className="text-[12.5px] text-[var(--color-ink-3)]">No hotel today.</p>
@@ -363,7 +352,7 @@ export function DayDetail() {
           </SectionCard>
 
           {/* Tasks */}
-          <SectionCard title="Tasks" eyebrow={`${tasks.length} for this day`} action={<MockTag source="task" field="Tasks" />}>
+          <SectionCard title="Tasks" eyebrow={`${tasks.length} for this day`}>
             {tasks.length === 0 ? (
               <p className="text-[12.5px] text-[var(--color-ink-3)]">No tasks tied to this day.</p>
             ) : (
@@ -472,10 +461,6 @@ export function DayDetail() {
           />
         );
       })()}
-
-      <DataSourcesPanel
-        sourceKeys={['day', 'schedule_item', 'travel', 'hotel', 'task', 'visibility', 'venue']}
-      />
     </div>
   );
 }

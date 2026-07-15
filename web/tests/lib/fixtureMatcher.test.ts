@@ -4,7 +4,7 @@ import { matchFixture, fixturesOfKind, nonMatchNote, FIXTURES } from '@/lib/fixt
 describe('matchFixture', () => {
   it('matches a known fixture by exact filename', () => {
     expect(matchFixture('AM19_Group_LAX-MEX_2026-09-22.pdf')?.kind).toBe('flight');
-    expect(matchFixture('mock-tour-route-mexico-7day.csv')?.kind).toBe('route');
+    expect(matchFixture('sample-tour-route-mexico-7day.csv')?.kind).toBe('route');
   });
 
   it('is case-insensitive', () => {
@@ -13,7 +13,7 @@ describe('matchFixture', () => {
 
   it("tolerates the browser's duplicate-download suffix", () => {
     expect(matchFixture('AM19_Group_LAX-MEX_2026-09-22 (1).pdf')?.id).toBe('flight_am19');
-    expect(matchFixture('mock-tour-route-mexico-7day (2).csv')?.kind).toBe('route');
+    expect(matchFixture('sample-tour-route-mexico-7day (2).csv')?.kind).toBe('route');
   });
 
   it('returns null for an unknown file', () => {

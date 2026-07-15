@@ -1,4 +1,3 @@
-import { MockTag } from './MockTag';
 import { SourceTag } from './SourceTag';
 import type { TourPerson } from '@/types';
 import type { RealSourceKey } from '@/data/realSources';
@@ -11,7 +10,7 @@ interface PersonNameProps {
 }
 
 // Map TourPerson IDs to their real-data source keys.
-// Placeholders are excluded — their MockTag handles "name pending".
+// Placeholders are excluded — no source tag until the name is entered.
 const personToSource: Record<string, RealSourceKey> = {
   tp_elsa: 'rider_person_elsa',
   tp_julian: 'rider_person_julian',
@@ -23,7 +22,7 @@ const personToSource: Record<string, RealSourceKey> = {
 /**
  * Renders a person's display name.
  *
- * - Placeholders (no real name yet) → italic + (mock) tag.
+ * - Placeholders (no real name yet) → italic, no source tag (name pending).
  * - Real persons → bold + (i) tag pointing to the rider page where the name
  *   appears (or "user entry" for user-provided records like the TM).
  */
@@ -40,13 +39,7 @@ export function PersonName({ person, className, showRole }: PersonNameProps) {
       >
         {person.person.name}
       </span>
-      {isPlaceholder ? (
-        <MockTag
-          source="tour_person"
-          field={`Crew name placeholder — ${person.role}`}
-          note={`The rider §12 reveals this role exists on the tour but no name is given. The TM will fill this in once the crew is finalized. Currently shown as the role label.`}
-        />
-      ) : sourceKey ? (
+      {!isPlaceholder && sourceKey ? (
         <SourceTag source={sourceKey} field={person.person.name} />
       ) : null}
       {showRole && !isPlaceholder && (

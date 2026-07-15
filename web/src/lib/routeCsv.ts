@@ -91,8 +91,8 @@ interface RouteRow {
   curfew_local: string;
 }
 
-// Build a mock schedule skeleton for one day, shaped by its day type. Times
-// are mock — a realistic shape so the schedule/day surfaces have something to
+// Build a sample schedule skeleton for one day, shaped by its day type. Times
+// are placeholders — a realistic shape so the schedule/day surfaces have something to
 // show before the TM fills in the real plan.
 function daySchedule(day: Day, row: RouteRow): ScheduleItem[] {
   const items: ScheduleItem[] = [];

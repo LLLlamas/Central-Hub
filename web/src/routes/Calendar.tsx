@@ -4,12 +4,11 @@ import { useApp } from '@/state/AppState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
-import { MockBadge } from '@/components/provenance/MockBadge';
-import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
 import { dayTypeLabel } from '@/lib/format';
 import type { Day, DayType } from '@/types';
 import { cn } from '@/lib/cn';
 import { getTodayIso } from '@/lib/today';
+import { tourPath } from '@/lib/routing';
 import { parseISO, format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addDays } from 'date-fns';
 
 const ALL_TYPES: DayType[] = ['show', 'off', 'travel', 'rehearsal', 'promo', 'hold'];
@@ -74,7 +73,6 @@ export function CalendarPage() {
                 </button>
               );
             })}
-            <MockBadge source="day" className="ml-2 hidden sm:inline-flex" />
           </div>
         }
       />
@@ -137,11 +135,6 @@ export function CalendarPage() {
           ))}
         </div>
       )}
-
-      <DataSourcesPanel
-        sourceKeys={['day', 'day_weather', 'venue', 'leg']}
-        intro="The calendar is the spine. Days are auto-generated from the tour date range; the TM/PM sets the day type and confirms venue. All visible here is mocked."
-      />
     </div>
   );
 }
@@ -170,10 +163,11 @@ function ViewToggle({ view, setView }: { view: CalView; setView: (v: CalView) =>
 }
 
 function DayListRow({ day, locked, isToday }: { day: Day; locked: boolean; isToday: boolean }) {
+  const { tour } = useApp();
   const d = parseISO(day.date);
   return (
     <Link
-      to={`/calendar/${day.date}`}
+      to={tourPath(tour.id, `calendar/${day.date}`)}
       className={cn(
         'card flex items-center gap-3 px-4 py-3 min-h-[76px]',
         isToday && 'border-[var(--color-accent)]',
@@ -302,6 +296,7 @@ function DayCell({
   locked: boolean;
   isToday: boolean;
 }) {
+  const { tour } = useApp();
   const iso = format(date, 'yyyy-MM-dd');
   if (!day) {
     return (
@@ -316,7 +311,7 @@ function DayCell({
 
   return (
     <Link
-      to={`/calendar/${iso}`}
+      to={tourPath(tour.id, `calendar/${iso}`)}
       className={cn(
         'group block border border-[var(--color-rule-soft)] min-h-[56px] sm:min-h-[88px] p-1.5 sm:p-2 relative transition-all bg-[var(--color-card)] hover:bg-[var(--color-paper)]/40',
         dimmed && 'opacity-30',

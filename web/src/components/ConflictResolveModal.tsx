@@ -3,6 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { RiderRef, linkifyRiderRefs } from '@/components/RiderRef';
+import { SelectableRow } from '@/components/ui/SelectableRow';
 import { useApp } from '@/state/AppState';
 import { cn } from '@/lib/cn';
 import type { Conflict } from '@/types';
@@ -210,20 +211,21 @@ export function ConflictResolveModal({ conflict, onClose }: ConflictResolveModal
               <ul className="space-y-1.5">
                 {conflict.values.map((v, i) => (
                   <li key={i}>
-                    <ChoiceRow
-                      label={v.section}
-                      value={v.value}
-                      selected={choiceIdx === i}
-                      onSelect={() => setChoiceIdx(i)}
-                    />
+                    <SelectableRow selected={choiceIdx === i} onSelect={() => setChoiceIdx(i)}>
+                      <div className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-ink-3)]">
+                        {linkifyRiderRefs(v.section)}
+                      </div>
+                      {v.value && (
+                        <div className="text-[12.5px] text-[var(--color-ink)] mt-0.5 leading-snug">{v.value}</div>
+                      )}
+                    </SelectableRow>
                   </li>
                 ))}
                 <li>
-                  <ChoiceRow
-                    label="Enter a different value"
-                    selected={choiceIdx === 'custom'}
-                    onSelect={() => setChoiceIdx('custom')}
-                  >
+                  <SelectableRow selected={choiceIdx === 'custom'} onSelect={() => setChoiceIdx('custom')}>
+                    <div className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-ink-3)]">
+                      Enter a different value
+                    </div>
                     <input
                       type="text"
                       value={customValue}
@@ -232,7 +234,7 @@ export function ConflictResolveModal({ conflict, onClose }: ConflictResolveModal
                       placeholder="What value should the system use?"
                       className="w-full h-8 px-2 text-[12.5px] rounded-[3px] border border-[var(--color-rule)] bg-[var(--color-card)] mt-1.5 outline-none focus:border-[var(--color-ink-4)]"
                     />
-                  </ChoiceRow>
+                  </SelectableRow>
                 </li>
               </ul>
             </div>
@@ -320,52 +322,5 @@ export function ConflictResolveModal({ conflict, onClose }: ConflictResolveModal
         )}
       </div>
     </Modal>
-  );
-}
-
-function ChoiceRow({
-  label,
-  value,
-  selected,
-  onSelect,
-  children,
-}: {
-  label: string;
-  value?: string;
-  selected: boolean;
-  onSelect: () => void;
-  children?: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        'w-full text-left rounded-[4px] border transition-colors px-3 py-2.5',
-        selected
-          ? 'border-[var(--color-ink)] bg-[var(--color-paper-2)]/50'
-          : 'border-[var(--color-rule)] hover:border-[var(--color-ink-4)]',
-      )}
-    >
-      <div className="flex items-baseline gap-2">
-        <span
-          className={cn(
-            'w-3 h-3 rounded-full border-[1.5px] shrink-0 mt-[3px]',
-            selected ? 'border-[var(--color-ink)] bg-[var(--color-ink)]' : 'border-[var(--color-ink-4)]',
-          )}
-        />
-        <div className="flex-1 min-w-0">
-          <div className="font-mono text-[10px] uppercase tracking-[0.10em] text-[var(--color-ink-3)]">
-            {linkifyRiderRefs(label)}
-          </div>
-          {value && (
-            <div className="text-[12.5px] text-[var(--color-ink)] mt-0.5 leading-snug">
-              {value}
-            </div>
-          )}
-          {children}
-        </div>
-      </div>
-    </button>
   );
 }

@@ -1,4 +1,5 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
+import { tourPath } from '@/lib/routing';
 
 // Friendly fallback for any render-time error — a live demo should never show
 // React Router's raw "Unexpected Application Error!" page.
@@ -23,8 +24,13 @@ function RouteErrorCard() {
     </div>
   );
 }
+
 import { Layout } from '@/components/layout/Layout';
 import { PrintLayout } from '@/components/layout/PrintLayout';
+import { TourScope } from '@/routes/TourScope';
+import { TourNotFoundRedirect } from '@/routes/TourNotFoundRedirect';
+import { LegacyPathRedirect } from '@/routes/LegacyPathRedirect';
+import { MyShows } from '@/routes/MyShows';
 import { TourOverview } from '@/routes/TourOverview';
 import { CalendarPage } from '@/routes/Calendar';
 import { DayDetail } from '@/routes/DayDetail';
@@ -33,44 +39,61 @@ import { ScheduleAndVisibility } from '@/routes/ScheduleAndVisibility';
 import { DaySheets } from '@/routes/DaySheets';
 import { DaySheetPrint } from '@/routes/DaySheetPrint';
 import { FlightIngest } from '@/routes/FlightIngest';
-import { RiderIngest } from '@/routes/RiderIngest';
+import { RiderBuilder } from '@/routes/RiderBuilder';
 import { Plots } from '@/routes/Plots';
 import { Gear } from '@/routes/Gear';
+import { Advance } from '@/routes/Advance';
+import { AdvanceDetail } from '@/routes/AdvanceDetail';
 import { AppUserPermissions } from '@/routes/AppUserPermissions';
 import { MyTravelInfo } from '@/routes/MyTravelInfo';
 import { SubmissionsInbox } from '@/routes/SubmissionsInbox';
 import { More } from '@/routes/More';
 
+// Old bookmarks/links pointed at `ingest/riders` (the upload-and-review
+// surface). The rider now lives at the `rider` builder path — forward
+// instead of breaking the old URL.
+function RiderIngestRedirect() {
+  const { tourId } = useParams<{ tourId: string }>();
+  return <Navigate to={tourPath(tourId ?? '', 'rider')} replace />;
+}
+
 export const router = createBrowserRouter([
+  { path: '/', element: <MyShows />, errorElement: <RouteErrorCard /> },
   {
-    path: '/',
-    element: <Layout />,
+    path: '/t/:tourId',
+    element: <TourScope />,
     errorElement: <RouteErrorCard />,
     children: [
-      { index: true, element: <TourOverview /> },
-      { path: 'calendar', element: <CalendarPage /> },
-      { path: 'calendar/:date', element: <DayDetail /> },
-      { path: 'personnel', element: <Personnel /> },
-      { path: 'plots', element: <Plots /> },
-      { path: 'gear', element: <Gear /> },
-      { path: 'schedule', element: <ScheduleAndVisibility /> },
-      { path: 'access', element: <AppUserPermissions /> },
-      { path: 'me', element: <MyTravelInfo /> },
-      { path: 'submissions', element: <SubmissionsInbox /> },
-      { path: 'daysheet', element: <DaySheets /> },
-      { path: 'daysheet/:date', element: <DaySheets /> },
-      { path: 'ingest/flights', element: <FlightIngest /> },
-      { path: 'ingest/riders', element: <RiderIngest /> },
-      { path: 'more', element: <More /> },
-      { path: '*', element: <Navigate to="/" replace /> },
+      {
+        element: <Layout />,
+        children: [
+          { index: true, element: <TourOverview /> },
+          { path: 'calendar', element: <CalendarPage /> },
+          { path: 'calendar/:date', element: <DayDetail /> },
+          { path: 'personnel', element: <Personnel /> },
+          { path: 'plots', element: <Plots /> },
+          { path: 'gear', element: <Gear /> },
+          { path: 'advance', element: <Advance /> },
+          { path: 'advance/:dayId', element: <AdvanceDetail /> },
+          { path: 'schedule', element: <ScheduleAndVisibility /> },
+          { path: 'access', element: <AppUserPermissions /> },
+          { path: 'me', element: <MyTravelInfo /> },
+          { path: 'submissions', element: <SubmissionsInbox /> },
+          { path: 'daysheet', element: <DaySheets /> },
+          { path: 'daysheet/:date', element: <DaySheets /> },
+          { path: 'ingest/flights', element: <FlightIngest /> },
+          { path: 'rider', element: <RiderBuilder /> },
+          { path: 'ingest/riders', element: <RiderIngestRedirect /> },
+          { path: 'more', element: <More /> },
+          { path: '*', element: <TourNotFoundRedirect /> },
+        ],
+      },
+      {
+        path: 'print',
+        element: <PrintLayout />,
+        children: [{ path: 'daysheet/:date', element: <DaySheetPrint /> }],
+      },
     ],
   },
-  {
-    path: '/print',
-    element: <PrintLayout />,
-    errorElement: <RouteErrorCard />,
-    children: [
-      { path: 'daysheet/:date', element: <DaySheetPrint /> },
-    ],
-  },
+  { path: '*', element: <LegacyPathRedirect /> },
 ]);

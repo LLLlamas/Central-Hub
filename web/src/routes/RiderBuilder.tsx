@@ -13,8 +13,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { EditableText, EditableSelect } from '@/components/ui/EditableText';
 import { SourceTag } from '@/components/provenance/SourceTag';
-import { DataSourcesPanel } from '@/components/provenance/DataSourcesPanel';
-import { ExplainTag, ExcludedBrandExplain } from '@/components/ExplainTag';
+import { ExplainTag } from '@/components/ExplainTag';
 import { LastUpdated } from '@/components/LastUpdated';
 import { usePdfViewer, PdfViewerInline } from '@/components/PdfViewer';
 import { FileDropZone } from '@/components/ingest/FileDropZone';
@@ -22,20 +21,32 @@ import { UploadResultNote } from '@/components/ingest/UploadResultNote';
 import type { UploadNote } from '@/components/ingest/UploadResultNote';
 import { RIDER_PDF_PATH } from '@/lib/riderSections';
 import { matchFixture } from '@/lib/fixtureMatcher';
+import { tourPath } from '@/lib/routing';
 import { buildScratchRiderImport, buildScratchRiderPersonnel, hydrateRiderPlotImages } from '@/data/riderFixture';
 import { parseRiderPdf } from '@/lib/pdfParser';
 import { backend } from '@/lib/backend';
+import { FLIGHTS_ENABLED } from '@/lib/features';
 import { cn } from '@/lib/cn';
+import { sectionKey, RIDER_TOC_TEMPLATE } from '@/lib/riderBuilder';
+import { BacklineEditor } from '@/components/rider/BacklineEditor';
+import { LodgingEditor } from '@/components/rider/LodgingEditor';
+import { CateringEditor } from '@/components/rider/CateringEditor';
+import { RemoveRowButton } from '@/components/rider/shared';
+import { StageMediaEditor } from '@/components/StageMediaEditor';
+import { StageMediaGallery } from '@/components/StageMediaGallery';
+import { mediaItemSrc } from '@/lib/media';
 import type {
   RiderImport,
   RiderSection,
   RiderSectionType,
   RiderSectionStatus,
+  RiderOrigin,
   InputChannel,
   MonitorMix,
   FOHOutput,
   SectionEditRecord,
   UpdateStamp,
+  StageMediaItem,
 } from '@/types';
 
 // Active rider PDF URL — Blob URL of the user's uploaded file. Returns
@@ -80,14 +91,6 @@ function sectionLabel(s: RiderSection): string {
 }
 
 /** All plot images across every section — drives the "Plots" tab. */
-function collectPlots(imp: RiderImport): Array<{ sectionKey: string; section: RiderSection; plot: import('@/types').PlotImage }> {
-  const out: Array<{ sectionKey: string; section: RiderSection; plot: import('@/types').PlotImage }> = [];
-  imp.sections.forEach((s, i) => {
-    for (const plot of s.plots ?? []) out.push({ sectionKey: `${s.type}-${i}`, section: s, plot });
-  });
-  return out;
-}
-
 /** Group plot images by their owning section — one card per section in the
  *  Plots tab + the /plots route, opening a fullscreen image lightbox over
  *  that section's pages only. */
@@ -95,12 +98,18 @@ export function collectPlotsBySection(
   imp: RiderImport,
 ): Array<{ sectionKey: string; section: RiderSection; plots: import('@/types').PlotImage[] }> {
   const out: Array<{ sectionKey: string; section: RiderSection; plots: import('@/types').PlotImage[] }> = [];
-  imp.sections.forEach((s, i) => {
+  imp.sections.forEach((s) => {
     if (s.plots && s.plots.length > 0) {
-      out.push({ sectionKey: `${s.type}-${i}`, section: s, plots: s.plots });
+      out.push({ sectionKey: sectionKey(s), section: s, plots: s.plots });
     }
   });
   return out;
+}
+
+function collectPlots(imp: RiderImport): Array<{ sectionKey: string; section: RiderSection; plot: import('@/types').PlotImage }> {
+  return collectPlotsBySection(imp).flatMap(({ sectionKey: sk, section, plots }) =>
+    plots.map((plot) => ({ sectionKey: sk, section, plot })),
+  );
 }
 
 // Rider version history — prior + active rider revisions. Only renders when more
@@ -124,7 +133,9 @@ function RiderVersionHistory() {
             <li key={ri.id} className="flex items-center justify-between gap-3 py-3">
               <div className="flex items-center gap-3 min-w-0">
                 {i === 0 && <Chip tone="success" size="sm">Active</Chip>}
-                <span className="text-[12.5px] font-mono truncate text-[var(--color-ink-2)]">{ri.filename}</span>
+                <span className="text-[12.5px] font-mono truncate text-[var(--color-ink-2)]">
+                  {ri.filename ?? (ri.origin === 'authored' ? 'Authored rider (no file)' : 'Untitled rider')}
+                </span>
                 <span className="text-[11.5px] text-[var(--color-ink-4)]">v{ri.revision} · {ri.uploadedAt.replace('T', ' ')}</span>
                 {ri.uploadedBy && <span className="text-[11.5px] text-[var(--color-ink-4)]">by {ri.uploadedBy}</span>}
               </div>
@@ -148,39 +159,166 @@ function RiderVersionHistory() {
   );
 }
 
+/**
+ * Persistent, collapsed-by-default preview of the "Stage design" section's
+ * media — stays visible no matter which OTHER section is open in the detail
+ * pane, so the TM/PM can check the real stage layout while filling in
+ * Backline, Audio, Input List, etc. without navigating away and losing their
+ * place. Hidden entirely when there's no Stage design section at all, or when
+ * Stage design itself is the active section (its own full editor/gallery
+ * already shows this same media — a second copy would be redundant). Reuses
+ * `mediaItemSrc` (lib/media.ts) for image thumbnails and the same
+ * `PlotImageLightbox` the full gallery uses, rather than a new preview path.
+ */
+function StageDesignPeek({ imp, active }: { imp: RiderImport; active: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+
+  const stageSection = imp.sections.find((s) => s.type === 'stage_plot');
+  const media: StageMediaItem[] = stageSection?.media ?? [];
+  const imageItems = media.filter((m) => m.kind === 'image');
+  const plots = imageItems.map((item, i) => ({
+    page: i + 1,
+    caption: item.caption || 'Stage photo',
+    dataUrl: mediaItemSrc(item),
+  }));
+
+  if (!stageSection || active === sectionKey(stageSection)) return null;
+
+  return (
+    <Card padded={false} className="overflow-hidden mb-4">
+      <button
+        type="button"
+        onClick={() => media.length > 0 && setExpanded((v) => !v)}
+        className={cn(
+          'w-full flex items-center justify-between gap-3 px-4 py-2.5 transition-colors',
+          media.length > 0 ? 'hover:bg-[var(--color-paper)]/40 cursor-pointer' : 'cursor-default',
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <Icon.Image size={12} className="text-[var(--color-ink-3)]" />
+          <span className="text-[12.5px] font-semibold">Stage design</span>
+          <span className="font-mono tabular text-[11px] text-[var(--color-ink-3)]">
+            {media.length === 0 ? 'no stage photos yet' : `${media.length} item${media.length === 1 ? '' : 's'}`}
+          </span>
+        </div>
+        {media.length > 0 && (
+          <span className="font-mono uppercase tracking-[0.10em] text-[10px] text-[var(--color-ink-3)] inline-flex items-center gap-1 shrink-0">
+            {expanded ? 'Hide' : 'Peek'}
+            <Icon.Arrow size={9} className={expanded ? 'rotate-90' : ''} />
+          </span>
+        )}
+      </button>
+      {expanded && media.length > 0 && (
+        <div className="border-t border-[var(--color-rule-soft)] px-4 py-3 flex items-center gap-2 overflow-x-auto">
+          {media.map((item) => {
+            if (item.kind === 'image') {
+              const src = mediaItemSrc(item);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setLightboxIdx(imageItems.indexOf(item))}
+                  className="shrink-0 w-16 h-12 rounded-[3px] overflow-hidden border border-[var(--color-rule-soft)] bg-[var(--color-paper-2)]"
+                  title={item.caption || 'View stage photo'}
+                >
+                  {src ? (
+                    <img src={src} alt={item.caption ?? ''} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[var(--color-ink-4)]">
+                      <Icon.Image size={14} />
+                    </div>
+                  )}
+                </button>
+              );
+            }
+            if (item.kind === 'video') {
+              return (
+                <div
+                  key={item.id}
+                  title={item.caption || 'Stage video'}
+                  className="shrink-0 w-16 h-12 rounded-[3px] border border-[var(--color-rule-soft)] bg-[var(--color-paper-2)] flex items-center justify-center text-[var(--color-ink-4)]"
+                >
+                  <Icon.Video size={14} />
+                </div>
+              );
+            }
+            return (
+              <a
+                key={item.id}
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={item.caption || item.url || 'Open link'}
+                className="shrink-0 w-16 h-12 rounded-[3px] border border-[var(--color-rule-soft)] bg-[var(--color-paper-2)] flex items-center justify-center text-[var(--color-ink-3)] hover:border-[var(--color-ink-4)] transition-colors"
+              >
+                <Icon.Link size={14} />
+              </a>
+            );
+          })}
+        </div>
+      )}
+      <PlotImageLightbox
+        open={lightboxIdx != null}
+        onClose={() => setLightboxIdx(null)}
+        section={stageSection}
+        plots={plots}
+        initialIndex={lightboxIdx ?? 0}
+      />
+    </Card>
+  );
+}
+
 // Hook-context guard: this is a React component, so useActiveRiderPdfUrl() is valid.
-export function RiderIngest() {
-  const { tour, user, isSectionApproved, getPendingEdit } = useApp();
+export function RiderBuilder() {
+  const {
+    tour,
+    user,
+    isSectionApproved,
+    getPendingEdit,
+    createRiderDraft,
+    removeRiderSection,
+    moveRiderSection,
+    renameRiderSection,
+  } = useApp();
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const { openPdf } = usePdfViewer();
   const pdfUrl = useActiveRiderPdfUrl();
   const imp = tour.riderImports[0];
+  const origin: RiderOrigin = imp?.origin ?? 'imported';
 
-  // Active selection: either a section key (`type-index`) or the special "plots" sentinel.
-  // The trailing "other"-type conflicts pseudo-section is excluded — it lived
-  // here as a rail entry but felt overkill at the section-review altitude.
+  // Active selection: either a section's stable id (via `sectionKey()`) or the
+  // special "plots" sentinel. The trailing "other"-type conflicts pseudo-section
+  // (legacy, no tocIndex — see `sectionRows` filter below) is excluded from the
+  // initial pick — it lived here as a rail entry but felt overkill at the
+  // section-review altitude.
   const [active, setActive] = useState<string>(() => {
     if (!imp) return 'plots';
-    const first = imp.sections.find((s) => s.type !== 'other');
-    if (!first) return 'plots';
-    const idx = imp.sections.indexOf(first);
-    return `${first.type}-${idx}`;
+    const first = imp.sections.find((s) => s.type !== 'other' || s.tocIndex != null);
+    return first ? sectionKey(first) : 'plots';
   });
   const [isReuploading, setIsReuploading] = useState(false);
   const [approvedExpanded, setApprovedExpanded] = useState(false);
+
+  // Scroll the active rail row into view — matters most right after "Add
+  // section" picks a brand-new section that may be below the fold.
+  useEffect(() => {
+    if (!imp || active === 'plots') return;
+    document.getElementById(`rider-rail-${active}`)?.scrollIntoView({ block: 'nearest' });
+  }, [active, imp]);
 
   // Rider import + review is a manager-only power tool. Crew share documents via
   // /me, which the Submissions inbox surfaces for manager review.
   if (!managerView) {
     return (
       <div>
-        <PageHeader eyebrow="Import rider" title="Rider import" />
+        <PageHeader eyebrow="Rider" title="Rider" />
         <Card>
           <EmptyState
             title="Managers only"
-            hint="Reviewing and approving the rider is done by the TM/PM. Need to share a document? Use My Travel & Info to submit it for review."
+            hint="Building and approving the rider is done by the TM/PM. Need to share a document? Use My Travel & Info to submit it for review."
             action={
-              <Link to="/me">
+              <Link to={tourPath(tour.id, 'me')}>
                 <Button variant="primary" size="sm">Go to My Travel &amp; Info</Button>
               </Link>
             }
@@ -190,32 +328,77 @@ export function RiderIngest() {
     );
   }
 
-  if (!imp || isReuploading) {
+  if (!imp) {
+    return (
+      <div>
+        <PageHeader
+          eyebrow="Build rider"
+          title="Rider"
+          description="Author the tech rider directly — start from a blank template covering the 14 sections most riders need, then fill it in, add, remove, reorder, or rename sections as the tour firms up."
+        />
+        <Card className="max-w-2xl">
+          <div className="flex flex-col items-center text-center gap-3 py-8 px-4">
+            <Icon.Sparkle size={26} className="text-[var(--color-accent)]" />
+            <div>
+              <h2 className="font-display text-[17px] font-bold text-[var(--color-ink)]">Start your rider</h2>
+              <p className="mt-1.5 text-[12.5px] text-[var(--color-ink-3)] max-w-sm leading-relaxed">
+                Creates a blank rider with the standard 14 sections — cover &amp; contacts, production control,
+                stage specs, audio, backline, lodging, catering, and more. Fill in what you know now; add or
+                remove sections later.
+              </p>
+            </div>
+            <Button variant="primary" leading={<Icon.Plus size={14} />} onClick={createRiderDraft}>
+              Start your rider
+            </Button>
+          </div>
+        </Card>
+
+        <div className="max-w-2xl mt-5">
+          <CollapsibleSection
+            eyebrow="Have a PDF?"
+            title="Import a rider PDF instead"
+            defaultOpen={false}
+          >
+            <p className="text-[12px] text-[var(--color-ink-3)] mb-3 leading-relaxed">
+              If a tech rider already exists as a PDF, upload it here and the parser will read the table of
+              contents and produce one review surface per section. This is the fallback path — authoring in-app
+              above is the faster way to get a rider into shape.
+            </p>
+            <ScratchRiderUpload />
+          </CollapsibleSection>
+        </div>
+      </div>
+    );
+  }
+
+  if (isReuploading) {
     return (
       <div>
         <PageHeader
           eyebrow="Import rider"
           title="Rider import"
           description="Drop a rider PDF — the parser reads the table of contents and produces one review surface per section."
-          actions={isReuploading && (
+          actions={
             <Button variant="outline" onClick={() => setIsReuploading(false)}>
               Cancel
             </Button>
-          )}
+          }
         />
         <ScratchRiderUpload onDone={() => setIsReuploading(false)} />
       </div>
     );
   }
 
-  // The 14 TOC entries keyed by `type-index`. Sort by tocIndex when present so
-  // the rail reads §1 → §14 even if section order in the import is shuffled.
-  // Any legacy "other"-type pseudo-section (the old conflicts rail entry) is
-  // dropped — its rail surface was removed; conflict data still flows through
-  // the Tour Overview's ConflictFeed via AppState.
+  // The rider's sections, keyed by the stable `sectionKey()` (== section.id).
+  // Sort by tocIndex when present so the rail reads §1 → §14 even if section
+  // order in the import is shuffled. The legacy "other"-type conflicts
+  // pseudo-section (imported-PDF only, no tocIndex — the old conflicts rail
+  // entry) is dropped; conflict data still flows through the Tour Overview's
+  // ConflictFeed via AppState. A user-authored "Custom" section is also type
+  // 'other' but always carries a tocIndex, so it's kept.
   const sectionRows = imp.sections
-    .map((s, i) => ({ s, i, key: `${s.type}-${i}` }))
-    .filter(({ s }) => s.type !== 'other')
+    .map((s, i) => ({ s, i, key: sectionKey(s) }))
+    .filter(({ s }) => s.type !== 'other' || s.tocIndex != null)
     .sort((a, b) => {
       const ai = a.s.tocIndex ?? 99;
       const bi = b.s.tocIndex ?? 99;
@@ -234,41 +417,53 @@ export function RiderIngest() {
   return (
     <div>
       <PageHeader
-        eyebrow="Import rider"
-        title="Rider import"
-        description="Read each section in the rider against the parser's extraction and approve it. The PDF on the left is the source; the extracted text on the right is editable."
+        eyebrow={origin === 'authored' ? 'Build rider' : 'Import rider'}
+        title="Rider"
+        description={
+          origin === 'authored'
+            ? 'Fill in each section, then mark it complete once it’s ready. Add, remove, reorder, or rename sections anytime.'
+            : 'Read each section in the rider against the parser’s extraction and mark it complete. The PDF on the left is the source; the extracted text on the right is editable.'
+        }
         actions={
           <Button variant="primary" leading={<Icon.Plus size={14} />} onClick={() => setIsReuploading(true)}>
-            Upload rider
+            {origin === 'authored' ? 'Import a PDF instead' : 'Upload rider'}
           </Button>
         }
         meta={
           <div className="flex flex-wrap items-center gap-2">
-            {pdfUrl ? (
-              <button
-                type="button"
-                onClick={() => openPdf({ url: pdfUrl, title: imp.filename })}
-                title="View the rider PDF"
-                className="cursor-pointer hover:opacity-80 transition-opacity"
-              >
-                <Chip tone="critical">
-                  <Icon.Document size={10} /> {imp.filename}
-                </Chip>
-              </button>
-            ) : (
-              <Chip tone="critical">
-                <Icon.Document size={10} /> {imp.filename}
-              </Chip>
+            {origin === 'imported' && (
+              <>
+                {pdfUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => openPdf({ url: pdfUrl, title: imp.filename })}
+                    title="View the rider PDF"
+                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                  >
+                    <Chip tone="critical">
+                      <Icon.Document size={10} /> {imp.filename}
+                    </Chip>
+                  </button>
+                ) : (
+                  <Chip tone="critical">
+                    <Icon.Document size={10} /> {imp.filename}
+                  </Chip>
+                )}
+                {imp.pageCount != null && (
+                  <Chip tone="neutral" variant="outline">
+                    <Icon.Document size={10} /> {imp.pageCount} pages
+                  </Chip>
+                )}
+                {imp.sourceLanguage && (
+                  <Chip tone="travel" variant="outline">
+                    Source: {imp.sourceLanguage.toUpperCase()}
+                  </Chip>
+                )}
+              </>
             )}
-            <Chip tone="neutral" variant="outline">
-              <Icon.Document size={10} /> {imp.pageCount} pages
-            </Chip>
-            <Chip tone="travel" variant="outline">
-              Source: {imp.sourceLanguage.toUpperCase()}
-            </Chip>
             <Chip tone="rehearsal">Revision {imp.revision}</Chip>
             <Chip tone="neutral" variant="outline">
-              {approvedCount}/{totalCount} approved
+              {approvedCount}/{totalCount} complete
             </Chip>
           </div>
         }
@@ -281,14 +476,16 @@ export function RiderIngest() {
 
       {managerView && <RosterSuggestions imp={imp} />}
 
+      <StageDesignPeek imp={imp} active={active} />
+
       <div className="grid lg:grid-cols-[240px_1fr] gap-5 mt-6">
         {/* Left rail — TOC-ordered section list + Plots entry */}
         <Card padded={false} className="overflow-hidden">
-          <div data-tour="rider-sections" className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
-            <div className="eyebrow">Sections to review</div>
+          <div className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
+            <div className="eyebrow">Sections</div>
             <div className="text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
               {unapprovedRows.length === 0
-                ? `All ${totalCount} approved`
+                ? `All ${totalCount} complete`
                 : `${unapprovedRows.length} of ${totalCount} remaining`}
             </div>
           </div>
@@ -296,20 +493,41 @@ export function RiderIngest() {
             {unapprovedRows.length === 0 && (
               <li className="px-4 py-6 text-center">
                 <div className="text-[12px] text-[var(--color-ink-3)] italic">
-                  Every section has been approved.
+                  Every section has been marked complete.
                 </div>
               </li>
             )}
-            {unapprovedRows.map(({ s, key }) => (
-              <SectionRailItem
-                key={key}
-                section={s}
-                active={key === active}
-                onSelect={() => setActive(key)}
-                pendingEdit={!!getPendingEdit(key)}
-                approved={false}
-              />
-            ))}
+            {unapprovedRows.map(({ s, key }) => {
+              const rowIndex = sectionRows.findIndex((r) => r.key === key);
+              return (
+                <SectionRailItem
+                  key={key}
+                  section={s}
+                  active={key === active}
+                  onSelect={() => setActive(key)}
+                  pendingEdit={!!getPendingEdit(key)}
+                  approved={false}
+                  origin={origin}
+                  managerView={managerView}
+                  canMoveUp={rowIndex > 0}
+                  canMoveDown={rowIndex >= 0 && rowIndex < sectionRows.length - 1}
+                  onMoveUp={() => {
+                    moveRiderSection(s.id, -1);
+                    setActive(key);
+                  }}
+                  onMoveDown={() => {
+                    moveRiderSection(s.id, 1);
+                    setActive(key);
+                  }}
+                  onRename={(title) => renameRiderSection(s.id, title)}
+                  onRemove={() => {
+                    const fallback = sectionRows[rowIndex + 1]?.key ?? sectionRows[rowIndex - 1]?.key ?? 'plots';
+                    removeRiderSection(s.id);
+                    if (active === key) setActive(fallback);
+                  }}
+                />
+              );
+            })}
             {plots.length > 0 && (
               <li>
                 <button
@@ -335,6 +553,12 @@ export function RiderIngest() {
                 </button>
               </li>
             )}
+            {managerView && (
+              <AddSectionRow
+                imp={imp}
+                onAdded={(id) => setActive(id)}
+              />
+            )}
           </ul>
         </Card>
 
@@ -350,7 +574,7 @@ export function RiderIngest() {
                 <div className="flex items-center gap-2">
                   <Icon.Check size={12} />
                   <span className="text-[12.5px] font-semibold">
-                    Approved sections
+                    Completed sections
                   </span>
                   <span className="font-mono tabular text-[11px] text-[var(--color-ink-3)]">
                     {approvedCount}/{totalCount}
@@ -365,7 +589,7 @@ export function RiderIngest() {
                 <ul className="border-t border-[var(--color-rule-soft)] divide-y divide-[var(--color-rule-soft)] max-h-[280px] overflow-y-auto">
                   {approvedRows.length === 0 ? (
                     <li className="px-4 py-4 text-[12px] italic text-[var(--color-ink-3)] text-center">
-                      No sections approved yet.
+                      No sections marked complete yet.
                     </li>
                   ) : (
                     approvedRows.map(({ s, key }) => (
@@ -393,7 +617,7 @@ export function RiderIngest() {
                             'shrink-0 font-mono uppercase tracking-[0.10em] text-[10px]',
                             key === active ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-ink-4)]',
                           )}>
-                            Approved
+                            Complete
                           </span>
                         </button>
                       </li>
@@ -410,26 +634,12 @@ export function RiderIngest() {
             <SectionReviewSplit
               section={activeSection}
               sectionKey={active}
-              sourceLang={imp.sourceLanguage}
+              sourceLang={imp.sourceLanguage ?? ''}
+              origin={origin}
             />
           ) : null}
         </div>
       </div>
-
-      <DataSourcesPanel
-        sourceKeys={[
-          'rider_import',
-          'rider_cover_contacts',
-          'rider_input_list',
-          'rider_monitor_mix',
-          'rider_foh_outputs',
-          'rider_backline',
-          'rider_lodging',
-          'rider_catering',
-          'rider_conflicts',
-        ]}
-        intro="Every section on this page is REAL data extracted from the Elsa y Elmar rider PDF. The parser reads the rider's own table of contents to produce one review surface per section, then applies typed extractors where it can (input list, rooming, catering)."
-      />
     </div>
   );
 }
@@ -440,70 +650,286 @@ function SectionRailItem({
   onSelect,
   pendingEdit,
   approved,
+  origin,
+  managerView,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+  onRename,
+  onRemove,
 }: {
   section: RiderSection;
   active: boolean;
   onSelect: () => void;
   pendingEdit: boolean;
   approved: boolean;
+  origin: RiderOrigin;
+  managerView: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onRename: (title: string) => void;
+  onRemove: () => void;
 }) {
   const label = sectionLabel(section);
   const hasConflicts = (section.conflicts?.length ?? 0) > 0;
   const num = section.tocIndex;
+  const pages = section.pages ?? [];
+  // Stage design on the authored/media path (see `SectionReviewSplit`'s
+  // dispatch): the rail's usual page-range summary doesn't apply, so show a
+  // media item count instead.
+  const isStageMediaSection =
+    section.type === 'stage_plot' && (origin === 'authored' || (section.plots?.length ?? 0) === 0);
+  const mediaCount = section.media?.length ?? 0;
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(label);
+
+  const commitRename = () => {
+    setIsRenaming(false);
+    const trimmed = draftTitle.trim();
+    if (trimmed && trimmed !== label) onRename(trimmed);
+    else setDraftTitle(label);
+  };
+
   return (
-    <li className={cn(hasConflicts && !active && 'border-l-2 border-[var(--color-accent)]')}>
-      <button
-        onClick={onSelect}
+    <li
+      id={`rider-rail-${section.id}`}
+      className={cn(hasConflicts && !active && 'border-l-2 border-[var(--color-accent)]')}
+    >
+      <div
         className={cn(
-          'w-full text-left px-4 py-2.5 hover:bg-[var(--color-paper)]/60 transition-colors',
-          active && 'bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]',
-          hasConflicts && active && 'bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]',
+          'px-4 py-2.5 transition-colors',
+          active ? 'bg-[var(--color-ink)] text-[var(--color-paper)]' : 'hover:bg-[var(--color-paper)]/60',
         )}
       >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[12.5px] font-semibold inline-flex items-baseline gap-1.5 min-w-0">
-            {hasConflicts && (
-              <Icon.Alert size={10} className={cn('shrink-0', active ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-accent)]')} />
-            )}
-            {num != null && (
-              <span
-                className={cn(
-                  'font-mono text-[10px] tabular shrink-0',
-                  active ? 'text-[var(--color-paper)] opacity-70' : 'text-[var(--color-ink-4)]',
-                )}
-              >
-                §{num}
-              </span>
-            )}
-            <span className="truncate">{label}</span>
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {pendingEdit && (
-              <span
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ background: 'var(--color-accent)' }}
-                title="Proposed edit pending approval"
-              />
-            )}
-            {hasConflicts && (
-              <span
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ background: 'var(--color-accent)' }}
-                title="Conflicts detected"
-              />
-            )}
-            <SectionStatusDot status={approved ? 'approved' : section.status} />
+        <button type="button" onClick={onSelect} className="w-full text-left">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[12.5px] font-semibold inline-flex items-baseline gap-1.5 min-w-0">
+              {hasConflicts && (
+                <Icon.Alert size={10} className={cn('shrink-0', active ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-accent)]')} />
+              )}
+              {num != null && (
+                <span
+                  className={cn(
+                    'font-mono text-[10px] tabular shrink-0',
+                    active ? 'text-[var(--color-paper)] opacity-70' : 'text-[var(--color-ink-4)]',
+                  )}
+                >
+                  §{num}
+                </span>
+              )}
+              {!isRenaming && <span className="truncate">{label}</span>}
+            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {pendingEdit && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ background: 'var(--color-accent)' }}
+                  title="Proposed edit pending approval"
+                />
+              )}
+              {hasConflicts && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ background: 'var(--color-accent)' }}
+                  title="Conflicts detected"
+                />
+              )}
+              <SectionStatusDot status={approved ? 'approved' : section.status} />
+            </div>
           </div>
-        </div>
-        <div
-          className={cn(
-            'flex items-center gap-2 mt-1 text-[10.5px] font-mono tabular',
-            active ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-ink-4)]',
-          )}
+          <div
+            className={cn(
+              'flex items-center gap-2 mt-1 text-[10.5px] font-mono tabular',
+              active ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-ink-4)]',
+            )}
+          >
+            <span>
+              {isStageMediaSection
+                ? `${mediaCount} item${mediaCount === 1 ? '' : 's'}`
+                : pages.length > 0
+                  ? `pp. ${pages[0]}${section.endPage && section.endPage !== pages[0] ? `–${section.endPage}` : ''}`
+                  : 'derived'}
+            </span>
+            {origin === 'imported' && section.confidence != null && <span>· conf {(section.confidence * 100).toFixed(0)}%</span>}
+          </div>
+        </button>
+
+        {isRenaming && (
+          <input
+            autoFocus
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+              else if (e.key === 'Escape') { setDraftTitle(label); setIsRenaming(false); }
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              'mt-1 w-full text-[12.5px] font-semibold bg-transparent rounded-[2px] px-1 py-0.5 outline-none border',
+              active ? 'border-[var(--color-paper)]/40 text-[var(--color-paper)] placeholder:text-[var(--color-paper)]/50' : 'border-[var(--color-ocean)] text-[var(--color-ink)]',
+            )}
+          />
+        )}
+
+        {managerView && (
+          <div
+            className={cn(
+              'flex items-center gap-3 mt-1.5 pt-1.5 border-t border-dashed',
+              active ? 'border-[var(--color-paper)]/25' : 'border-[var(--color-rule-soft)]',
+            )}
+          >
+            <button
+              type="button"
+              onClick={onMoveUp}
+              disabled={!canMoveUp}
+              title="Move up"
+              className={cn(
+                'disabled:opacity-30 disabled:cursor-default',
+                active ? 'text-[var(--color-paper)]/80 hover:text-[var(--color-paper)]' : 'text-[var(--color-ink-3)] hover:text-[var(--color-ink)]',
+              )}
+            >
+              <Icon.Chevron size={11} className="-rotate-90" />
+            </button>
+            <button
+              type="button"
+              onClick={onMoveDown}
+              disabled={!canMoveDown}
+              title="Move down"
+              className={cn(
+                'disabled:opacity-30 disabled:cursor-default',
+                active ? 'text-[var(--color-paper)]/80 hover:text-[var(--color-paper)]' : 'text-[var(--color-ink-3)] hover:text-[var(--color-ink)]',
+              )}
+            >
+              <Icon.Chevron size={11} className="rotate-90" />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setDraftTitle(label); setIsRenaming(true); }}
+              title="Rename section"
+              className={cn(active ? 'text-[var(--color-paper)]/80 hover:text-[var(--color-paper)]' : 'text-[var(--color-ink-3)] hover:text-[var(--color-ink)]')}
+            >
+              <Icon.Edit size={11} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Remove "${label}"? All content entered in this section will be permanently deleted and can't be recovered.`)) onRemove();
+              }}
+              title="Remove section"
+              className={cn(
+                'ml-auto',
+                active ? 'text-[var(--color-paper)]/80 hover:text-[var(--color-paper)]' : 'text-[var(--color-ink-3)] hover:text-[var(--color-accent)]',
+              )}
+            >
+              <Icon.X size={11} />
+            </button>
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
+
+// Manager-only rail row that lets the TM/PM add a new section — every TOC
+// entry not already present in the rider, plus a free-typed "Custom" section
+// (type 'other'). Selecting one calls `addRiderSection` and hands the new
+// section's id back so the caller can select + scroll to it.
+function AddSectionRow({
+  imp,
+  onAdded,
+}: {
+  imp: RiderImport;
+  onAdded: (sectionId: string) => void;
+}) {
+  const { addRiderSection } = useApp();
+  const [choosing, setChoosing] = useState(false);
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customTitle, setCustomTitle] = useState('');
+
+  const presentTypes = new Set(imp.sections.map((s) => s.type));
+  const available = RIDER_TOC_TEMPLATE.filter((t) => !presentTypes.has(t.type));
+
+  const reset = () => {
+    setChoosing(false);
+    setShowCustomInput(false);
+    setCustomTitle('');
+  };
+
+  const handleAdd = (type: RiderSectionType, title: string) => {
+    const id = addRiderSection(type, title);
+    onAdded(id);
+    reset();
+  };
+
+  if (!choosing) {
+    return (
+      <li className="px-4 py-2.5">
+        <button
+          type="button"
+          onClick={() => setChoosing(true)}
+          className="w-full inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-ocean)] hover:text-[var(--color-ink)] transition-colors"
         >
-          <span>{section.pages.length > 0 ? `pp. ${section.pages[0]}${section.endPage && section.endPage !== section.pages[0] ? `–${section.endPage}` : ''}` : 'derived'}</span>
-          {section.confidence != null && <span>· conf {(section.confidence * 100).toFixed(0)}%</span>}
+          <Icon.Plus size={12} /> Add section
+        </button>
+      </li>
+    );
+  }
+
+  return (
+    <li className="px-4 py-3 space-y-2 bg-[var(--color-paper)]/40">
+      {available.length > 0 && (
+        <div className="space-y-1 max-h-[160px] overflow-y-auto">
+          {available.map((t) => (
+            <button
+              key={t.type}
+              type="button"
+              onClick={() => handleAdd(t.type, t.title)}
+              className="w-full text-left text-[12px] px-2 py-1 rounded-[2px] hover:bg-[var(--color-card)] text-[var(--color-ink-2)]"
+            >
+              {t.title}
+            </button>
+          ))}
         </div>
+      )}
+      {!showCustomInput ? (
+        <button
+          type="button"
+          onClick={() => setShowCustomInput(true)}
+          className="w-full text-left text-[12px] px-2 py-1 rounded-[2px] hover:bg-[var(--color-card)] text-[var(--color-ink-3)] italic"
+        >
+          Custom section…
+        </button>
+      ) : (
+        <div className="flex items-center gap-1.5">
+          <input
+            autoFocus
+            value={customTitle}
+            onChange={(e) => setCustomTitle(e.target.value)}
+            placeholder="Section title"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && customTitle.trim()) handleAdd('other', customTitle.trim());
+            }}
+            className="min-w-0 flex-1 text-[12px] bg-[var(--color-card)] rounded-[2px] px-1.5 py-1 outline-none border border-[var(--color-rule)] focus:border-[var(--color-ocean)]"
+          />
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => customTitle.trim() && handleAdd('other', customTitle.trim())}
+          >
+            Add
+          </Button>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={reset}
+        className="text-[11px] font-mono uppercase tracking-[0.08em] text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+      >
+        Cancel
       </button>
     </li>
   );
@@ -513,19 +939,38 @@ function SectionReviewSplit({
   section,
   sectionKey,
   sourceLang,
+  origin,
 }: {
   section: RiderSection;
   sectionKey: string;
   sourceLang: string;
+  origin: RiderOrigin;
 }) {
   const pdfUrl = useActiveRiderPdfUrl();
-  // Plot sections (stage plot / lightplot) are CAD drawings, not text. Skip
-  // the source PDF iframe + the text-extraction surface entirely and render
-  // the rendered plot images as a single-pane review.
+  const hasPlots = (section.plots?.length ?? 0) > 0;
+
+  // Stage design (`stage_plot`) is authored media — pasted links or
+  // uploaded photos/video — rather than PDF-extracted plot pages, UNLESS
+  // this is an imported rider whose stage-plot pages genuinely extracted
+  // images (still routed to the PDF-plot review below). This branch never
+  // fires for `lighting_plot`, which stays PDF-plot-only and unaffected.
+  if (section.type === 'stage_plot' && (origin === 'authored' || !hasPlots)) {
+    return (
+      <div className="min-w-0">
+        <StageMediaSectionReview section={section} sectionKey={sectionKey} />
+      </div>
+    );
+  }
+
+  // Remaining plot sections (lightplot, any imported stage_plot with real
+  // extracted pages, or any other section carrying extracted plot images)
+  // are CAD drawings, not text. Skip the source PDF iframe + the
+  // text-extraction surface entirely and render the rendered plot images
+  // as a single-pane review.
   const isPlotSection =
     section.type === 'stage_plot' ||
     section.type === 'lighting_plot' ||
-    (section.plots?.length ?? 0) > 0;
+    hasPlots;
   if (isPlotSection) {
     return (
       <div className="min-w-0">
@@ -536,13 +981,15 @@ function SectionReviewSplit({
 
   // Always render the side-by-side when the section is anchored to pages — the
   // user wants a stable two-pane shape so they can compare source to extracted
-  // text. If the live PDF URL hasn't resolved yet (boot rehydration pending or
-  // upload bytes missing), show a placeholder card in the left slot instead of
-  // collapsing the layout. Conflicts-pseudo sections with zero source pages
-  // still drop to single column.
-  const hasPages = section.pages.length > 0;
+  // text. Only an imported PDF rider has source pages at all — an authored
+  // section never does, so `hasPages` is naturally false for it and the
+  // layout collapses to single column. If the live PDF URL hasn't resolved
+  // yet (boot rehydration pending or upload bytes missing), show a
+  // placeholder card in the left slot instead of collapsing the layout.
+  const hasPages = origin === 'imported' && (section.pages?.length ?? 0) > 0;
+  const pages = section.pages ?? [];
   const pageRange = hasPages
-    ? `pages ${section.pages[0]}${section.endPage && section.endPage !== section.pages[0] ? `–${section.endPage}` : ''}`
+    ? `pages ${pages[0]}${section.endPage && section.endPage !== pages[0] ? `–${section.endPage}` : ''}`
     : '';
   return (
     <div className={cn('grid gap-5 min-w-0', hasPages ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : 'lg:grid-cols-1')}>
@@ -554,7 +1001,7 @@ function SectionReviewSplit({
           {pdfUrl ? (
             <PdfViewerInline
               url={pdfUrl}
-              page={section.pages[0]}
+              page={pages[0]}
               title={sectionLabel(section)}
               height="50vh"
             />
@@ -570,9 +1017,89 @@ function SectionReviewSplit({
         </div>
       )}
       <div className="space-y-5 min-w-0">
-        <SectionView section={section} sectionKey={sectionKey} sourceLang={sourceLang} />
+        <SectionView section={section} sectionKey={sectionKey} sourceLang={sourceLang} origin={origin} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Shared section-card chrome for the two "no text extraction, just review
+ * images/media" surfaces (`PlotSectionReview` and `StageMediaSectionReview`):
+ * the §N-prefixed title, the status chip + approve/reopen action, and the
+ * completed-banner-vs-pending-blurb switch. Only the body differs between
+ * callers, so it's a render-prop (both it and the blurb need `managerView`,
+ * which is resolved once here rather than in each caller).
+ */
+function SectionReviewChrome({
+  section,
+  sectionKey,
+  eyebrow,
+  pendingBlurb,
+  children,
+}: {
+  section: RiderSection;
+  sectionKey: string;
+  eyebrow: React.ReactNode;
+  pendingBlurb: (managerView: boolean) => React.ReactNode;
+  children: (managerView: boolean) => React.ReactNode;
+}) {
+  const {
+    user,
+    isSectionApproved,
+    getSectionApproval,
+    approveSection,
+    reopenSection,
+  } = useApp();
+  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
+  const approved = isSectionApproved(sectionKey);
+  const approval = getSectionApproval(sectionKey);
+  const effStatus: RiderSectionStatus = approved ? 'approved' : section.status;
+  const label = sectionLabel(section);
+
+  return (
+    <SectionCard
+      title={
+        <span className="inline-flex items-baseline gap-2">
+          {section.tocIndex != null && (
+            <span className="font-mono text-[12px] text-[var(--color-ink-4)] tabular">§{section.tocIndex}</span>
+          )}
+          <span>{label}</span>
+        </span>
+      }
+      eyebrow={eyebrow}
+      action={
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <SectionStatusChip status={effStatus} />
+          {managerView && (approved ? (
+            <Button size="sm" variant="outline" onClick={() => reopenSection(sectionKey)}>
+              Reopen
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="primary"
+              leading={<Icon.Check size={12} />}
+              onClick={() => approveSection(sectionKey)}
+            >
+              Mark complete
+            </Button>
+          ))}
+        </div>
+      }
+    >
+      {approved && approval ? (
+        <div className="mb-4 inline-flex items-center gap-2 rounded-[3px] border border-[var(--color-moss)]/35 bg-[var(--color-moss)]/8 px-2.5 py-1.5">
+          <Icon.Check size={12} className="text-[var(--color-moss)] shrink-0" />
+          <LastUpdated label="Completed" stamp={approval} />
+        </div>
+      ) : (
+        <p className="mb-4 text-[11.5px] text-[var(--color-ink-3)] leading-relaxed">
+          {pendingBlurb(managerView)}
+        </p>
+      )}
+      {children(managerView)}
+    </SectionCard>
   );
 }
 
@@ -588,124 +1115,142 @@ function PlotSectionReview({
   section: RiderSection;
   sectionKey: string;
 }) {
-  const {
-    user,
-    isSectionApproved,
-    getSectionApproval,
-    approveSection,
-    reopenSection,
-  } = useApp();
-  const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
-  const approved = isSectionApproved(sectionKey);
-  const approval = getSectionApproval(sectionKey);
-  const effStatus: RiderSectionStatus = approved ? 'approved' : section.status;
   const label = sectionLabel(section);
   const plots = section.plots ?? [];
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   return (
-    <SectionCard
-      title={
-        <span className="inline-flex items-baseline gap-2">
-          {section.tocIndex != null && (
-            <span className="font-mono text-[12px] text-[var(--color-ink-4)] tabular">§{section.tocIndex}</span>
-          )}
-          <span>{label}</span>
-        </span>
-      }
+    <SectionReviewChrome
+      section={section}
+      sectionKey={sectionKey}
       eyebrow={
         <span className="inline-flex items-baseline">
-          <SectionPageLinks pages={section.pages} sectionLabel={label} />
+          <SectionPageLinks pages={section.pages ?? []} sectionLabel={label} />
           Plot images
         </span>
       }
-      action={
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          <SectionStatusChip status={effStatus} />
-          {managerView && (approved ? (
-            <Button size="sm" variant="outline" onClick={() => reopenSection(sectionKey)}>
-              Reopen
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="primary"
-              leading={<Icon.Check size={12} />}
-              onClick={() => approveSection(sectionKey)}
-            >
-              Approve images
-            </Button>
-          ))}
-        </div>
+      pendingBlurb={(managerView) =>
+        managerView
+          ? 'Confirm these are the right plot images for this section, then mark it complete.'
+          : 'Plot images extracted from the rider — read-only.'
       }
     >
-      {approved && approval ? (
-        <div className="mb-4 inline-flex items-center gap-2 rounded-[3px] border border-[var(--color-moss)]/35 bg-[var(--color-moss)]/8 px-2.5 py-1.5">
-          <Icon.Check size={12} className="text-[var(--color-moss)] shrink-0" />
-          <LastUpdated label="Approved" stamp={approval} />
-        </div>
-      ) : (
-        <p className="mb-4 text-[11.5px] text-[var(--color-ink-3)] leading-relaxed">
-          {managerView
-            ? 'Confirm these are the right plot images for this section, then approve.'
-            : 'Plot images extracted from the rider — read-only.'}
-        </p>
+      {() => (
+        <>
+          {plots.length === 0 ? (
+            <p className="text-[12.5px] text-[var(--color-ink-3)] italic">No plot images detected for this section.</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {plots.map((plot, i) => (
+                <figure
+                  key={`${plot.page}-${i}`}
+                  className="rounded-[4px] border border-[var(--color-rule-soft)] overflow-hidden bg-[var(--color-paper-2)] group"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setLightboxIdx(i)}
+                    className="block w-full aspect-[4/3] relative overflow-hidden"
+                    title={`View page ${plot.page} fullscreen`}
+                  >
+                    {plot.dataUrl ? (
+                      <img
+                        src={plot.dataUrl}
+                        alt={plot.caption}
+                        className="absolute inset-0 w-full h-full object-contain bg-white"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[var(--color-ink-3)]">
+                        <Icon.Document size={18} />
+                        <span className="text-[11px] font-semibold">p.{plot.page}</span>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                      <span className="text-white text-[11px] font-semibold bg-black/50 px-2 py-1 rounded">Enlarge</span>
+                    </div>
+                  </button>
+                  <figcaption className="px-2 py-1.5 flex items-center justify-between gap-1 text-[10.5px] border-t border-[var(--color-rule-soft)] bg-[var(--color-card)]">
+                    <span className="font-mono uppercase tracking-[0.08em] text-[var(--color-ink-3)] truncate">
+                      {plot.caption}
+                    </span>
+                    <span className="text-[var(--color-ink-4)] shrink-0">p.{plot.page}</span>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          )}
+          <PlotImageLightbox
+            open={lightboxIdx != null}
+            onClose={() => setLightboxIdx(null)}
+            section={section}
+            plots={plots}
+            initialIndex={lightboxIdx ?? 0}
+          />
+        </>
       )}
-      {plots.length === 0 ? (
-        <p className="text-[12.5px] text-[var(--color-ink-3)] italic">No plot images detected for this section.</p>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {plots.map((plot, i) => (
-            <figure
-              key={`${plot.page}-${i}`}
-              className="rounded-[4px] border border-[var(--color-rule-soft)] overflow-hidden bg-[var(--color-paper-2)] group"
-            >
-              <button
-                type="button"
-                onClick={() => setLightboxIdx(i)}
-                className="block w-full aspect-[4/3] relative overflow-hidden"
-                title={`View page ${plot.page} fullscreen`}
-              >
-                {plot.dataUrl ? (
-                  <img
-                    src={plot.dataUrl}
-                    alt={plot.caption}
-                    className="absolute inset-0 w-full h-full object-contain bg-white"
-                  />
-                ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[var(--color-ink-3)]">
-                    <Icon.Document size={18} />
-                    <span className="text-[11px] font-semibold">p.{plot.page}</span>
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                  <span className="text-white text-[11px] font-semibold bg-black/50 px-2 py-1 rounded">Enlarge</span>
-                </div>
-              </button>
-              <figcaption className="px-2 py-1.5 flex items-center justify-between gap-1 text-[10.5px] border-t border-[var(--color-rule-soft)] bg-[var(--color-card)]">
-                <span className="font-mono uppercase tracking-[0.08em] text-[var(--color-ink-3)] truncate">
-                  {plot.caption}
-                </span>
-                <span className="text-[var(--color-ink-4)] shrink-0">p.{plot.page}</span>
-              </figcaption>
-            </figure>
-          ))}
-        </div>
-      )}
-      <PlotImageLightbox
-        open={lightboxIdx != null}
-        onClose={() => setLightboxIdx(null)}
-        section={section}
-        plots={plots}
-        initialIndex={lightboxIdx ?? 0}
-      />
-    </SectionCard>
+    </SectionReviewChrome>
+  );
+}
+
+/**
+ * Stage-media section review — the "Stage design" (`stage_plot`) section's
+ * review surface once it's driven by pasted links / uploaded photos & video
+ * rather than PDF-extracted plot pages: every authored rider's stage_plot
+ * section takes this path, and an imported rider's takes it too when the PDF
+ * genuinely didn't extract any plot images for that section. Same section-card
+ * chrome (title, approve/reopen, completed banner) as `PlotSectionReview`;
+ * only the body swaps the plot-image grid for the media editor/gallery.
+ */
+function StageMediaSectionReview({
+  section,
+  sectionKey,
+}: {
+  section: RiderSection;
+  sectionKey: string;
+}) {
+  const { addStageMedia, removeStageMedia } = useApp();
+  const label = sectionLabel(section);
+  const media = section.media ?? [];
+
+  return (
+    <SectionReviewChrome
+      section={section}
+      sectionKey={sectionKey}
+      eyebrow={
+        section.pages && section.pages.length > 0 ? (
+          <SectionPageLinks pages={section.pages} sectionLabel={label} />
+        ) : (
+          'Stage photos & video'
+        )
+      }
+      pendingBlurb={(managerView) =>
+        managerView
+          ? 'Paste a Dropbox link or upload a photo or video of the stage setup, then mark this section complete.'
+          : 'Stage photos and video shared by the team.'
+      }
+    >
+      {(managerView) =>
+        managerView ? (
+          <StageMediaEditor
+            items={media}
+            onAdd={(init) => addStageMedia(section.id, init)}
+            onRemove={(mediaId) => removeStageMedia(section.id, mediaId)}
+          />
+        ) : (
+          <StageMediaGallery items={media} />
+        )
+      }
+    </SectionReviewChrome>
   );
 }
 
 function CoverBanner({ imp }: { imp: RiderImport }) {
   const inputSec = imp.sections.find(s => s.type === 'input_list');
   const bandMembers = (inputSec?.monitorMix ?? []).map(m => m.personName).filter(Boolean) as string[];
+
+  if (imp.origin === 'authored') {
+    return <AuthoredCoverBanner imp={imp} />;
+  }
+
   return (
     <Card className="mb-5 border-l-4" padded={false}>
       <div
@@ -762,6 +1307,98 @@ function CoverBanner({ imp }: { imp: RiderImport }) {
               <Fact label="Flight tickets" value={String(imp.partySize.flightTickets ?? '—')} sourceKey="rider_flight_tickets" />
             </>
           )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// Authored-mode cover banner — same facts as the imported-rider `CoverBanner`,
+// but artist name / PM contact / party size are editable text inputs that
+// write straight through `updateRiderMeta`. There's no source PDF and no
+// revision-warning to show, so those bits of the imported banner are dropped
+// rather than rendered empty.
+function AuthoredCoverBanner({ imp }: { imp: RiderImport }) {
+  const { updateRiderMeta } = useApp();
+  const pm = imp.productionManager;
+  const party = imp.partySize;
+
+  const setPartyField = (field: 'tourists' | 'rooms' | 'flightTickets', v: string) => {
+    const n = v.trim() ? Number(v) : undefined;
+    updateRiderMeta({ partySize: { ...party, [field]: Number.isFinite(n) ? n : undefined } });
+  };
+
+  return (
+    <Card className="mb-5 border-l-4" padded={false}>
+      <div
+        className="border-l-4 px-5 py-4 grid sm:grid-cols-[1fr_auto] gap-4 items-start"
+        style={{ borderLeftColor: 'var(--color-accent)' }}
+      >
+        <div>
+          <div className="eyebrow text-[var(--color-accent)] mb-1">Authored rider · revision {imp.revision}</div>
+          <EditableText
+            value={imp.artistName ?? ''}
+            disabled={false}
+            placeholder="Artist name"
+            onChange={(v) => updateRiderMeta({ artistName: v })}
+            className="font-display text-[20px] leading-tight font-bold"
+          />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-[12.5px]">
+          <div>
+            <div className="eyebrow mb-1">Production Manager</div>
+            <EditableText
+              value={pm?.name ?? ''}
+              disabled={false}
+              placeholder="Name"
+              onChange={(v) => updateRiderMeta({ productionManager: { ...pm, name: v } })}
+              className="text-[13px] font-semibold"
+            />
+            <EditableText
+              value={pm?.email ?? ''}
+              disabled={false}
+              placeholder="Email"
+              onChange={(v) => updateRiderMeta({ productionManager: { ...pm, email: v } })}
+              className="font-mono text-[10.5px] text-[var(--color-ink-3)]"
+            />
+            <EditableText
+              value={pm?.phone ?? ''}
+              disabled={false}
+              placeholder="Phone"
+              onChange={(v) => updateRiderMeta({ productionManager: { ...pm, phone: v } })}
+              className="font-mono text-[10.5px] text-[var(--color-ink-3)]"
+            />
+          </div>
+          <div>
+            <div className="eyebrow mb-1">Party size</div>
+            <EditableText
+              value={party?.tourists != null ? String(party.tourists) : ''}
+              disabled={false}
+              mono
+              placeholder="—"
+              onChange={(v) => setPartyField('tourists', v)}
+            />
+          </div>
+          <div>
+            <div className="eyebrow mb-1">Hotel rooms</div>
+            <EditableText
+              value={party?.rooms != null ? String(party.rooms) : ''}
+              disabled={false}
+              mono
+              placeholder="—"
+              onChange={(v) => setPartyField('rooms', v)}
+            />
+          </div>
+          <div>
+            <div className="eyebrow mb-1">Flight tickets</div>
+            <EditableText
+              value={party?.flightTickets != null ? String(party.flightTickets) : ''}
+              disabled={false}
+              mono
+              placeholder="—"
+              onChange={(v) => setPartyField('flightTickets', v)}
+            />
+          </div>
         </div>
       </div>
     </Card>
@@ -934,21 +1571,33 @@ function RosterSuggestions({ imp }: { imp: RiderImport }) {
   );
 }
 
-function ContactBlock({
+// Shared by the cover-page contact block (ContactBlock, prose weight) and the
+// numeric facts strip (Fact, mono/tabular weight) — same label/sourceTag/sub
+// structure, differing only in the value's typography.
+function LabeledValue({
   label,
   value,
   sub,
   sourceKey,
+  variant = 'fact',
 }: {
   label: string;
   value: string;
   sub?: string;
   sourceKey?: import('@/data/realSources').RealSourceKey;
+  variant?: 'contact' | 'fact';
 }) {
   return (
     <div>
       <div className="eyebrow">{label}</div>
-      <div className="text-[13px] font-semibold mt-1 leading-tight inline-flex items-baseline gap-1">
+      <div
+        className={cn(
+          'mt-1 inline-flex items-baseline gap-1',
+          variant === 'contact'
+            ? 'text-[13px] font-semibold leading-tight'
+            : 'font-mono text-[14px] tabular font-bold text-[var(--color-ink)]',
+        )}
+      >
         {value}
         {sourceKey && <SourceTag source={sourceKey} field={label} />}
       </div>
@@ -957,49 +1606,28 @@ function ContactBlock({
   );
 }
 
-function Fact({
-  label,
-  value,
-  sub,
-  sourceKey,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  sourceKey?: import('@/data/realSources').RealSourceKey;
-}) {
-  return (
-    <div>
-      <div className="eyebrow">{label}</div>
-      <div className="font-mono text-[14px] tabular font-bold text-[var(--color-ink)] mt-1 inline-flex items-baseline gap-1">
-        {value}
-        {sourceKey && <SourceTag source={sourceKey} field={label} />}
-      </div>
-      {sub && <div className="font-mono text-[10.5px] text-[var(--color-ink-3)] mt-0.5">{sub}</div>}
-    </div>
-  );
+function ContactBlock(props: { label: string; value: string; sub?: string; sourceKey?: import('@/data/realSources').RealSourceKey }) {
+  return <LabeledValue {...props} variant="contact" />;
 }
 
+function Fact(props: { label: string; value: string; sub?: string; sourceKey?: import('@/data/realSources').RealSourceKey }) {
+  return <LabeledValue {...props} variant="fact" />;
+}
+
+const SECTION_STATUS_META: Record<RiderSectionStatus, { color: string; tone: 'off' | 'travel' | 'rehearsal' | 'success'; label: string }> = {
+  pending: { color: 'var(--color-ink-4)', tone: 'off', label: 'Pending' },
+  extracted: { color: 'var(--color-day-travel)', tone: 'travel', label: 'Extracted' },
+  review: { color: 'var(--color-day-rehearsal)', tone: 'rehearsal', label: 'Review' },
+  approved: { color: 'var(--color-day-promo)', tone: 'success', label: 'Approved' },
+};
 
 function SectionStatusDot({ status }: { status: RiderSectionStatus }) {
-  const color = {
-    pending: 'var(--color-ink-4)',
-    extracted: 'var(--color-day-travel)',
-    review: 'var(--color-day-rehearsal)',
-    approved: 'var(--color-day-promo)',
-  }[status];
-  return <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />;
+  return <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SECTION_STATUS_META[status].color }} />;
 }
 
 function SectionStatusChip({ status }: { status: RiderSectionStatus }) {
-  const map = {
-    pending: { tone: 'off', label: 'Pending' },
-    extracted: { tone: 'travel', label: 'Extracted' },
-    review: { tone: 'rehearsal', label: 'Review' },
-    approved: { tone: 'success', label: 'Approved' },
-  } as const;
-  const m = map[status];
-  return <Chip tone={m.tone}>{m.label}</Chip>;
+  const { tone, label } = SECTION_STATUS_META[status];
+  return <Chip tone={tone}>{label}</Chip>;
 }
 
 function PendingEditBanner({
@@ -1211,6 +1839,7 @@ export function collectAllPlots(imp: RiderImport) {
 }
 
 function PlotsPanel({ imp }: { imp: RiderImport }) {
+  const { tour } = useApp();
   const sectionPlots = collectPlotsBySection(imp);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const totalPages = sectionPlots.reduce((n, sp) => n + sp.plots.length, 0);
@@ -1219,7 +1848,7 @@ function PlotsPanel({ imp }: { imp: RiderImport }) {
     return (
       <div className="rounded-[4px] border border-dashed border-[var(--color-rule)] py-16 text-center">
         <p className="text-[13px] text-[var(--color-ink-3)]">No stage plot or lightplot pages detected.</p>
-        <p className="mt-1 text-[11.5px] text-[var(--color-ink-4)]">Plot images extracted from §7 Stage Plot and §8 Lightplot will appear here once the rider is imported.</p>
+        <p className="mt-1 text-[11.5px] text-[var(--color-ink-4)]">Plot images extracted from an imported rider PDF's Stage Plot and Lightplot sections will appear here. Building the rider yourself? Add stage photos in the Stage design section instead.</p>
       </div>
     );
   }
@@ -1243,7 +1872,7 @@ function PlotsPanel({ imp }: { imp: RiderImport }) {
             {sectionPlots.length} section{sectionPlots.length === 1 ? '' : 's'} · {totalPages} image{totalPages === 1 ? '' : 's'}
           </Chip>
           <Link
-            to="/plots"
+            to={tourPath(tour.id, 'plots')}
             className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[var(--color-ocean)] hover:underline"
             title="Open the full Plots surface"
           >
@@ -1303,10 +1932,12 @@ function SectionView({
   section,
   sectionKey,
   sourceLang,
+  origin,
 }: {
   section: RiderSection;
   sectionKey: string;
   sourceLang: string;
+  origin: RiderOrigin;
 }) {
   const {
     user,
@@ -1333,15 +1964,18 @@ function SectionView({
   const inputList = pending?.patch.inputList ?? edit?.inputList ?? section.inputList;
   const monitorMix = pending?.patch.monitorMix ?? edit?.monitorMix ?? section.monitorMix;
   const fohOutputs = pending?.patch.fohOutputs ?? edit?.fohOutputs ?? section.fohOutputs;
+  const backline = pending?.patch.backline ?? edit?.backline ?? section.backline;
+  const lodging = pending?.patch.lodging ?? edit?.lodging ?? section.lodging;
+  const catering = pending?.patch.catering ?? edit?.catering ?? section.catering;
   const freeText = pending?.patch.freeText ?? edit?.freeText ?? section.freeText;
   const freeTextEn = pending?.patch.freeTextEn ?? edit?.freeTextEn ?? section.freeTextEn;
   const effStatus: RiderSectionStatus = approved ? 'approved' : section.status;
-  const eff: RiderSection = { ...section, inputList, monitorMix, fohOutputs, freeText, freeTextEn };
+  const eff: RiderSection = { ...section, inputList, monitorMix, fohOutputs, backline, lodging, catering, freeText, freeTextEn };
 
   // Route onChange to direct edit (managers) or proposal (everyone else).
   // Captures the current effective state as `before` for the diff/history.
   const editOrPropose = (patch: Parameters<typeof updateSectionEdit>[1]) => {
-    const before = { inputList, monitorMix, fohOutputs, freeText, freeTextEn };
+    const before = { inputList, monitorMix, fohOutputs, backline, lodging, catering, freeText, freeTextEn };
     if (managerView) {
       updateSectionEdit(sectionKey, patch, before);
     } else {
@@ -1349,7 +1983,23 @@ function SectionView({
     }
   };
 
+  // Mirrors the render branch below: is whichever editor actually shows for
+  // this section still at its blank/default state? A brand-new authored
+  // section (from `createRiderDraft`) starts with none of these fields set,
+  // so a manager could otherwise click through all 14 sections without
+  // typing anything and see "All complete" with nothing actually filled in.
+  const sectionHasNoContent = (): boolean => {
+    if (inputList || section.type === 'input_list') return (inputList?.length ?? 0) === 0;
+    if (monitorMix) return monitorMix.length === 0;
+    if (fohOutputs) return fohOutputs.length === 0;
+    if (section.type === 'backline') return !backline || Object.keys(backline).length === 0;
+    if (section.type === 'lodging') return !lodging || ((lodging.roomingList?.length ?? 0) === 0 && !lodging.hotelRequirements);
+    if (section.type === 'catering') return !catering || ((catering.menus?.length ?? 0) === 0 && !catering.generalRequirements);
+    return !freeText?.trim() && !freeTextEn?.trim();
+  };
+
   const label = sectionLabel(section);
+  const languageLabel = section.language ?? sourceLang;
   return (
     <>
       <SectionCard
@@ -1363,13 +2013,13 @@ function SectionView({
         }
         eyebrow={
           <span className="inline-flex items-baseline">
-            <SectionPageLinks pages={section.pages} sectionLabel={label} />
-            {(section.language ?? sourceLang).toUpperCase()}
+            <SectionPageLinks pages={section.pages ?? []} sectionLabel={label} />
+            {origin === 'imported' && languageLabel && languageLabel.toUpperCase()}
           </span>
         }
         action={
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            {section.confidence != null && (
+            {origin === 'imported' && section.confidence != null && (
               <Chip
                 tone={section.confidence >= 0.9 ? 'success' : section.confidence >= 0.75 ? 'rehearsal' : 'critical'}
                 variant="outline"
@@ -1388,9 +2038,12 @@ function SectionView({
                 size="sm"
                 variant="primary"
                 leading={<Icon.Check size={12} />}
-                onClick={() => approveSection(sectionKey)}
+                onClick={() => {
+                  if (sectionHasNoContent() && !window.confirm('This section has no content yet — mark it complete anyway?')) return;
+                  approveSection(sectionKey);
+                }}
               >
-                Approve section
+                Mark complete
               </Button>
             ))}
           </div>
@@ -1407,19 +2060,23 @@ function SectionView({
         {!pending && approved && approval ? (
           <div className="mb-4 inline-flex items-center gap-2 rounded-[3px] border border-[var(--color-moss)]/35 bg-[var(--color-moss)]/8 px-2.5 py-1.5">
             <Icon.Check size={12} className="text-[var(--color-moss)] shrink-0" />
-            <LastUpdated label="Approved" stamp={approval} />
+            <LastUpdated label="Completed" stamp={approval} />
           </div>
         ) : !pending ? (
           <p className="mb-4 text-[11.5px] text-[var(--color-ink-3)] leading-relaxed">
-            {managerView
-              ? 'Click any field to correct what the AI extracted. Approve the section once it matches the source.'
-              : 'Click any field to propose a correction. Your changes will be reviewed by the production manager before taking effect.'}
+            {origin === 'imported'
+              ? (managerView
+                  ? 'Click any field to correct what the AI extracted. Mark this section complete once it matches the source.'
+                  : 'Click any field to propose a correction. Your changes will be reviewed by the production manager before taking effect.')
+              : (managerView
+                  ? 'Fill in this section, then mark it complete once it’s ready.'
+                  : 'Propose changes to this section. Your changes will be reviewed by the production manager before taking effect.')}
           </p>
         ) : null}
 
-        {inputList ? (
+        {inputList || section.type === 'input_list' ? (
           <InputListReview
-            channels={inputList}
+            channels={inputList ?? []}
             disabled={approved}
             history={getSectionHistory(sectionKey)}
             userName={user.name}
@@ -1441,12 +2098,12 @@ function SectionView({
             userName={user.name}
             onChange={(v) => editOrPropose({ fohOutputs: v })}
           />
-        ) : section.backline ? (
-          <BacklineReview backline={section.backline} />
-        ) : section.lodging ? (
-          <LodgingReview lodging={section.lodging} />
-        ) : section.catering ? (
-          <CateringReview catering={section.catering} />
+        ) : section.type === 'backline' ? (
+          <BacklineEditor backline={backline} disabled={approved} onChange={(v) => editOrPropose({ backline: v })} />
+        ) : section.type === 'lodging' ? (
+          <LodgingEditor lodging={lodging} disabled={approved} onChange={(v) => editOrPropose({ lodging: v })} />
+        ) : section.type === 'catering' ? (
+          <CateringEditor catering={catering} disabled={approved} onChange={(v) => editOrPropose({ catering: v })} />
         ) : (
           <FreeTextReview
             es={freeText}
@@ -1696,6 +2353,13 @@ function InputListReview({
     onChange(updated);
   };
 
+  const addChannel = () => {
+    const nextNumber = channels.length ? Math.max(...channels.map((c) => c.channelNumber)) + 1 : 1;
+    onChange([...channels, { channelNumber: nextNumber, source: '', micOrDi: '' }]);
+  };
+
+  const removeChannel = (i: number) => onChange(channels.filter((_, idx) => idx !== i));
+
   const sorted = [...channels].sort((a, b) => {
     const af = (a.extractionFlags?.length ?? 0) > 0 ? 0 : 1;
     const bf = (b.extractionFlags?.length ?? 0) > 0 ? 0 : 1;
@@ -1750,6 +2414,7 @@ function InputListReview({
                   <FilterOption label="Not edited" selected={editedFilter === 'unedited'} onSelect={() => setEditedFilter('unedited')} />
                 </ColumnFilterPopup>
               </th>
+              <th className="px-2.5 py-2 w-8"></th>
             </tr>
           </thead>
           <tbody>
@@ -1829,12 +2494,18 @@ function InputListReview({
                   <td className="px-2.5 py-1.5 align-top">
                     <LastEditedCell stamp={c.lastEditedAt} history={history} />
                   </td>
+                  <td className="px-2.5 py-1.5 align-top text-center">
+                    <RemoveRowButton onClick={() => removeChannel(i)} disabled={disabled} title="Remove this channel" />
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      <Button variant="ghost" size="sm" leading={<Icon.Plus size={12} />} onClick={addChannel} disabled={disabled} className="mt-2">
+        Add channel
+      </Button>
     </div>
   );
 }
@@ -1994,204 +2665,9 @@ function FOHOutputsReview({
   );
 }
 
-function BacklineReview({ backline }: { backline: NonNullable<RiderSection['backline']> }) {
-  return (
-    <div className="space-y-5 text-[12.5px]">
-      {backline.drums && (
-        <BlockSub title="Drums">
-          <div>
-            <Label>Kit options</Label>
-            <div className="text-[var(--color-ink-2)]">{backline.drums.kitOptions.join(' · ')}</div>
-          </div>
-          <div>
-            <Label>Pieces</Label>
-            <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-0.5 mt-0.5">
-              {backline.drums.pieces.map((p, i) => (
-                <li key={i} className="flex justify-between gap-3">
-                  <span className="text-[var(--color-ink-2)] capitalize">{p.type.replace('_', ' ')}</span>
-                  <span className="font-mono text-[var(--color-ink-2)]">{p.size}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <Label>Hardware</Label>
-            <ul className="space-y-1 mt-0.5">
-              {backline.drums.hardware.map((h, i) => {
-                const hasExcl = (h.excluded?.length ?? 0) > 0;
-                return (
-                  <li key={i} className={cn('px-2.5 py-1.5 border border-[var(--color-rule-soft)] rounded-[3px]', hasExcl && 'border-[rgba(184,57,43,0.35)] bg-[rgba(184,57,43,0.03)]')}>
-                    <div className="flex justify-between gap-3">
-                      <span className="font-semibold text-[var(--color-ink)]">
-                        {h.item} <span className="font-mono text-[var(--color-ink-3)]">×{h.qty}</span>
-                      </span>
-                      {h.preferred && h.preferred.length > 0 && (
-                        <span className="text-[11px] text-[var(--color-ink-3)]">Preferred: {h.preferred.join(', ')}</span>
-                      )}
-                    </div>
-                    {h.excluded && h.excluded.length > 0 && (
-                      <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-accent)]">
-                        <Icon.X size={10} /> Excluded: {h.excluded.join(', ')}
-                        <ExcludedBrandExplain section="backline" />
-                      </div>
-                    )}
-                    {h.notes && <div className="text-[11px] text-[var(--color-ink-3)] mt-0.5 italic">{h.notes}</div>}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </BlockSub>
-      )}
-
-      {backline.bass && (
-        <BlockSub title="Bass">
-          <ul className="space-y-1">
-            {backline.bass.options.map((o) => (
-              <li key={o.optionNumber} className="grid grid-cols-[auto_1fr_1fr] gap-3 items-center px-2.5 py-1.5 border border-[var(--color-rule-soft)] rounded-[3px]">
-                <span className="font-mono text-[11px] text-[var(--color-ink-3)] uppercase tracking-[0.10em]">Opt {o.optionNumber}</span>
-                <span><span className="text-[11px] text-[var(--color-ink-3)]">Head: </span>{o.head}</span>
-                <span><span className="text-[11px] text-[var(--color-ink-3)]">Cab: </span>{o.cab}</span>
-              </li>
-            ))}
-          </ul>
-        </BlockSub>
-      )}
-
-      {backline.guitar && (
-        <BlockSub title="Guitar amps">
-          <ul className="space-y-1">
-            {backline.guitar.map((g, i) => (
-              <li key={i} className="flex justify-between gap-3 px-2.5 py-1.5 border border-[var(--color-rule-soft)] rounded-[3px]">
-                <span>{g.item} <span className="font-mono text-[var(--color-ink-3)]">×{g.qty}</span></span>
-                <span className="text-[11px] text-[var(--color-ink-3)]">{g.notes ?? ''}</span>
-              </li>
-            ))}
-          </ul>
-        </BlockSub>
-      )}
-
-      {backline.miscellaneous && (
-        <BlockSub title="Miscellaneous">
-          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-0.5">
-            {backline.miscellaneous.map((m, i) => (
-              <li key={i} className="flex justify-between gap-3">
-                <span className="text-[var(--color-ink-2)]">{m.item}</span>
-                <span className="font-mono text-[var(--color-ink-2)]">×{m.qty}</span>
-              </li>
-            ))}
-          </ul>
-        </BlockSub>
-      )}
-
-      {backline.videoScreen && (
-        <BlockSub title="Video screen">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-            <KV k="Type" v={backline.videoScreen.type} />
-            <KV k="Dimensions" v={backline.videoScreen.dimensions} />
-            <KV k="Aspect" v={backline.videoScreen.aspectRatio} />
-            <KV k="Resolution" v={`${backline.videoScreen.resolutionPreferred} (min ${backline.videoScreen.resolutionMin})`} />
-          </div>
-        </BlockSub>
-      )}
-    </div>
-  );
-}
-
-function LodgingReview({ lodging }: { lodging: NonNullable<RiderSection['lodging']> }) {
-  return (
-    <div>
-      <p className="text-[12.5px] text-[var(--color-ink-3)] mb-3 leading-relaxed">
-        Rooming list reveals the touring party. {lodging.totalRooms ?? '—'} rooms, {lodging.totalOccupants ?? '—'} occupants.
-        {lodging.hotelRequirements?.artistPreApproval && ' Artist pre-approval required.'}
-      </p>
-      <ul className="space-y-1.5">
-        {lodging.roomingList.map((r) => (
-          <li key={r.roomNumber} className="flex items-baseline gap-3 px-2.5 py-1.5 border border-[var(--color-rule-soft)] rounded-[3px]">
-            <span className="font-mono text-[11.5px] tabular text-[var(--color-ink-3)] w-8">#{r.roomNumber}</span>
-            <Chip tone="neutral" size="sm" variant="outline">
-              {r.roomType.replace('_', ' ')}
-            </Chip>
-            <div className="flex-1 flex flex-wrap gap-x-3 gap-y-0.5">
-              {r.occupants.map((o, i) => (
-                <span key={i}>
-                  {o.name ? (
-                    <>
-                      <span className="font-semibold text-[var(--color-ink)]">{o.name}</span>
-                      <span className="text-[11px] text-[var(--color-ink-3)] ml-1.5">· {o.role.replace('_', ' ')}</span>
-                    </>
-                  ) : (
-                    <span className="text-[var(--color-ink-3)] italic">{o.role.replace('_', ' ')}</span>
-                  )}
-                </span>
-              ))}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function CateringReview({ catering }: { catering: NonNullable<RiderSection['catering']> }) {
-  return (
-    <div className="space-y-5">
-      <p className="text-[12.5px] text-[var(--color-ink-3)] leading-relaxed">
-        {catering.menus.length} menus by room × time-of-day. Excluded brands and dietary tags captured verbatim — they're as important as positive specs.
-      </p>
-      {catering.menus.map((menu, i) => (
-        <BlockSub key={i} title={`${menu.room} · ${menu.menuTime.replace('_', ' ')}`}>
-          {menu.availableBy && (
-            <div className="text-[11px] text-[var(--color-ink-3)] italic mb-2">
-              Available: {menu.availableBy}
-            </div>
-          )}
-          <ul className="space-y-0.5 text-[12.5px]">
-            {menu.items.map((item, j) => {
-              const hasExcl = (item.brandExcluded?.length ?? 0) > 0;
-              return (
-                <li key={j} className={cn('flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-0.5', hasExcl && 'bg-[rgba(184,57,43,0.03)]')}>
-                  <span className="text-[var(--color-ink)]">{item.item}</span>
-                  {item.itemEn && item.itemEn !== item.item && (
-                    <span className="text-[10.5px] italic text-[var(--color-ink-3)]">({item.itemEn})</span>
-                  )}
-                  <span className="font-mono text-[11px] text-[var(--color-ink-3)]">
-                    ×{item.qty}
-                    {item.unit ? ` ${item.unit}` : ''}
-                  </span>
-                  {item.brandPreferred && item.brandPreferred.length > 0 && (
-                    <span className="text-[10.5px] text-[var(--color-ink-3)]">
-                      → {item.brandPreferred.join(', ')}
-                    </span>
-                  )}
-                  {hasExcl && (
-                    <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--color-accent)]">
-                      <Icon.X size={9} /> NOT {item.brandExcluded!.join(', ')}
-                      <ExcludedBrandExplain section="catering" />
-                    </span>
-                  )}
-                  {item.dietaryTags && item.dietaryTags.length > 0 && (
-                    <span className="text-[10px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-4)]">
-                      {item.dietaryTags.join(' · ').replace(/_/g, ' ')}
-                    </span>
-                  )}
-                  {item.notes && <span className="text-[10.5px] italic text-[var(--color-ink-3)]">— {item.notes}</span>}
-                </li>
-              );
-            })}
-          </ul>
-        </BlockSub>
-      ))}
-      {catering.generalRequirements && (
-        <div className="border-t border-[var(--color-rule-soft)] pt-3 text-[12px] text-[var(--color-ink-3)]">
-          <span className="eyebrow mr-2">General</span>
-          {catering.generalRequirements.biodegradableDisposables && '· Biodegradable disposables '}
-          {catering.generalRequirements.foodDonationPlanRequired && '· Food donation plan required '}
-        </div>
-      )}
-    </div>
-  );
-}
+// BacklineReview / LodgingReview / CateringReview (read-only) were replaced by
+// BacklineEditor / LodgingEditor / CateringEditor above — see git history for
+// the removed read-only versions.
 
 function FreeTextReview({
   es,
@@ -2225,31 +2701,9 @@ function FreeTextReview({
   );
 }
 
-function BlockSub({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h4 className="font-display text-[15px] font-bold text-[var(--color-ink)] mb-2 pb-1 border-b border-[var(--color-rule-soft)]">{title}</h4>
-      <div className="space-y-2.5">{children}</div>
-    </div>
-  );
-}
-
-function Label({ children }: { children: React.ReactNode }) {
-  return <div className="eyebrow mb-0.5">{children}</div>;
-}
-
-function KV({ k, v }: { k: string; v: string }) {
-  return (
-    <div>
-      <Label>{k}</Label>
-      <div className="text-[var(--color-ink-2)]">{v}</div>
-    </div>
-  );
-}
-
 // Scratch-mode upload zone, shown when no rider has been imported yet (or on re-upload).
 function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
-  const { addRiderImportToScratch } = useApp();
+  const { tour, addRiderImportToScratch } = useApp();
   const [note, setNote] = useState<UploadNote | null>(null);
   const [isParsing, setIsParsing] = useState(false);
 
@@ -2275,13 +2729,23 @@ function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
       // Persist the raw bytes so a refresh can rehydrate the Blob URL — the
       // parser already detached its copy into the worker, so re-read from the
       // File (multiple reads are allowed).
-      await backend.savePdf('rider', parsed.id, await file.arrayBuffer());
+      await backend.savePdf(tour.id, 'rider', parsed.id, await file.arrayBuffer());
       addRiderImportToScratch(parsed, buildScratchRiderPersonnel());
       onDone?.();
     } catch (err) {
       console.error('[rider parse] failed:', err);
       const fixture = matchFixture(file.name);
       if (fixture && fixture.kind !== 'rider') {
+        const isFlightKind = fixture.kind === 'flight' || fixture.kind === 'travel_grid';
+        if (isFlightKind && !FLIGHTS_ENABLED) {
+          setNote({
+            tone: 'warning',
+            title: 'That file belongs to another step',
+            detail: `"${file.name}" looks like a ${fixture.kind === 'flight' ? 'flight confirmation' : 'travel grid'}, but flight imports aren't accepted right now.`,
+          });
+          setIsParsing(false);
+          return;
+        }
         const kindLabel =
           fixture.kind === 'flight' ? 'flight confirmation'
           : fixture.kind === 'hotel' ? 'hotel booking'
@@ -2290,7 +2754,7 @@ function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
         setNote({
           tone: 'warning',
           title: 'That file belongs to another step',
-          detail: `"${file.name}" looks like a ${kindLabel} — drop it on the Import route & travel page instead.`,
+          detail: `"${file.name}" looks like a ${kindLabel} — drop it on the Import route & hotels page instead.`,
         });
         setIsParsing(false);
         return;
@@ -2306,7 +2770,7 @@ function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
           const resp = await fetch(RIDER_PDF_PATH);
           if (resp.ok) {
             const bytes = await resp.arrayBuffer();
-            await backend.savePdf('rider', fixtureImport.id, bytes);
+            await backend.savePdf(tour.id, 'rider', fixtureImport.id, bytes);
             blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
           }
         } catch (fetchErr) {
@@ -2343,7 +2807,6 @@ function ScratchRiderUpload({ onDone }: { onDone?: () => void }) {
           ? 'Extracting sections — this takes a few seconds.'
           : 'Any rider PDF works — the parser reads the table of contents and pulls out sections, band roster, PM contact, and party size. Spanish or English.'}
         icon={<Icon.Sparkle size={22} />}
-        tourAnchor="rider-dropzone"
       />
       {note && <UploadResultNote {...note} onDismiss={() => setNote(null)} />}
     </div>

@@ -250,7 +250,11 @@ export const supabaseBackend: Backend = {
     });
   },
 
-  async loadPdf(scope: PdfScope, id: string): Promise<ArrayBuffer | null> {
+  // Multi-tenancy note: supabase is single-shared-tour for now, so the new
+  // `tourId` param is accepted (to satisfy the Backend interface) but ignored
+  // in favor of the cached `activeTourId` from subscribeTour/saveTour — real
+  // per-call tour-scoping here is out of scope for this pass.
+  async loadPdf(_tourId: ID, scope: PdfScope, id: string): Promise<ArrayBuffer | null> {
     if (!activeTourId) return null;
     const sb = await client();
     const { data, error } = await sb.storage
@@ -260,7 +264,7 @@ export const supabaseBackend: Backend = {
     return data.arrayBuffer();
   },
 
-  async savePdf(scope: PdfScope, id: string, bytes: ArrayBuffer): Promise<void> {
+  async savePdf(_tourId: ID, scope: PdfScope, id: string, bytes: ArrayBuffer): Promise<void> {
     if (!activeTourId) return;
     const sb = await client();
     await sb.storage
@@ -271,7 +275,7 @@ export const supabaseBackend: Backend = {
       });
   },
 
-  async deletePdf(scope: PdfScope, id: string): Promise<void> {
+  async deletePdf(_tourId: ID, scope: PdfScope, id: string): Promise<void> {
     if (!activeTourId) return;
     const sb = await client();
     await sb.storage.from(PDF_BUCKET).remove([pdfPath(activeTourId, scope, id)]);

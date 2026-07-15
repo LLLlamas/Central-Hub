@@ -3,7 +3,7 @@ import { cn } from '@/lib/cn';
 
 interface ChipProps {
   children: ReactNode;
-  tone?: 'neutral' | 'show' | 'travel' | 'off' | 'rehearsal' | 'promo' | 'hold' | 'critical' | 'success' | 'mock';
+  tone?: 'neutral' | 'show' | 'travel' | 'off' | 'rehearsal' | 'promo' | 'hold' | 'critical' | 'success';
   variant?: 'solid' | 'soft' | 'outline';
   size?: 'sm' | 'md';
   style?: CSSProperties;
@@ -21,7 +21,6 @@ const toneVars: Record<NonNullable<ChipProps['tone']>, { color: string; bg: stri
   hold:      { color: 'var(--color-day-hold)', bg: 'rgba(184,177,160,0.18)',     border: 'rgba(184,177,160,0.40)' },
   critical:  { color: 'var(--color-accent)', bg: 'rgba(184,57,43,0.12)',         border: 'rgba(184,57,43,0.35)' },
   success:   { color: '#3a6b3a', bg: 'rgba(58,107,58,0.12)',                     border: 'rgba(58,107,58,0.30)' },
-  mock:      { color: '#7a5a8a', bg: 'rgba(122,90,138,0.10)',                    border: 'rgba(122,90,138,0.35)' },
 };
 
 export function Chip({

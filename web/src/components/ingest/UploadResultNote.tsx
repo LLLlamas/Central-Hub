@@ -1,8 +1,7 @@
 import { Icon } from '@/components/ui/Icon';
-import { MockTag } from '@/components/provenance/MockTag';
 import { cn } from '@/lib/cn';
 
-/** Inline feedback for a scratch-mode upload attempt. The `onDismiss`-less
+/** Inline feedback for an upload attempt. The `onDismiss`-less
  *  shape callers hold in state before rendering. */
 export interface UploadNote {
   tone: 'success' | 'warning';
@@ -14,7 +13,7 @@ interface UploadResultNoteProps extends UploadNote {
   onDismiss?: () => void;
 }
 
-/** Inline feedback after a scratch-mode upload attempt. */
+/** Inline feedback after an upload attempt. */
 export function UploadResultNote({ tone, title, detail, onDismiss }: UploadResultNoteProps) {
   const success = tone === 'success';
   return (
@@ -34,7 +33,6 @@ export function UploadResultNote({ tone, title, detail, onDismiss }: UploadResul
       <div className="flex-1 min-w-0">
         <div className="text-[12.5px] font-semibold text-[var(--color-ink)] inline-flex items-center gap-1">
           {title}
-          <MockTag source="scratch_tour" field="Imported from a sample file" />
         </div>
         <div className="text-[12px] text-[var(--color-ink-3)] leading-snug mt-0.5">{detail}</div>
       </div>
