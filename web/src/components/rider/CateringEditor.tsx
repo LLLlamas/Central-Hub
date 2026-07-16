@@ -1,8 +1,11 @@
+import { useMemo, useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { EditableText, EditableSelect } from '@/components/ui/EditableText';
 import { ExcludedBrandExplain } from '@/components/ExplainTag';
 import { Label, TagListEditor, RemoveRowButton } from '@/components/rider/shared';
+import { aggregateDietaryTags } from '@/lib/dietary';
 import { cn } from '@/lib/cn';
 import type { CateringSpec, CateringMenu, CateringItem, MenuTime } from '@/types';
 
@@ -23,6 +26,53 @@ const MENU_TIME_OPTIONS: { value: MenuTime; label: string }[] = [
 
 const emptyItem = (): CateringItem => ({ item: '', qty: '' });
 const emptyMenu = (): CateringMenu => ({ room: '', menuTime: 'show', items: [emptyItem()] });
+
+const MENU_TIME_LABELS: Record<MenuTime, string> = {
+  load_in: 'Load-in',
+  soundcheck: 'Soundcheck',
+  show: 'Show',
+  post_show: 'Post-show',
+};
+
+// Cross-menu dietary/allergy rollup — "gluten-free: 2 items", drill into which.
+function DietarySummary({ menus }: { menus: CateringMenu[] }) {
+  const [openTag, setOpenTag] = useState<string | null>(null);
+  const rollup = useMemo(() => aggregateDietaryTags(menus), [menus]);
+
+  if (rollup.length === 0) return null;
+
+  return (
+    <div className="border border-[var(--color-rule-soft)] rounded-[3px] p-3 bg-[var(--color-paper-2)]/30">
+      <div className="eyebrow mb-2">Dietary &amp; allergy summary — across all menus</div>
+      <div className="flex flex-wrap gap-1.5">
+        {rollup.map((entry) => (
+          <button
+            key={entry.tag}
+            type="button"
+            onClick={() => setOpenTag((t) => (t === entry.tag ? null : entry.tag))}
+            className="rounded-[3px]"
+          >
+            <Chip tone={openTag === entry.tag ? 'critical' : 'neutral'} variant={openTag === entry.tag ? 'solid' : 'soft'}>
+              {entry.tag} · {entry.count}
+            </Chip>
+          </button>
+        ))}
+      </div>
+      {openTag && (
+        <ul className="mt-2.5 pt-2.5 border-t border-[var(--color-rule-soft)] space-y-1">
+          {rollup
+            .find((e) => e.tag === openTag)!
+            .items.map((it, i) => (
+              <li key={i} className="text-[11.5px] text-[var(--color-ink-2)]">
+                <span className="font-medium">{it.itemName}</span>
+                <span className="text-[var(--color-ink-3)]"> — {it.room} · {MENU_TIME_LABELS[it.menuTime]}</span>
+              </li>
+            ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export function CateringEditor({
   catering,
@@ -65,6 +115,8 @@ export function CateringEditor({
       <p className="text-[12.5px] text-[var(--color-ink-3)] leading-relaxed">
         {menus.length} menu{menus.length === 1 ? '' : 's'} by room × time-of-day. Excluded brands are hard constraints — as important as what's requested.
       </p>
+
+      <DietarySummary menus={menus} />
 
       {menus.map((menu, mi) => (
         <div key={mi} className="border border-[var(--color-rule-soft)] rounded-[3px] p-3">

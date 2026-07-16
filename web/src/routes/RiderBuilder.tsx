@@ -28,6 +28,7 @@ import { backend } from '@/lib/backend';
 import { FLIGHTS_ENABLED } from '@/lib/features';
 import { cn } from '@/lib/cn';
 import { sectionKey, RIDER_TOC_TEMPLATE } from '@/lib/riderBuilder';
+import { diffRiderVersions } from '@/lib/riderDiff';
 import { BacklineEditor } from '@/components/rider/BacklineEditor';
 import { LodgingEditor } from '@/components/rider/LodgingEditor';
 import { CateringEditor } from '@/components/rider/CateringEditor';
@@ -115,9 +116,102 @@ function collectPlots(imp: RiderImport): Array<{ sectionKey: string; section: Ri
 // Rider version history — prior + active rider revisions. Only renders when more
 // than one rider has been imported. Lets the user re-open any version's PDF and
 // promote a prior revision back to active (riderImports[0]).
+function CompareVersionsModal({ versions, onClose }: { versions: RiderImport[]; onClose: () => void }) {
+  const label = (ri: RiderImport, i: number) =>
+    `${i === 0 ? 'Active — ' : ''}v${ri.revision} · ${ri.uploadedAt.replace('T', ' ')}${ri.filename ? ` · ${ri.filename}` : ''}`;
+  const [aId, setAId] = useState(versions[1]?.id ?? versions[0].id);
+  const [bId, setBId] = useState(versions[0].id);
+  const a = versions.find((v) => v.id === aId) ?? versions[0];
+  const b = versions.find((v) => v.id === bId) ?? versions[0];
+  const diff = diffRiderVersions(a, b);
+  const noChanges = diff.addedSections.length === 0 && diff.removedSections.length === 0 && diff.sectionDiffs.length === 0;
+
+  return (
+    <Modal open title="Compare rider versions" eyebrow="Version diff" onClose={onClose} size="lg">
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div>
+          <label className="block text-[10px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-4)] mb-1">From</label>
+          <select
+            value={aId}
+            onChange={(e) => setAId(e.target.value)}
+            className="w-full text-[12.5px] rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] px-2 py-1.5"
+          >
+            {versions.map((v, i) => (
+              <option key={v.id} value={v.id}>{label(v, i)}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-4)] mb-1">To</label>
+          <select
+            value={bId}
+            onChange={(e) => setBId(e.target.value)}
+            className="w-full text-[12.5px] rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] px-2 py-1.5"
+          >
+            {versions.map((v, i) => (
+              <option key={v.id} value={v.id}>{label(v, i)}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {a.id === b.id ? (
+        <p className="text-[12.5px] text-[var(--color-ink-3)]">Pick two different versions to compare.</p>
+      ) : noChanges ? (
+        <p className="text-[12.5px] text-[var(--color-ink-3)]">No differences between these versions.</p>
+      ) : (
+        <div className="space-y-4 max-h-[55vh] overflow-y-auto">
+          {diff.addedSections.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 items-center">
+              <span className="text-[10px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-4)]">Added</span>
+              {diff.addedSections.map((s) => (
+                <Chip key={s.type} tone="success" size="sm">{s.label}</Chip>
+              ))}
+            </div>
+          )}
+          {diff.removedSections.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 items-center">
+              <span className="text-[10px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-4)]">Removed</span>
+              {diff.removedSections.map((s) => (
+                <Chip key={s.type} tone="critical" size="sm">{s.label}</Chip>
+              ))}
+            </div>
+          )}
+          {diff.sectionDiffs.map((sd) => (
+            <div key={sd.type}>
+              <div className="text-[12.5px] font-semibold text-[var(--color-ink)] mb-1.5">{sd.label}</div>
+              <table className="w-full text-[11.5px]">
+                <thead>
+                  <tr className="text-left text-[10px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-4)]">
+                    <th className="pb-1 pr-3 w-[35%]">Row</th>
+                    <th className="pb-1 pr-3 w-[15%]">Field</th>
+                    <th className="pb-1 pr-3">Before</th>
+                    <th className="pb-1">After</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sd.changes.map((ch, ci) => (
+                    <tr key={ci} className="border-t border-[var(--color-rule-soft)]">
+                      <td className="py-1 pr-3 text-[var(--color-ink-3)] truncate max-w-[160px]">{ch.rowLabel}</td>
+                      <td className="py-1 pr-3 font-mono text-[10px] text-[var(--color-ink-4)] uppercase">{ch.field}</td>
+                      <td className="py-1 pr-3 line-through text-[var(--color-ink-4)] max-w-[180px] truncate">{ch.before || '—'}</td>
+                      <td className="py-1 text-[var(--color-ink)] font-semibold max-w-[180px] truncate">{ch.after || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function RiderVersionHistory() {
   const { tour, setActiveRider } = useApp();
   const { openPdf } = usePdfViewer();
+  const [showCompare, setShowCompare] = useState(false);
   if (tour.riderImports.length <= 1) return null;
 
   return (
@@ -128,6 +222,11 @@ function RiderVersionHistory() {
         defaultOpen={false}
         badge={<Chip tone="neutral" size="sm">{tour.riderImports.length} versions</Chip>}
       >
+        <div className="flex justify-end mb-2">
+          <Button size="sm" variant="outline" onClick={() => setShowCompare(true)}>
+            Compare versions
+          </Button>
+        </div>
         <ul className="divide-y divide-[var(--color-rule-soft)]">
           {tour.riderImports.map((ri, i) => (
             <li key={ri.id} className="flex items-center justify-between gap-3 py-3">
@@ -155,6 +254,9 @@ function RiderVersionHistory() {
           ))}
         </ul>
       </CollapsibleSection>
+      {showCompare && (
+        <CompareVersionsModal versions={tour.riderImports} onClose={() => setShowCompare(false)} />
+      )}
     </div>
   );
 }

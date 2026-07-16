@@ -17,6 +17,8 @@ Reference docs for Central-Hub. The working map for day-to-day development is th
 
 ## Audits
 
-- [audits/2026-07-11-demo-readiness.md](audits/2026-07-11-demo-readiness.md) — pre-client-demo audit: data-consistency, edge cases, UX.
-- [audits/2026-05-31-gap-analysis.md](audits/2026-05-31-gap-analysis.md) — feature gap analysis vs the spec (snapshot at commit ed3f268; several items have since shipped).
-- [audits/2026-05-31-security-audits.md](audits/2026-05-31-security-audits.md) — shared-tour privacy audit + submissions/RLS audit.
+Stale snapshots, predate the multi-tour/rider-authoring/venue-negotiation overhaul (commit 5a49fb6) — kept for historical reference only. Root [CLAUDE.md](../CLAUDE.md)'s "What's still on the gap list" is the current source of truth for open work.
+
+- [outdated/audits/2026-07-11-demo-readiness.md](outdated/audits/2026-07-11-demo-readiness.md) — pre-client-demo audit: data-consistency, edge cases, UX.
+- [outdated/audits/2026-05-31-gap-analysis.md](outdated/audits/2026-05-31-gap-analysis.md) — feature gap analysis vs the spec (snapshot at commit ed3f268; several items have since shipped).
+- [outdated/audits/2026-05-31-security-audits.md](outdated/audits/2026-05-31-security-audits.md) — shared-tour privacy audit + submissions/RLS audit.

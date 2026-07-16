@@ -425,15 +425,15 @@ Resolved since the last pass (verified against current code, not assumed):
 - **Inline editing for nested rider sections** — Backline, Lodging, and Catering now have real inline editors (`components/rider/*Editor.tsx`); every rider section type is correctable in-app.
 - **Personnel edits** — `addTourPerson`/`updateTourPerson`/`removeTourPerson`/`addGroup` ship with a full CRUD UI on `/t/:tourId/personnel`, following the same pending/approval-free direct-write pattern as schedule-item content edits.
 - **Flight passenger matching** — moot for now: flights are de-scoped behind `FLIGHTS_ENABLED = false`. The matching code + `flightPassengerResolutions` overlay still exist and would need no changes if the flag flips back on.
+- **Diff between rider versions** — `RiderVersionHistory` now shows a field-by-field diff between two versions, not just "View PDF" / "Make active" per entry.
+- **Catering allergy/diet aggregator + hotel special-requests tracking** — cross-menu `dietaryTags` aggregation view shipped, alongside per-room hotel special-requests tracking (snacks/beverages/amenities).
+- **Rider-to-gear sync for an authored rider** — the manager-triggered "sync gear from rider" action now derives gear from authored content; gear seeding is no longer skipped for `origin: 'authored'` riders.
 
 Still open:
 - **i18n posture (near-term).** The rider section model still respects the source-language TOC: `RiderSection.title` carries the rider's verbatim heading ("Hospedaje", "Iluminación y Lightplot") for an *imported* rider; an *authored* rider's titles are always the English `SECTION_LABELS` fallback (now defined in `routes/RiderBuilder.tsx`, moved from the old `RiderIngest.tsx`) since there's no source-language heading to draw from. We do NOT translate UI chrome strings today; the eventual plan is separate Spanish + English locales (chrome translates, rider content stays verbatim in its source language). Leave anything sourced from `RiderSection.title`/`.freeText` alone when wiring locale switching.
 - **PDF text highlighting** — the viewer + jump-to-page are done, but auto-highlighting the cited text is blocked on a data issue (Spanish PDF vs. English citations). Plan + fix in `docs/pdf.md`.
-- **Diff between rider versions** — `RiderVersionHistory` (in `RiderBuilder.tsx`) lists versions with "View PDF" / "Make active" per entry, but there's still no field-by-field diff between two versions.
-- **Catering allergy/diet aggregator** — `CateringItem.dietaryTags` exists per-item; no cross-menu aggregation view.
 - **Promoter contact card as a first-class entity** — promoter fields live on `Venue` (`data/venues.ts`) but there's no dedicated promoter-contact surface; `AdvanceDetail`/`Advance` don't currently surface promoter info at all, only venue name/city.
-- **Timezone-aware times throughout** — still untouched; no `timezone`/`timeZone` handling anywhere in the codebase.
-- **Rider-to-gear sync for an authored rider** — gear seeding is skipped entirely for `origin: 'authored'` riders (see "Data modes" above); the planned manager-triggered "sync gear from rider" action for authored content is unbuilt.
-- **Real multi-tour on the supabase backend** — `MyShows.tsx` redirects straight into one membership tour there; the tours-index/per-tour-storage model is `local`-only today.
+- **Timezone-aware times throughout (next up)** — still untouched; no `timezone`/`timeZone` handling anywhere in the codebase.
+- **Real multi-tour on the supabase backend (next up)** — `MyShows.tsx` redirects straight into one membership tour there; the tours-index/per-tour-storage model is `local`-only today.
 
 See `docs/potential-implementation.md` §9 for the original full backlog (predates this overhaul; treat as historical context, not a current TODO list).

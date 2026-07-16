@@ -342,11 +342,19 @@ interface AppState {
   /** Single "last updated" stamp for the whole gear list — bumped by every
    *  gear mutator, mirroring how `getDayLastUpdated` tracks one stamp per day. */
   gearUpdatedAt: UpdateStamp | undefined;
+  /** Manager-triggered gear derivation for an authored rider (no-op if the
+   *  active rider isn't `origin: 'authored'`) — see `syncGearFromAuthoredRider`. */
+  syncGearFromAuthoredRider: () => Promise<void>;
 
   // Inline cost edits for Travel + Hotel records — surfaced on the
   // Supplies & Costs page. Mutate the tour directly.
   updateHotelCost: (id: ID, patch: Partial<Pick<Hotel, 'nightlyRate' | 'currency' | 'taxRate'>>) => void;
   updateTravelCost: (id: ID, patch: Partial<Pick<Travel, 'costPerPassenger' | 'currency'>>) => void;
+  updateHotelOccupant: (
+    hotelId: ID,
+    tourPersonId: ID,
+    patch: Partial<Pick<Hotel['occupants'][number], 'roomNumber' | 'roomType' | 'specialRequests'>>,
+  ) => void;
 
   // ── Document submissions (Milestone 2) ──
   // Crew submit any document for manager review; it lands as `pending` and only
@@ -2546,6 +2554,18 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
     [stampGear],
   );
 
+  // Manager-triggered re-derive for an authored rider (no PDF, so the
+  // automatic seed effect above skips it) — walks the rider's own Backline/
+  // Input List/Catering section content instead of the hardcoded fixture text.
+  const syncGearFromAuthoredRider = useCallback(async () => {
+    const ri = tour.riderImports[0];
+    if (!ri || ri.origin !== 'authored') return;
+    const { buildGearItemsFromAuthoredRider, mergeGearItems } = await import('@/data/gearFixture');
+    const fresh = buildGearItemsFromAuthoredRider(ri);
+    setGearItems((cur) => (cur.length === 0 ? fresh : mergeGearItems(cur, fresh)));
+    stampGear();
+  }, [tour.riderImports, stampGear]);
+
   // ---- Document submissions (Milestone 2) ---------------------------------
   // On `local`: the overlay array is the source of truth; file bytes go to the
   // IndexedDB documents store via savePdf('submissions', id). On `supabase`:
@@ -2708,6 +2728,30 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
       updateScratchTour((t) => ({
         ...t,
         travel: t.travel.map((tr) => (tr.id === travelId ? { ...tr, ...patch } : tr)),
+      }));
+      stampGear();
+    },
+    [updateScratchTour, stampGear],
+  );
+
+  const updateHotelOccupant = useCallback(
+    (
+      hotelId: ID,
+      tourPersonId: ID,
+      patch: Partial<Pick<Hotel['occupants'][number], 'roomNumber' | 'roomType' | 'specialRequests'>>,
+    ) => {
+      updateScratchTour((t) => ({
+        ...t,
+        hotels: t.hotels.map((h) =>
+          h.id === hotelId
+            ? {
+                ...h,
+                occupants: h.occupants.map((o) =>
+                  o.tourPersonId === tourPersonId ? { ...o, ...patch } : o,
+                ),
+              }
+            : h,
+        ),
       }));
       stampGear();
     },
@@ -3067,8 +3111,10 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
       addGearItem,
       deleteGearItem,
       gearUpdatedAt,
+      syncGearFromAuthoredRider,
       updateHotelCost,
       updateTravelCost,
+      updateHotelOccupant,
       submissions,
       refreshSubmissions,
       proposeSubmission,
@@ -3077,7 +3123,7 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
       loadSubmissionFileUrl,
       addDocument,
     }),
-    [tour, booting, user, userKey, allUsers, resetScratchTour, renameTour, applyRouteToScratch, addRiderImportToScratch, setActiveRider, createRiderDraft, addRiderSection, removeRiderSection, moveRiderSection, renameRiderSection, updateRiderMeta, addStageMedia, removeStageMedia, addFlightImportToScratch, commitFlightImportToScratch, editFlightImportPassenger, removeFlightImportPassenger, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, sectionEditHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, visibilityEditHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory, scheduleItemEditHistory, addTourPerson, updateTourPerson, addGroup, showAdvances, negotiations, sendRiderToVenue, recordVenueResponse, reconcileItem, reopenNegotiation, markShowConfirmed, getShowAdvance, getNegotiationThread, gearItems, updateGearItem, addGearItem, deleteGearItem, gearUpdatedAt, updateHotelCost, updateTravelCost, submissions, refreshSubmissions, proposeSubmission, approveSubmission, rejectSubmission, loadSubmissionFileUrl, addDocument],
+    [tour, booting, user, userKey, allUsers, resetScratchTour, renameTour, applyRouteToScratch, addRiderImportToScratch, setActiveRider, createRiderDraft, addRiderSection, removeRiderSection, moveRiderSection, renameRiderSection, updateRiderMeta, addStageMedia, removeStageMedia, addFlightImportToScratch, commitFlightImportToScratch, editFlightImportPassenger, removeFlightImportPassenger, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, sectionEditHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, visibilityEditHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory, scheduleItemEditHistory, addTourPerson, updateTourPerson, addGroup, showAdvances, negotiations, sendRiderToVenue, recordVenueResponse, reconcileItem, reopenNegotiation, markShowConfirmed, getShowAdvance, getNegotiationThread, gearItems, updateGearItem, addGearItem, deleteGearItem, gearUpdatedAt, syncGearFromAuthoredRider, updateHotelCost, updateTravelCost, updateHotelOccupant, submissions, refreshSubmissions, proposeSubmission, approveSubmission, rejectSubmission, loadSubmissionFileUrl, addDocument],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

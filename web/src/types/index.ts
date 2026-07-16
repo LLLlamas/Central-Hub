@@ -305,7 +305,7 @@ export interface Hotel {
   checkIn?: HHMM;
   checkOut?: HHMM;
   nights?: number;
-  occupants: { tourPersonId: ID; roomNumber?: string; roomType?: string }[];
+  occupants: { tourPersonId: ID; roomNumber?: string; roomType?: string; specialRequests?: string[] }[];
   visibility: Visibility;
   sensitive: boolean;
   /** Nightly rate per room, in `currency`. Seeded from the booking confirmation

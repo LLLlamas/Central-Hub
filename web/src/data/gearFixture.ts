@@ -2,7 +2,7 @@
 // Derived from: §6 Input-Output, §9 Backline, §13 Camerinos, §14 Catering.
 // Call buildRiderGearItems() to get a fresh list; each call returns new IDs.
 
-import type { GearItem, GearCategory, RiderSectionType } from '@/types';
+import type { GearItem, GearCategory, RiderImport, RiderSection, RiderSectionType } from '@/types';
 
 type ItemSpec = Omit<GearItem, 'id'>;
 
@@ -165,6 +165,93 @@ export function buildRiderGearItems(): GearItem[] {
     ...s,
     id: `gear_rider_${i + 1}`,
   }));
+}
+
+function authoredSpec(
+  name: string,
+  quantity: number,
+  category: GearCategory,
+  section: RiderSection,
+  opts: Partial<Omit<ItemSpec, 'name' | 'quantity' | 'category'>> = {},
+): ItemSpec {
+  return {
+    name,
+    quantity,
+    category,
+    status: 'needed',
+    fromRider: true,
+    riderSection: section.type,
+    ...opts,
+  };
+}
+
+function backlineSpecs(section: RiderSection): ItemSpec[] {
+  const bl = section.backline;
+  if (!bl) return [];
+  const specs: ItemSpec[] = [];
+  for (const p of bl.drums?.pieces ?? []) {
+    specs.push(authoredSpec(`${p.type} — ${p.size}`, 1, 'backline_drums', section, { notes: p.notes }));
+  }
+  for (const h of bl.drums?.hardware ?? []) {
+    specs.push(authoredSpec(h.item, h.qty, 'backline_drums', section, {
+      notes: [h.preferred?.length ? `Preferred: ${h.preferred.join(', ')}` : undefined, h.excluded?.length ? `Excluded: ${h.excluded.join(', ')}` : undefined, h.notes]
+        .filter(Boolean).join(' — ') || undefined,
+    }));
+  }
+  for (const b of bl.bass?.options ?? []) {
+    specs.push(authoredSpec(`Bass amp option ${b.optionNumber} — ${b.head} + ${b.cab}`, 1, 'backline_bass', section));
+  }
+  for (const g of bl.guitar ?? []) {
+    specs.push(authoredSpec(g.item, g.qty, 'backline_guitar', section, { notes: g.notes }));
+  }
+  for (const m of bl.miscellaneous ?? []) {
+    specs.push(authoredSpec(m.item, m.qty, 'backline_other', section, {
+      notes: [m.brandPreferred ? `Preferred: ${m.brandPreferred}` : undefined, m.notes].filter(Boolean).join(' — ') || undefined,
+    }));
+  }
+  if (bl.videoScreen) {
+    const v = bl.videoScreen;
+    specs.push(authoredSpec(`${v.type} — ${v.dimensions}`, 1, 'video', section, {
+      notes: `${v.aspectRatio}, min ${v.resolutionMin} (preferred ${v.resolutionPreferred})`,
+    }));
+  }
+  return specs;
+}
+
+function inputListSpecs(section: RiderSection): ItemSpec[] {
+  return (section.inputList ?? []).map((ch) =>
+    authoredSpec(`Ch ${ch.channelNumber} — ${ch.source}`, 1, 'audio_mics', section, {
+      notes: [ch.micOrDi, ch.notes].filter(Boolean).join(' — ') || undefined,
+    }),
+  );
+}
+
+function cateringSpecs(section: RiderSection): ItemSpec[] {
+  const menus = section.catering?.menus ?? [];
+  const specs: ItemSpec[] = [];
+  for (const menu of menus) {
+    for (const item of menu.items) {
+      const qty = typeof item.qty === 'number' ? item.qty : Number(item.qty) || 1;
+      specs.push(authoredSpec(item.itemEn ?? item.item, qty, 'catering', section, {
+        unit: item.unit,
+        notes: [menu.room, item.brandPreferred?.length ? `Preferred: ${item.brandPreferred.join(', ')}` : undefined, item.notes]
+          .filter(Boolean).join(' — ') || undefined,
+      }));
+    }
+  }
+  return specs;
+}
+
+// No source PDF for an authored rider, so this reads its structured
+// Backline/Input List/Catering payloads instead of the fixture specs above.
+export function buildGearItemsFromAuthoredRider(rider: RiderImport): GearItem[] {
+  const specs: ItemSpec[] = [];
+  for (const section of rider.sections) {
+    if (section.type === 'backline') specs.push(...backlineSpecs(section));
+    else if (section.type === 'input_list') specs.push(...inputListSpecs(section));
+    else if (section.type === 'catering') specs.push(...cateringSpecs(section));
+  }
+  return specs.map((s, i) => ({ ...s, id: `gear_authored_${i + 1}` }));
 }
 
 /** Smart-merge a fresh rider build with the user's current gear list.

@@ -250,6 +250,14 @@ export const Icon = {
       <path d="M6.5 6l4 2.25-4 2.25z" fill="currentColor" stroke="none" />
     </S>
   ),
+  Refresh: (p: IconProps) => (
+    <S {...p}>
+      <path d="M2.5 8a5.5 5.5 0 0 1 9.4-3.9L13.5 5.5" />
+      <path d="M13.5 8a5.5 5.5 0 0 1-9.4 3.9L2.5 10.5" />
+      <path d="M11 2.5v3h-3" />
+      <path d="M5 13.5v-3h3" />
+    </S>
+  ),
   Link: (p: IconProps) => (
     <S {...p}>
       <rect x="2.2" y="6.2" width="6" height="3.6" rx="1.8" transform="rotate(-45 5.2 8)" />

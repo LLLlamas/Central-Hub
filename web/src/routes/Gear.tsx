@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -13,7 +13,9 @@ import { LastUpdated } from '@/components/LastUpdated';
 import { fmtDate } from '@/lib/format';
 import { matchFixture } from '@/lib/fixtureMatcher';
 import { tourPath } from '@/lib/routing';
-import type { GearCategory, GearItem, GearStatus, GearProvidedBy, Travel, Hotel } from '@/types';
+import { aggregateHotelRequests } from '@/lib/hotelRequests';
+import { TagListEditor } from '@/components/rider/shared';
+import type { GearCategory, GearItem, GearStatus, GearProvidedBy, Travel, Hotel, ID, TourPerson } from '@/types';
 
 // ─── Category metadata ────────────────────────────────────────────────────────
 
@@ -577,11 +579,28 @@ interface HotelCostsSectionProps {
   hotels: Hotel[];
   managerView: boolean;
   onRateChange: (id: string, next: number | undefined) => void;
+  getTourPersonById: (id: ID) => TourPerson | undefined;
+  onOccupantChange: (hotelId: ID, tourPersonId: ID, patch: Partial<Pick<Hotel['occupants'][number], 'roomNumber' | 'roomType' | 'specialRequests'>>) => void;
 }
 
-function HotelCostsSection({ hotels, managerView, onRateChange }: HotelCostsSectionProps) {
+function HotelCostsSection({ hotels, managerView, onRateChange, getTourPersonById, onOccupantChange }: HotelCostsSectionProps) {
   const [open, setOpen] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const { openPdf } = usePdfViewer();
+
+  const toggleExpanded = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const requestsRollup = useMemo(
+    () => aggregateHotelRequests(hotels, (id) => getTourPersonById(id)?.person.name),
+    [hotels, getTourPersonById],
+  );
 
   const sorted = useMemo(() => {
     return [...hotels].sort((a, b) => a.dayId.localeCompare(b.dayId));
@@ -634,14 +653,17 @@ function HotelCostsSection({ hotels, managerView, onRateChange }: HotelCostsSect
                 <th className="py-1.5 px-2 text-[10px] font-semibold text-[var(--color-ink-4)] uppercase tracking-wide w-[120px]">Per room/night</th>
                 <th className="py-1.5 px-2 text-[10px] font-semibold text-[var(--color-ink-4)] uppercase tracking-wide text-right w-[110px]">Total + tax</th>
                 <th className="py-1.5 pl-2 pr-3 w-[80px] text-[10px] font-semibold text-[var(--color-ink-4)] uppercase tracking-wide text-right">Source</th>
+                <th className="py-1.5 pl-2 pr-3 w-[36px]"></th>
               </tr>
             </thead>
             <tbody>
               {sorted.map((h) => {
                 const date = h.dayId.startsWith('day_') ? h.dayId.slice(4) : '';
                 const { sub, tax, total, rooms, nights } = subtotalFor(h);
+                const isOpen = expanded.has(h.id);
                 return (
-                  <tr key={h.id} className="border-b border-[var(--color-rule-soft)] last:border-0 hover:bg-[var(--color-paper-2)] group">
+                  <Fragment key={h.id}>
+                  <tr className="border-b border-[var(--color-rule-soft)] last:border-0 hover:bg-[var(--color-paper-2)] group">
                     <td className="py-2 pl-3 pr-2 text-[12px] font-mono text-[var(--color-ink-2)]">{date ? fmtDate(date, 'EEE MMM d') : '—'}</td>
                     <td className="py-2 px-2">
                       <div className="text-[13px] font-medium text-[var(--color-ink)]">{h.name}</div>
@@ -686,13 +708,92 @@ function HotelCostsSection({ hotels, managerView, onRateChange }: HotelCostsSect
                         <span className="text-[10px] text-[var(--color-ink-4)]">—</span>
                       )}
                     </td>
+                    <td className="py-2 pl-2 pr-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(h.id)}
+                        title="Occupants & special requests"
+                        className="inline-flex items-center gap-1 text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+                      >
+                        <Icon.Users size={13} />
+                        <Icon.Chevron size={10} className={cn('transition-transform', isOpen && 'rotate-90')} />
+                      </button>
+                    </td>
                   </tr>
+                  {isOpen && (
+                    <tr className="border-b border-[var(--color-rule-soft)] last:border-0 bg-[var(--color-paper-2)]/40">
+                      <td colSpan={7} className="px-3 py-3">
+                        <HotelOccupantList
+                          hotel={h}
+                          managerView={managerView}
+                          getTourPersonById={getTourPersonById}
+                          onOccupantChange={onOccupantChange}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
           </table>
         </div>
       )}
+      {requestsRollup.length > 0 && (
+        <div className="border-t border-[var(--color-rule-soft)] px-3 py-2.5">
+          <div className="eyebrow mb-1.5">Special requests — all hotels</div>
+          <ul className="space-y-1">
+            {requestsRollup.map((group) => (
+              <li key={group.hotelId} className="text-[11.5px] text-[var(--color-ink-2)]">
+                <span className="font-semibold text-[var(--color-ink)]">{group.hotelName}</span>
+                {': '}
+                {group.occupants
+                  .map((o) => `${o.personName ?? 'Unknown'} (${o.requests.join(', ')})`)
+                  .join(' · ')}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HotelOccupantList({
+  hotel,
+  managerView,
+  getTourPersonById,
+  onOccupantChange,
+}: {
+  hotel: Hotel;
+  managerView: boolean;
+  getTourPersonById: (id: ID) => TourPerson | undefined;
+  onOccupantChange: (hotelId: ID, tourPersonId: ID, patch: Partial<Pick<Hotel['occupants'][number], 'roomNumber' | 'roomType' | 'specialRequests'>>) => void;
+}) {
+  if (hotel.occupants.length === 0) {
+    return <div className="text-[12px] text-[var(--color-ink-4)]">No occupants on record.</div>;
+  }
+  return (
+    <div className="space-y-2.5">
+      {hotel.occupants.map((o) => {
+        const name = getTourPersonById(o.tourPersonId)?.person.name ?? 'Unknown';
+        return (
+          <div key={o.tourPersonId} className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 text-[12px]">
+            <div className="sm:w-[140px] shrink-0 font-medium text-[var(--color-ink)]">
+              {name}
+              {o.roomNumber && <span className="text-[var(--color-ink-3)] font-normal"> · Rm {o.roomNumber}</span>}
+            </div>
+            <div className="flex-1 min-w-0">
+              <TagListEditor
+                tags={o.specialRequests ?? []}
+                onChange={(v) => onOccupantChange(hotel.id, o.tourPersonId, { specialRequests: v.length ? v : undefined })}
+                placeholder="Add a special request"
+                disabled={!managerView}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -700,7 +801,7 @@ function HotelCostsSection({ hotels, managerView, onRateChange }: HotelCostsSect
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function Gear() {
-  const { gearItems, updateGearItem, addGearItem, deleteGearItem, updateHotelCost, updateTravelCost, tour, user, gearUpdatedAt } = useApp();
+  const { gearItems, updateGearItem, addGearItem, deleteGearItem, updateHotelCost, updateTravelCost, updateHotelOccupant, getTourPersonById, tour, user, gearUpdatedAt, syncGearFromAuthoredRider } = useApp();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<GearCategory | 'all'>('all');
   const [query, setQuery] = useState('');
@@ -714,7 +815,18 @@ export function Gear() {
   const hasTravel = FLIGHTS_ENABLED && tour.travel.length > 0;
   const hasHotels = tour.hotels.length > 0;
   const hasAnything = hasRider || hasTravel || hasHotels;
-  const isAuthoredRiderEmpty = hasRider && tour.riderImports[0]?.origin === 'authored' && gearItems.length === 0;
+  const isAuthoredRider = hasRider && tour.riderImports[0]?.origin === 'authored';
+  const isAuthoredRiderEmpty = isAuthoredRider && gearItems.length === 0;
+  const [syncing, setSyncing] = useState(false);
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      await syncGearFromAuthoredRider();
+    } finally {
+      setSyncing(false);
+    }
+  }
   const gearCopy = {
     emptyDescription: FLIGHTS_ENABLED
       ? 'Every rider item, flight, and hotel in one place — status, estimated costs, and links back to the source documents.'
@@ -846,10 +958,18 @@ export function Gear() {
         }
         actions={
           managerView && hasRider && (
-            <Button variant="primary" onClick={() => setAddModal(true)}>
-              <Icon.Plus size={14} />
-              Add item
-            </Button>
+            <div className="flex gap-2">
+              {isAuthoredRider && (
+                <Button variant="outline" onClick={handleSync} disabled={syncing}>
+                  <Icon.Refresh size={14} />
+                  {syncing ? 'Syncing…' : 'Sync gear from rider'}
+                </Button>
+              )}
+              <Button variant="primary" onClick={() => setAddModal(true)}>
+                <Icon.Plus size={14} />
+                Add item
+              </Button>
+            </div>
           )
         }
       />
@@ -927,6 +1047,8 @@ export function Gear() {
                   hotels={tour.hotels}
                   managerView={managerView}
                   onRateChange={(id, v) => updateHotelCost(id, { nightlyRate: v })}
+                  getTourPersonById={getTourPersonById}
+                  onOccupantChange={updateHotelOccupant}
                 />
               )}
             </div>
@@ -947,8 +1069,14 @@ export function Gear() {
           )}
 
           {isAuthoredRiderEmpty && (
-            <div className="mb-4 px-3 py-2.5 rounded-md bg-[var(--color-paper-2)] border border-[var(--color-rule-soft)] text-[12px] text-[var(--color-ink-3)]">
-              Authored riders don't auto-populate supplies yet — add items manually below.
+            <div className="mb-4 px-3 py-2.5 rounded-md bg-[var(--color-paper-2)] border border-[var(--color-rule-soft)] flex flex-wrap items-center justify-between gap-2 text-[12px] text-[var(--color-ink-3)]">
+              <span>Nothing synced from the rider yet — pull in Backline, Input List, and Catering items, or add items manually below.</span>
+              {managerView && (
+                <Button variant="outline" onClick={handleSync} disabled={syncing}>
+                  <Icon.Refresh size={14} />
+                  {syncing ? 'Syncing…' : 'Sync gear from rider'}
+                </Button>
+              )}
             </div>
           )}
 
