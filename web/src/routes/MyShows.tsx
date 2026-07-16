@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { BACKEND_KIND } from '@/lib/backend';
+import { backend, BACKEND_KIND } from '@/lib/backend';
 import { useAuth } from '@/state/AuthProvider';
 import { useToursIndex } from '@/lib/useToursIndex';
 import { createTourId, saveScratchTour } from '@/lib/scratchStorage';
@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { fmtDate } from '@/lib/format';
 import { tourPath } from '@/lib/routing';
 import { TOUR_STATUS_LABEL } from '@/lib/tourSummary';
-import type { TourSummary, TourSummaryStatus } from '@/types';
+import type { Membership, TourSummary, TourSummaryStatus } from '@/types';
 
 const STATUS_CHIP_TONE: Record<TourSummaryStatus, 'neutral' | 'hold' | 'success' | 'off'> = {
   draft: 'neutral',
@@ -30,19 +30,68 @@ export function MyShows() {
   return <MyShowsList />;
 }
 
-// Supabase carve-out: this backend doesn't yet support multiple tours, so
-// there's nothing to list — resolve the caller's one membership and hop
-// straight into their tour. AuthGate has already ensured membershipStatus is
-// 'active' by the time this mounts, but we still guard on membership being
-// resolved before navigating.
+// Supabase: a caller may hold an active membership in more than one tour.
+// AuthGate has already ensured membershipStatus is 'active' for at least one
+// of them by the time this mounts. The common case (exactly one active
+// membership) keeps the old straight-in redirect; more than one renders a
+// real switcher over Membership[] (not the local tours-index).
 function MyShowsSupabaseRedirect() {
   const { membership, membershipLoading } = useAuth();
+  const [memberships, setMemberships] = useState<Membership[] | null>(null);
 
-  if (membershipLoading || !membership) {
+  useEffect(() => {
+    let cancelled = false;
+    void backend.listMyMemberships?.().then((rows) => {
+      if (!cancelled) setMemberships(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (membershipLoading || !membership || memberships === null) {
     return <LoadingSpinner label="Loading" />;
   }
 
-  return <Navigate to={tourPath(membership.tourId)} replace />;
+  if (memberships.length <= 1) {
+    return <Navigate to={tourPath(membership.tourId)} replace />;
+  }
+
+  return <MembershipSwitcher memberships={memberships} />;
+}
+
+// Tour creation on supabase (who becomes TM/PM of a brand-new shared tour,
+// billing/tenancy) is out of scope here — this only switches between EXISTING
+// active memberships, so there's no "+ New show" on this screen.
+function MembershipSwitcher({ memberships }: { memberships: Membership[] }) {
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Tour Hub"
+        title="My Shows"
+        description="Every tour you're an active member of. Pick one to jump in."
+      />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {memberships.map((m) => (
+          <Link
+            key={m.tourId}
+            to={tourPath(m.tourId)}
+            className="card p-4 hover:bg-[var(--color-paper)]/50 transition-colors block"
+          >
+            <div className="min-w-0">
+              <div className="font-display text-[16px] font-bold text-[var(--color-ink)] truncate">
+                {m.tourName || 'Untitled tour'}
+              </div>
+              {m.artistName && (
+                <div className="text-[12.5px] text-[var(--color-ink-3)] truncate">{m.artistName}</div>
+              )}
+            </div>
+            <div className="mt-3 text-[11.5px] text-[var(--color-ink-3)] capitalize">{m.role}</div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function MyShowsList() {

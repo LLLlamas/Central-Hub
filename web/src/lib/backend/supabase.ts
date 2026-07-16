@@ -132,11 +132,16 @@ function rowToMembership(r: MemberRow): Membership {
 export const supabaseBackend: Backend = {
   kind: 'supabase',
 
-  // Loads the SHARED tour for the caller's active membership, then keeps it
-  // live. The callback may fire with null first (no tour/membership yet) —
-  // AppState seeds a fresh scratch tour on that for a bootstrap manager. Caches
-  // the tour id for tour-scoped storage paths. Realtime is best-effort.
-  subscribeTour(_tourId: ID | null, cb: (tour: Tour | null) => void): Unsub {
+  // Loads the SHARED tour for the given tourId (a caller may now hold ACTIVE
+  // memberships in more than one tour — see listMyMemberships — so the route's
+  // tourId, not "whichever membership sorts first", picks which one loads).
+  // Falls back to the caller's first active membership when no tourId is given
+  // (the bootstrap-manager-creates-the-first-tour case, where the route id and
+  // the not-yet-existing tour id are the same value anyway). The callback may
+  // fire with null first (no tour/membership yet) — AppState seeds a fresh
+  // scratch tour on that for a bootstrap manager. Caches the tour id for
+  // tour-scoped storage paths. Realtime is best-effort.
+  subscribeTour(tourId: ID | null, cb: (tour: Tour | null) => void): Unsub {
     let cancelled = false;
     let channel: { unsubscribe: () => void } | null = null;
 
@@ -147,15 +152,33 @@ export const supabaseBackend: Backend = {
         return;
       }
       const sb = await client();
-      // Find the caller's active membership → its tour_id is the shared tour.
-      const { data: mem } = await sb
-        .from('tour_members')
-        .select('tour_id')
-        .eq('user_id', uid)
-        .eq('status', 'active')
-        .limit(1)
-        .maybeSingle();
-      const tid = (mem?.tour_id as string | undefined) ?? null;
+      let tid: string | null = tourId ?? null;
+      if (tid) {
+        // Confirm the caller is actually an active member of THIS tour before
+        // loading it — a stale/foreign tourId in the URL must not silently
+        // resolve to some other tour the caller happens to belong to.
+        const { data: mem } = await sb
+          .from('tour_members')
+          .select('tour_id')
+          .eq('tour_id', tid)
+          .eq('user_id', uid)
+          .eq('status', 'active')
+          .maybeSingle();
+        if (!mem) tid = null;
+      }
+      if (!tid) {
+        // No tourId given, or the caller isn't an active member of it yet —
+        // fall back to the caller's first active membership (single-tour /
+        // bootstrap path, unchanged from before multi-tour).
+        const { data: mem } = await sb
+          .from('tour_members')
+          .select('tour_id')
+          .eq('user_id', uid)
+          .eq('status', 'active')
+          .limit(1)
+          .maybeSingle();
+        tid = (mem?.tour_id as string | undefined) ?? null;
+      }
       activeTourId = tid;
       if (!tid) {
         // No active membership yet — a bootstrap manager about to seed the tour,
@@ -329,6 +352,34 @@ export const supabaseBackend: Backend = {
     const pending = rows.find((r) => r.status === 'pending');
     const pick = active ?? pending ?? rows[0];
     return rowToMembership(pick);
+  },
+
+  // Every ACTIVE membership the caller holds, across every tour — the data
+  // source for the My Shows switcher. `tour_members.tour_id` isn't a DB foreign
+  // key into `tours` (both are plain text ids), so this is two round-trips
+  // rather than a PostgREST embed: memberships first, then the matching tours
+  // (RLS already restricts that second read to tours the caller can see).
+  async listMyMemberships(): Promise<Membership[]> {
+    const uid = await currentUid();
+    if (!uid) return [];
+    const sb = await client();
+    const { data: memberRows } = await sb
+      .from('tour_members')
+      .select('*')
+      .eq('user_id', uid)
+      .eq('status', 'active')
+      .order('joined_at', { ascending: true });
+    const rows = (memberRows ?? []) as MemberRow[];
+    if (rows.length === 0) return [];
+    const tourIds = Array.from(new Set(rows.map((r) => r.tour_id)));
+    const { data: tourRows } = await sb.from('tours').select('id, data').in('id', tourIds);
+    const tourById = new Map(
+      ((tourRows ?? []) as { id: string; data: Tour }[]).map((t) => [t.id, t.data]),
+    );
+    return rows.map((r) => {
+      const t = tourById.get(r.tour_id);
+      return { ...rowToMembership(r), tourName: t?.name ?? '', artistName: t?.artistName ?? '' };
+    });
   },
 
   async listMembers(tourId: ID): Promise<Membership[]> {

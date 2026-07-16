@@ -271,10 +271,19 @@ contribute documents without being able to silently change the tour:
 - Verified: `typecheck` clean · `npm test` 89/89 · `build` succeeds.
 - *Build-validated only* — run `0003_submissions.sql` + its storage policies (§8) then test live.
 
+**Multi-tour switching — DONE & build-validated (this milestone).** A caller can
+now hold an active membership in more than one tour and switch between them
+from My Shows; see "Multi-tour on supabase" below for the full detail. No
+migration file — `tour_members`'s existing `(tour_id, email)` PK already
+supported it. Tour *creation* on supabase stays out of scope (unchanged).
+Verified: `typecheck` clean · `npx vitest run` 193/193.
+
 **Still to do:**
 - **Run** `0002_members.sql` + `0003_submissions.sql` + the bootstrap seed (§8)
   against the live project; set the tour-scoped + submission storage RLS;
-  smoke-test the role-gate + submission approve/reject end to end.
+  smoke-test the role-gate + submission approve/reject end to end, and (new)
+  seed a second `tour_members` row for one email across two tour ids to
+  exercise the switcher against a live project.
 - **PWA** (`vite-plugin-pwa` + manifest/icons) for "Add to Home Screen".
 - **Phase B** — server-side per-row privacy: run the decomposed `migrations/0001_init.sql`,
   switch the backend to assemble from typed tables + realtime, RLS-enforced ABAC.
@@ -631,7 +640,9 @@ byte-for-byte unchanged** — every supabase behavior is gated on
 ### Shared tour + role-gated membership (`tour_members`)
 
 The supabase model is **one shared tour per tour**, set up by the TM/PM, that crew
-join and view filtered to their role. Implemented in `0002_members.sql`:
+join and view filtered to their role — but a caller can hold an **active
+membership in more than one tour** and switch between them (see "Multi-tour on
+supabase" below). Implemented in `0002_members.sql`:
 - **`tour_members`** (PK `(tour_id, email)`) carries `role`, `status`
   (`pending|active|revoked`), `group_id`, `tour_person_id`, `requested_group_id`,
   `nudged_at`. **Email-seedable**: a manager grants access by email before the
@@ -670,6 +681,37 @@ and `lib/visibility.ts` hides parts in the UI, so a determined member could read
 hidden fields via devtools. Safe for a **trusted-crew demo**. Before untrusted
 members, do the Phase B per-row `readable_by` RLS decomposition already drafted in
 `supabase/migrations/0001_init.sql`.
+
+### Multi-tour on supabase
+
+**No schema change was needed.** `tour_members`'s primary key is `(tour_id,
+email)`, not `email` alone — one email/uid was already able to hold rows in
+several tours; the "one membership tour" behavior was purely a client-side
+assumption (three call sites), now removed:
+- `Backend.listMyMemberships()` (`lib/backend/supabase.ts`) — every ACTIVE
+  membership row for the caller across all tours (two round-trips: `tour_members`
+  by `user_id`, then `tours` by the resulting ids for `name`/`artistName` — no
+  FK/embed since `tour_id` is a plain text column, not a foreign key into
+  `tours`). Returned `Membership[]` carries the tour's `name`/`artistName` in
+  two membership-only fields (`tourName`/`artistName`) so the switcher card
+  doesn't need a second fetch.
+- `supabaseBackend.subscribeTour(tourId, cb)` previously **ignored its `tourId`
+  argument** and always loaded "whichever active membership sorts first" —
+  harmless when a caller had exactly one, wrong the moment they had two. It now
+  confirms the caller is an active member of the *specific* `tourId` passed in
+  (falling back to "first active membership" only when `tourId` is null/foreign,
+  i.e. the original bootstrap-creates-the-first-tour path).
+- `routes/MyShows.tsx`'s `MyShowsSupabaseRedirect` — exactly one active
+  membership still redirects straight in (today's fast path, unchanged);
+  more than one renders `MembershipSwitcher`, a card list built from
+  `Membership[]` (adapted from `MyShowsList`'s card pattern, not `TourSummary[]`
+  / `useToursIndex()` — that index is `local`-only).
+
+**Deliberately out of scope:** creating a brand-new shared tour on supabase
+(who becomes its TM/PM, billing/tenancy) — `MembershipSwitcher` only switches
+between tours the caller is already an active member of; there is no "+ New
+show" there. A manager still adds tours (and grants membership into them) via
+direct `tour_members` seeding, same as today's bootstrap.
 
 - **AppState wiring:** boot/persist effects route through `backend`. On `local`,
   the synchronous `useState` initializers read localStorage as before. On

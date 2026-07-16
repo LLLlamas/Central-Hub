@@ -32,6 +32,7 @@ export const VENUE_DIRECTORY: Record<string, Venue> = {
     housePM: 'Ricardo Núñez',
     housePMPhone: '+52 55 9138 1380',
     stageDoor: 'Calle Tennyson · service entrance B',
+    timezone: 'America/Mexico_City',
   },
   v_auditorio_banamex: {
     name: 'Arena Monterrey',
@@ -49,6 +50,7 @@ export const VENUE_DIRECTORY: Record<string, Venue> = {
     housePM: 'Diego Tamez',
     housePMPhone: '+52 81 8369 1190',
     stageDoor: 'Loading dock — south side',
+    timezone: 'America/Monterrey',
   },
   v_auditorio_telmex: {
     name: 'Auditorio Telmex',
@@ -66,6 +68,7 @@ export const VENUE_DIRECTORY: Record<string, Venue> = {
     housePM: 'Hugo Salazar',
     housePMPhone: '+52 33 3818 0690',
     stageDoor: 'Acceso producción — gate C',
+    timezone: 'America/Mexico_City',
   },
   v_greek: {
     name: 'Greek Theatre',
@@ -84,6 +87,7 @@ export const VENUE_DIRECTORY: Record<string, Venue> = {
     housePM: 'Marcus O’Hara',
     housePMPhone: '+1 323 665 5860',
     stageDoor: 'Vermont Canyon Rd · production gate',
+    timezone: 'America/Los_Angeles',
   },
   v_fox: {
     name: 'Fox Theater',
@@ -101,6 +105,7 @@ export const VENUE_DIRECTORY: Record<string, Venue> = {
     housePM: 'Jenna Park',
     housePMPhone: '+1 510 302 2255',
     stageDoor: '19th St entrance · loading dock',
+    timezone: 'America/Los_Angeles',
   },
 };
 

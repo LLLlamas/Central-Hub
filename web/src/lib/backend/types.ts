@@ -47,6 +47,8 @@ export interface Backend {
   claimMembership?(): Promise<Membership | null>;
   /** The caller's own membership for the active tour (drives the role-gate). */
   getMyMembership?(): Promise<Membership | null>;
+  /** Every ACTIVE tour membership the caller holds, each carrying tourName/artistName for a My Shows card. */
+  listMyMemberships?(): Promise<Membership[]>;
   /** Full roster (active + pending) for a tour — manager-only at the DB layer. */
   listMembers?(tourId: ID): Promise<Membership[]>;
   /** Assign role + group (+ optional tags / tourPersonId) to a member. */

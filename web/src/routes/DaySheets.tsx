@@ -15,9 +15,10 @@ import { LobbyCallLadder } from '@/components/LobbyCallLadder';
 import { LastUpdated } from '@/components/LastUpdated';
 import { getVenue } from '@/data/venues';
 import type { RealSourceKey } from '@/data/realSources';
-import type { Day, ScheduleItem, ScheduleItemType, ScheduleItemPatch, ScheduleItemEditRecord, UpdateStamp, DayLockRecord, CurrentUser } from '@/types';
+import type { Day, ScheduleItem, ScheduleItemType, ScheduleItemPatch, ScheduleItemEditRecord, UpdateStamp, DayLockRecord, CurrentUser, Travel } from '@/types';
 import { isValidHHMM } from '@/lib/time';
 import { FLIGHTS_ENABLED } from '@/lib/features';
+import { resolveCityTimezone, formatTimezoneDelta } from '@/lib/timezone';
 import {
   fmtFullDate,
   fmtDate,
@@ -504,6 +505,9 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
                 </a>
               )}
             </div>
+            {venueTzDeltaLabel(venue, day) && (
+              <div className="mt-2 text-[11.5px] text-[var(--color-ink-3)]">{venueTzDeltaLabel(venue, day)}</div>
+            )}
           </section>
         )}
 
@@ -536,6 +540,11 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
                 <li key={t.id} className="text-[13px]">
                   <span className="font-mono text-[15px] text-[var(--color-day-travel)]">{travelModeIcon(t.mode)}</span>{' '}
                   <span className="font-semibold">{travelModeLabel(t.mode)}</span> {t.from} {t.departTime} - {t.to} {t.arriveTime}
+                  {travelTzDeltaLabel(t, day) && (
+                    <Chip tone="travel" variant="outline" size="sm" className="ml-1.5 normal-case">
+                      {t.from} → {t.to} · {travelTzDeltaLabel(t, day)}
+                    </Chip>
+                  )}
                 </li>
               ))}
             </ul>
@@ -675,6 +684,7 @@ function DaySheet({ day, mode, viewAsUser }: { day: Day; mode: Mode; viewAsUser?
           <Fact label="Tour day" value={`${tour.days.findIndex((d) => d.id === day.id) + 1} / ${tour.days.length}`} />
           {day.weather && <Fact label="Weather" value={`${day.weather.conditions} - ${day.weather.low}/${day.weather.high}C`} />}
           {day.sunrise && <Fact label="Sun" value={`${day.sunrise} / ${day.sunset}`} />}
+          {venueTzDeltaLabel(venue, day) && <Fact label="Local time" value={venueTzDeltaLabel(venue, day)} />}
           <Fact
             label="Items visible"
             value={
@@ -740,8 +750,13 @@ function DaySheet({ day, mode, viewAsUser }: { day: Day; mode: Mode; viewAsUser?
                     <div className="text-[13px] font-semibold">
                       {travelModeLabel(t.mode)} - {t.carrier} {t.identifier}
                     </div>
-                    <div className="font-mono text-[12.5px] tabular text-[var(--color-ink-2)]">
-                      {t.from} {t.departTime} - {t.to} {t.arriveTime}
+                    <div className="font-mono text-[12.5px] tabular text-[var(--color-ink-2)] flex items-center flex-wrap gap-1.5">
+                      <span>{t.from} {t.departTime} - {t.to} {t.arriveTime}</span>
+                      {travelTzDeltaLabel(t, day) && (
+                        <Chip tone="travel" variant="outline" size="sm" className="normal-case">
+                          {travelTzDeltaLabel(t, day)}
+                        </Chip>
+                      )}
                     </div>
                     {t.recordLocator && (
                       <div className="font-mono text-[10.5px] uppercase tracking-[0.10em] text-[var(--color-ink-4)] mt-0.5">
@@ -1122,4 +1137,22 @@ function whatsAppHref(phone: string): string {
 
 function mapsHref(query: string): string {
   return `https://maps.google.com/?q=${encodeURIComponent(query)}`;
+}
+
+const BROWSER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+// "Local time" line for a show day's venue vs whatever timezone this device
+// is in — only shown when the venue actually carries a timezone and it
+// differs from the browser's.
+function venueTzDeltaLabel(venue: { timezone?: string } | undefined, day: Day): string {
+  if (!venue?.timezone) return '';
+  const delta = formatTimezoneDelta(BROWSER_TZ, venue.timezone, `${day.date}T12:00:00`);
+  return delta ? `Venue local time is ${delta} vs. this device` : '';
+}
+
+function travelTzDeltaLabel(t: Travel, day: Day): string {
+  const fromTz = resolveCityTimezone(t.from);
+  const toTz = resolveCityTimezone(t.to);
+  if (!fromTz || !toTz) return '';
+  return formatTimezoneDelta(fromTz, toTz, `${day.date}T${t.departTime}:00`);
 }

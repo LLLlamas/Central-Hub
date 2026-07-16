@@ -195,6 +195,8 @@ export interface Venue {
   housePMPhone?: string;
   /** Stage door street/entrance — what the bus driver needs. */
   stageDoor?: string;
+  /** IANA timezone (e.g. "America/Mexico_City") — used for the local-time delta badge. */
+  timezone?: string;
 }
 
 // ============================================================
@@ -912,6 +914,10 @@ export interface Membership {
   requestedGroupId?: ID;
   nudgedAt?: ISODateTime;
   joinedAt: ISODateTime;
+  // Populated only by listMyMemberships() (the multi-tour switcher card) — cheap
+  // tour metadata for the card, not carried by any other membership query.
+  tourName?: string;
+  artistName?: string;
 }
 
 /** A group as exposed to a pending user by the list_active_tour_groups RPC. */
