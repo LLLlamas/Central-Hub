@@ -5,6 +5,14 @@ import { useAuth } from '@/state/AuthProvider';
 import { useToursIndex } from '@/lib/useToursIndex';
 import { createTourId, saveScratchTour } from '@/lib/scratchStorage';
 import { createScratchTour } from '@/data/scratchTour';
+import {
+  buildTourSeed,
+  fetchAttractionEvents,
+  getTicketmasterApiKey,
+  searchAttractions,
+  type TmAttraction,
+  type TourSeed,
+} from '@/lib/ticketmaster';
 import { MyShowsMap } from '@/components/MyShowsMap';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -113,6 +121,27 @@ function MyShowsList() {
     navigate(tourPath(newId));
   };
 
+  // Ticketmaster-seeded creation: same shell, pre-filled with the artist's
+  // real upcoming schedule (show days only — no fabricated off/travel days).
+  const handleCreateSeeded = (seed: TourSeed) => {
+    if (creating) return;
+    setCreating(true);
+    const newId = createTourId();
+    const freshTour = {
+      ...createScratchTour(newId, seed.suggestedName),
+      artistName: seed.artistName,
+      startDate: seed.startDate,
+      endDate: seed.endDate,
+      legs: seed.legs,
+      days: seed.days,
+      scheduleItems: seed.scheduleItems,
+      venues: seed.venues,
+      status: 'in_progress' as const,
+    };
+    saveScratchTour(newId, freshTour);
+    navigate(tourPath(newId));
+  };
+
   return (
     <div>
       <PageHeader
@@ -131,7 +160,12 @@ function MyShowsList() {
         }
       />
 
-      <NewShowModal open={newShowOpen} onClose={() => setNewShowOpen(false)} onCreate={handleCreate} />
+      <NewShowModal
+        open={newShowOpen}
+        onClose={() => setNewShowOpen(false)}
+        onCreate={handleCreate}
+        onCreateSeeded={handleCreateSeeded}
+      />
 
       <div className="mb-5">
         <MyShowsMap tours={tours} />
@@ -206,27 +240,205 @@ function NewShowModal({
   open,
   onClose,
   onCreate,
+  onCreateSeeded,
 }: {
   open: boolean;
   onClose: () => void;
   onCreate: (name: string) => void;
+  onCreateSeeded: (seed: TourSeed) => void;
 }) {
+  const hasApiKey = Boolean(getTicketmasterApiKey());
   const [name, setName] = useState('');
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<TmAttraction[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const [picked, setPicked] = useState<TmAttraction | null>(null);
+  const [seed, setSeed] = useState<TourSeed | null>(null);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState(false);
 
   useEffect(() => {
-    if (open) setName('');
+    if (!open) return;
+    setName('');
+    setQuery('');
+    setResults([]);
+    setSearching(false);
+    setSearchError(false);
+    setPicked(null);
+    setSeed(null);
+    setEventsLoading(false);
+    setEventsError(false);
   }, [open]);
+
+  // Debounced artist search — the cancelled flag covers both the timer and an
+  // in-flight fetch, so a stale response never overwrites a newer query's.
+  useEffect(() => {
+    if (!open || !hasApiKey) return;
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      setSearching(false);
+      setSearchError(false);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    setSearchError(false);
+    const t = setTimeout(async () => {
+      try {
+        const rows = await searchAttractions(q);
+        if (!cancelled) setResults(rows);
+      } catch {
+        if (!cancelled) setSearchError(true);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [query, open, hasApiKey]);
+
+  const handlePick = async (a: TmAttraction) => {
+    setPicked(a);
+    setSeed(null);
+    setEventsError(false);
+    setEventsLoading(true);
+    try {
+      const events = await fetchAttractionEvents(a.id);
+      const built = buildTourSeed(a.name, events);
+      setSeed(built);
+      if (built.days.length === 0) setName(a.name);
+    } catch {
+      setEventsError(true);
+    } finally {
+      setEventsLoading(false);
+    }
+  };
 
   const trimmed = name.trim();
   const canCreate = trimmed.length > 0;
 
   return (
-    <Modal open={open} onClose={onClose} eyebrow="New show" title="Name this tour" size="sm">
+    <Modal open={open} onClose={onClose} eyebrow="New show" title="Start a tour" size="md">
       <div className="space-y-4">
+        {hasApiKey ? (
+          <div className="space-y-2">
+            <label className="block">
+              <span className="eyebrow block mb-1">Search an artist on Ticketmaster</span>
+              <div className="relative">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--color-ink-3)]">
+                  <Icon.Search size={13} />
+                </span>
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setPicked(null);
+                    setSeed(null);
+                  }}
+                  placeholder="e.g. Phish — seeds the tour with their real upcoming dates"
+                  className="w-full h-9 pl-7 pr-2 text-[12.5px] rounded-[3px] border border-[var(--color-rule)] bg-[var(--color-card)]"
+                />
+              </div>
+            </label>
+
+            {searching && <p className="text-[12px] text-[var(--color-ink-3)]">Searching…</p>}
+            {searchError && (
+              <p className="text-[12px] text-[var(--color-accent)]">
+                Search failed — check your connection and try again.
+              </p>
+            )}
+
+            {!picked && !searching && results.length > 0 && (
+              <ul className="border border-[var(--color-rule)] rounded-[3px] divide-y divide-[var(--color-rule)] max-h-56 overflow-y-auto">
+                {results.map((a) => (
+                  <li key={a.id}>
+                    <button
+                      type="button"
+                      onClick={() => void handlePick(a)}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left hover:bg-[var(--color-paper)]/60"
+                    >
+                      {a.imageUrl ? (
+                        <img
+                          src={a.imageUrl}
+                          alt=""
+                          className="w-10 h-6 object-cover rounded-[2px] shrink-0"
+                        />
+                      ) : (
+                        <span className="w-10 h-6 rounded-[2px] bg-[var(--color-rule)] shrink-0" />
+                      )}
+                      <span className="text-[12.5px] font-semibold text-[var(--color-ink)] truncate">
+                        {a.name}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {picked && (
+              <div className="border border-[var(--color-rule)] rounded-[3px] p-3 space-y-2">
+                <div className="flex items-center gap-2.5">
+                  {picked.imageUrl && (
+                    <img
+                      src={picked.imageUrl}
+                      alt=""
+                      className="w-10 h-6 object-cover rounded-[2px] shrink-0"
+                    />
+                  )}
+                  <span className="text-[13px] font-semibold text-[var(--color-ink)]">
+                    {picked.name}
+                  </span>
+                </div>
+                {eventsLoading && (
+                  <p className="text-[12px] text-[var(--color-ink-3)]">Loading upcoming shows…</p>
+                )}
+                {eventsError && (
+                  <p className="text-[12px] text-[var(--color-accent)]">
+                    Couldn't load upcoming shows — try again, or start blank below.
+                  </p>
+                )}
+                {seed && seed.days.length > 0 && (
+                  <>
+                    <p className="text-[12.5px] text-[var(--color-ink-2)]">
+                      {seed.days.length} upcoming show{seed.days.length === 1 ? '' : 's'} ·{' '}
+                      {fmtDate(seed.startDate, 'MMM d')} – {fmtDate(seed.endDate, 'MMM d, yyyy')}
+                    </p>
+                    <SeedCities seed={seed} />
+                    <Button size="sm" variant="primary" onClick={() => onCreateSeeded(seed)}>
+                      Create tour from these shows
+                    </Button>
+                  </>
+                )}
+                {seed && seed.days.length === 0 && (
+                  <p className="text-[12px] text-[var(--color-ink-3)]">
+                    No upcoming shows on Ticketmaster — start blank below (name prefilled).
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-1">
+              <span className="flex-1 h-px bg-[var(--color-rule)]" />
+              <span className="eyebrow">or start blank</span>
+              <span className="flex-1 h-px bg-[var(--color-rule)]" />
+            </div>
+          </div>
+        ) : (
+          <p className="text-[11.5px] text-[var(--color-ink-3)]">
+            Artist search is off — set VITE_TICKETMASTER_API_KEY in web/.env.local to seed a tour
+            from an artist's real upcoming dates.
+          </p>
+        )}
+
         <label className="block">
           <span className="eyebrow block mb-1">Tour name</span>
           <input
-            autoFocus
+            autoFocus={!hasApiKey}
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
@@ -246,6 +458,27 @@ function NewShowModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+function SeedCities({ seed }: { seed: TourSeed }) {
+  const cities = [...new Set(seed.days.map((d) => d.city).filter((c): c is string => Boolean(c)))];
+  if (cities.length === 0) return null;
+  const shown = cities.slice(0, 6);
+  const more = cities.length - shown.length;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {shown.map((c) => (
+        <Chip key={c} tone="neutral" variant="outline" size="sm">
+          {c}
+        </Chip>
+      ))}
+      {more > 0 && (
+        <Chip tone="neutral" variant="outline" size="sm">
+          +{more} more
+        </Chip>
+      )}
+    </div>
   );
 }
 

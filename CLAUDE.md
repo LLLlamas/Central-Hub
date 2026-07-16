@@ -385,6 +385,7 @@ Three layout layers in `router.tsx`: `TourScope` (loads the tour, remounts `AppS
 > One-liners only — the full operational note for each lives in `docs/feature-notes.md` where it predates this phase; the multi-tour/rider-authoring/venue-negotiation/stage-media items below are this overhaul's own additions and aren't in that doc yet.
 
 - **Multi-tour architecture** — My Shows home page, `/t/:tourId` nesting, per-tour storage keying, one-time legacy-tour migration. See "Multi-tour architecture" above.
+- **Ticketmaster-seeded tour creation** — "+ New show" on My Shows can search an artist (Discovery API v2, key via `VITE_TICKETMASTER_API_KEY`, search hidden when unset) and seed the tour with their real upcoming show days/venues/timezones; `lib/ticketmaster.ts` (fetch wrappers + pure `buildTourSeed`, tested offline in `tests/lib/ticketmaster.test.ts`). Local backend only; blank creation unchanged.
 - **In-app rider authoring** — 14-section consensus TOC template, add/remove/reorder/rename, inline editors for every section type including Backline/Lodging/Catering. PDF upload/extraction is now the fallback path, not primary. See "Data modes" above.
 - **Venue negotiation** — advance board + per-show detail + reconcile flow, simulated venue persona. See "Venue negotiation model" above.
 - **Stage-design media gallery + crew updates feed** — see "Stage design media + updates feed" above.
