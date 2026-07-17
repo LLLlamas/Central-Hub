@@ -1,4 +1,4 @@
-// Pure derivation helpers for TourSummary — the "My Shows" multi-tour switcher.
+// Pure derivation helpers for TourSummary — the "My Tours" multi-tour switcher.
 // No storage I/O, no React. Callers pass in `todayIso` / `updatedAt` explicitly
 // so this stays testable and never reaches for `new Date()` itself.
 
@@ -6,7 +6,7 @@ import type { Day, ISODate, ISODateTime, Tour, TourSummary, TourSummaryStatus } 
 import { getTodayIso } from '@/lib/today';
 
 // Plain-English label per status — single source of truth shared by every
-// "My Shows" surface (list cards, map legend) so a copy change can't drift
+// "My Tours" surface (list cards, map legend) so a copy change can't drift
 // between them.
 export const TOUR_STATUS_LABEL: Record<TourSummaryStatus, string> = {
   draft: 'Draft',

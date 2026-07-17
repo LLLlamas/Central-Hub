@@ -6,7 +6,7 @@ import { tourPath } from '@/lib/routing';
 import { isVenuePersona, VENUE_VISIBLE_ROUTES } from '@/lib/access';
 
 const tools = [
-  { to: '/', label: 'My Shows', hint: 'Leave this tour and return to your full list of shows.', icon: Icon.Grid },
+  { to: '/', label: 'My Tours', hint: 'Leave this tour and return to your full list of tours.', icon: Icon.Grid },
   { to: 'me', label: 'My Travel & Info', hint: 'Your flights, hotel, schedule, and plots — and submit a document for review.', icon: Icon.User },
   { to: 'daysheet', label: 'Day sheets', hint: 'Edit, personalize, print, and publish daily sheets.', icon: Icon.Document },
   { to: 'gear', label: 'Supplies & Costs', hint: 'Rider supplies, flight costs, and hotel costs — status, cost estimates, and links to source documents.', icon: Icon.Package },
@@ -24,7 +24,7 @@ export function More() {
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const venuePersona = isVenuePersona(user);
   // A grp_venue persona is single-purpose: only the advance board and the
-  // tour-exit "My Shows" link ('/') stay visible — every manager/crew tool is hidden.
+  // tour-exit "My Tours" link ('/') stay visible — every manager/crew tool is hidden.
   const visible = tools.filter(
     (t) => (!t.managerOnly || managerView) && (!venuePersona || t.to === '/' || VENUE_VISIBLE_ROUTES.has(t.to)),
   );

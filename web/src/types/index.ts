@@ -116,7 +116,7 @@ export interface Leg {
 
 // ============================================================
 // Tour summary — lightweight card/list projection of a Tour,
-// used by the "My Shows" multi-tour switcher. Derived, never stored.
+// used by the "My Tours" multi-tour switcher. Derived, never stored.
 // ============================================================
 
 export type TourSummaryStatus = 'draft' | 'upcoming' | 'on_tour' | 'completed';
@@ -837,6 +837,33 @@ export interface ShowAdvance {
   sentAt?: UpdateStamp;
   confirmedAt?: UpdateStamp;
   history: { status: ShowRiderStatus; stamp: UpdateStamp; note?: string }[];
+}
+
+// ============================================================
+// Rider internal review — a whole-rider approval round-trip with a second
+// team (e.g. artist management) BEFORE the rider goes out to venues. Distinct
+// from venue negotiation above: this reviews the rider draft itself, section
+// by section, and expects multiple rounds (inventory changes, emergencies,
+// etc.), not a single pass.
+// ============================================================
+
+export type SectionReviewStatus = 'ok' | 'needs_changes';
+
+export interface SectionReviewMark {
+  status: SectionReviewStatus;
+  note?: string;
+  stamp: UpdateStamp;
+}
+
+/** One send-for-review cycle. `sectionSnapshot` freezes the rider's sections
+ *  at send-time so a later diff can show exactly what the reviewer saw,
+ *  regardless of edits made afterward. `marks` is keyed by `sectionKey()`. */
+export interface RiderReviewRound {
+  id: ID;
+  roundNumber: number;
+  sentAt: UpdateStamp;
+  sectionSnapshot: RiderSection[];
+  marks: Record<string, SectionReviewMark>;
 }
 
 // ============================================================

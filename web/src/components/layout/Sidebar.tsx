@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn';
 import { fmtDate, daysBetween } from '@/lib/format';
 import { getTodayIso } from '@/lib/today';
 import { sectionKey } from '@/lib/riderBuilder';
-import { isVenuePersona, VENUE_VISIBLE_ROUTES } from '@/lib/access';
+import { isVenuePersona, VENUE_VISIBLE_ROUTES, isReviewPersona, REVIEW_VISIBLE_ROUTES } from '@/lib/access';
 
 type NavEntry = {
   to: string;
@@ -66,6 +66,7 @@ export function Sidebar() {
   const ingest = useIngestStatus(tour, isSectionApproved);
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
   const venuePersona = isVenuePersona(user);
+  const reviewPersona = isReviewPersona(user);
   const today = getTodayIso();
   const dToStart = daysBetween(today, tour.startDate);
   const dToEnd = daysBetween(today, tour.endDate);
@@ -122,8 +123,9 @@ export function Sidebar() {
           const entries = nav.filter(
             (n) =>
               n.group === groupKey &&
-              (!MANAGER_ONLY.has(n.to) || managerView) &&
-              (!venuePersona || VENUE_VISIBLE_ROUTES.has(n.to)),
+              (!MANAGER_ONLY.has(n.to) || managerView || reviewPersona) &&
+              (!venuePersona || VENUE_VISIBLE_ROUTES.has(n.to)) &&
+              (!reviewPersona || REVIEW_VISIBLE_ROUTES.has(n.to)),
           );
           if (entries.length === 0) return null;
           return (

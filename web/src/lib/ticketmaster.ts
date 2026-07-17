@@ -1,5 +1,5 @@
 // Ticketmaster Discovery API v2 — artist search + upcoming-event fetch for
-// the "+ New show" seeded-tour flow, plus the PURE mapping from those events
+// the "+ New tour" seeded-tour flow, plus the PURE mapping from those events
 // to the tour-seeding shape (days/legs/venue overrides). Fetch wrappers and
 // mapping are deliberately separate so the mapping is testable offline.
 

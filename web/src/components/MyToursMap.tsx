@@ -1,4 +1,4 @@
-// Map for the "My Shows" home page — one pin per tour, plotted at its
+// Map for the "My Tours" home page — one pin per tour, plotted at its
 // primaryCity. Visual language borrows from RouteMap.tsx (grid, compass,
 // numbered-circle chrome) but this is a distinct component: RouteMap plots a
 // single tour's leg-by-leg route, this plots the whole multi-tour roster and
@@ -7,7 +7,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ID, TourSummary } from '@/types';
-import { CITY_COORDS, computeBounds, project, type CityCoord } from '@/lib/mapProjection';
+import { CITY_COORDS, computeBounds, padBounds, project, type CityCoord } from '@/lib/mapProjection';
 import { tourPath } from '@/lib/routing';
 import { TOUR_STATUS_LABEL } from '@/lib/tourSummary';
 
@@ -24,7 +24,7 @@ interface CityGroup {
   tours: TourSummary[];
 }
 
-export function MyShowsMap({
+export function MyToursMap({
   tours,
   onSelectTour,
 }: {
@@ -33,8 +33,8 @@ export function MyShowsMap({
 }) {
   const navigate = useNavigate();
 
-  // Group tours by primaryCity so multiple shows in the same city share one
-  // pin location (stacked/offset below) instead of perfectly overlapping.
+  // Group tours by primaryCity so multiple tours based in the same city share
+  // one pin location (stacked/offset below) instead of perfectly overlapping.
   // Tours whose primaryCity isn't in CITY_COORDS are skipped, not crashed on
   // — a known pre-existing gap in city coverage.
   const groups = useMemo(() => {
@@ -58,9 +58,9 @@ export function MyShowsMap({
   if (groups.length === 0) {
     return (
       <section className="card p-6">
-        <div className="eyebrow">Shows map</div>
+        <div className="eyebrow">Tour map</div>
         <p className="mt-2 text-[12.5px] text-[var(--color-ink-3)]">
-          No shows to plot yet — the map fills in once a tour has a city.
+          No tours to plot yet — the map fills in once a tour has a city.
         </p>
       </section>
     );
@@ -72,30 +72,49 @@ export function MyShowsMap({
   const innerW = W - pad.left - pad.right;
   const innerH = H - pad.top - pad.bottom;
 
-  const bounds = computeBounds(groups.map((g) => g.coord));
+  // padBounds keeps a single city (or tight cluster) centered instead of
+  // letting a degenerate lat/lng range collapse the pin into the top-left.
+  const bounds = padBounds(computeBounds(groups.map((g) => g.coord)));
   const { minLat, maxLat, minLng } = bounds;
   const projectPoint = (lat: number, lng: number) => project(lat, lng, bounds, W, H, pad);
+
+  // Only tours with a plottable city appear on the map — count those, not
+  // the whole roster the caller passed in.
+  const plottedCount = groups.reduce((n, g) => n + g.tours.length, 0);
+
+  // Pin labels are centered on the pin; near the viewBox edges that would
+  // clip the text, so clamp the label's x so its estimated width stays inside.
+  const clampLabelX = (x: number, text: string) => {
+    const halfW = (text.length * 5.8) / 2 + 2; // ~9.5px mono ≈ 5.8px/char
+    return Math.min(Math.max(x, halfW), W - halfW);
+  };
 
   return (
     <section className="card overflow-hidden">
       <header className="flex items-baseline justify-between border-b border-[var(--color-rule-soft)] px-6 pt-5 pb-3">
         <div>
-          <div className="eyebrow mb-1">Shows map</div>
+          <div className="eyebrow mb-1">Tour map</div>
           <h3 className="font-display text-[18px] font-bold tracking-tight text-[var(--color-ink)]">
-            {groups.length} {groups.length === 1 ? 'city' : 'cities'} · {tours.length}{' '}
-            {tours.length === 1 ? 'show' : 'shows'}
+            {groups.length} {groups.length === 1 ? 'city' : 'cities'} · {plottedCount}{' '}
+            {plottedCount === 1 ? 'tour' : 'tours'}
           </h3>
         </div>
       </header>
 
+      {/* Cap the plot's width so the 540x360 viewBox reads as a compact atlas
+          panel instead of scaling edge-to-edge on wide screens. */}
       <div className="px-4 py-4">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" aria-label="My shows map">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="block w-full h-auto max-w-[720px] mx-auto"
+          aria-label="Tour map — one pin per tour"
+        >
           <defs>
-            <pattern id="my-shows-grid" width="30" height="30" patternUnits="userSpaceOnUse">
+            <pattern id="my-tours-grid" width="30" height="30" patternUnits="userSpaceOnUse">
               <path d="M 30 0 L 0 0 0 30" fill="none" stroke="var(--color-rule-soft)" strokeWidth="0.5" />
             </pattern>
           </defs>
-          <rect x={pad.left} y={pad.top} width={innerW} height={innerH} fill="url(#my-shows-grid)" />
+          <rect x={pad.left} y={pad.top} width={innerW} height={innerH} fill="url(#my-tours-grid)" />
 
           {/* Compass / "N" arrow in corner */}
           <g transform={`translate(${W - pad.right - 14},${pad.top + 12})`}>
@@ -141,12 +160,12 @@ export function MyShowsMap({
                       handleSelect(t.id);
                     }
                   }}
-                  className="cursor-pointer focus:outline-none"
+                  className="cursor-pointer"
                 >
                   <circle cx={cx} cy={cy} r="10" fill="var(--color-card)" stroke={color} strokeWidth="1.5" />
                   <circle cx={cx} cy={cy} r="3.5" fill={color} />
                   <text
-                    x={cx}
+                    x={clampLabelX(cx, shortName)}
                     y={cy + 21}
                     textAnchor="middle"
                     fontSize="9.5"
@@ -174,7 +193,7 @@ export function MyShowsMap({
                 <button
                   type="button"
                   onClick={() => handleSelect(t.id)}
-                  className="inline-flex items-center gap-1 text-[var(--color-ink-2)] underline decoration-dotted hover:text-[var(--color-ink)] transition-colors"
+                  className="inline-flex items-center gap-1 cursor-pointer text-[var(--color-ink-2)] underline decoration-dotted hover:text-[var(--color-ink)] transition-colors"
                 >
                   <span
                     className="w-1.5 h-1.5 rounded-full shrink-0"

@@ -142,14 +142,17 @@ function diffSectionPayload(a: RiderSection, b: RiderSection): FieldChange[] {
   return out;
 }
 
-export function diffRiderVersions(a: RiderImport, b: RiderImport): RiderVersionDiff {
-  const aByType = new Map(a.sections.map((s) => [s.type, s]));
-  const bByType = new Map(b.sections.map((s) => [s.type, s]));
+/** Section-array-only diff — the shared engine behind `diffRiderVersions`
+ *  (two full `RiderImport`s) and the rider-review round diff (two section
+ *  snapshots, no enclosing `RiderImport` needed). */
+export function diffSections(a: RiderSection[], b: RiderSection[]): RiderVersionDiff {
+  const aByType = new Map(a.map((s) => [s.type, s]));
+  const bByType = new Map(b.map((s) => [s.type, s]));
 
-  const addedSections = b.sections
+  const addedSections = b
     .filter((s) => !aByType.has(s.type))
     .map((s) => ({ type: s.type, label: s.title?.trim() || s.type }));
-  const removedSections = a.sections
+  const removedSections = a
     .filter((s) => !bByType.has(s.type))
     .map((s) => ({ type: s.type, label: s.title?.trim() || s.type }));
 
@@ -164,4 +167,8 @@ export function diffRiderVersions(a: RiderImport, b: RiderImport): RiderVersionD
   }
 
   return { addedSections, removedSections, sectionDiffs };
+}
+
+export function diffRiderVersions(a: RiderImport, b: RiderImport): RiderVersionDiff {
+  return diffSections(a.sections, b.sections);
 }

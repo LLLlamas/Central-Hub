@@ -13,7 +13,7 @@ import { SourceTag } from '@/components/provenance/SourceTag';
 import { SensitiveExplain } from '@/components/ExplainTag';
 import { LobbyCallLadder } from '@/components/LobbyCallLadder';
 import { LastUpdated } from '@/components/LastUpdated';
-import { getVenue } from '@/data/venues';
+import { getVenueForTour } from '@/data/venues';
 import type { RealSourceKey } from '@/data/realSources';
 import type { Day, ScheduleItem, ScheduleItemType, ScheduleItemPatch, ScheduleItemEditRecord, UpdateStamp, DayLockRecord, CurrentUser, Travel } from '@/types';
 import { isValidHHMM } from '@/lib/time';
@@ -454,7 +454,7 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
   const items = mode === 'edit' ? allItems : allItems.filter((it) => resolveVisibility(it.visibility, effectiveUser) !== 'blocked');
   const travel = mode === 'edit' ? allTravel : allTravel.filter((t) => resolveVisibility(t.visibility, effectiveUser) !== 'blocked');
   const hotels = mode === 'edit' ? allHotels : allHotels.filter((h) => resolveVisibility(h.visibility, effectiveUser) !== 'blocked');
-  const venue = getVenue(day.venueId);
+  const venue = getVenueForTour(tour, day.venueId);
   const flightsImported = tour.flightImports.some((f) => f.status === 'imported');
   const hotelsImported = tour.hotelImport != null;
 
@@ -480,16 +480,16 @@ function MobileDaySheet({ day, mode, nextDay, viewAsUser }: { day: Day; mode: Mo
             <h3 className="text-[14px] font-semibold text-[var(--color-ink)]">Venue</h3>
             <div className="mt-2 text-[16px] font-semibold text-[var(--color-ink)]">{venue.name}</div>
             <a
-              href={mapsHref(`${venue.name}, ${venue.address}, ${venue.city}`)}
+              href={mapsHref([venue.name, venue.address, venue.city].filter(Boolean).join(', '))}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-1 block text-[13px] leading-snug text-[var(--color-ocean)] underline decoration-[var(--color-ocean)]/30"
             >
-              {venue.address}, {venue.city}
+              {[venue.address, venue.city].filter(Boolean).join(', ') || venue.name}
             </a>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <a
-                href={mapsHref(`${venue.name}, ${venue.address}, ${venue.city}`)}
+                href={mapsHref([venue.name, venue.address, venue.city].filter(Boolean).join(', '))}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="min-h-11 inline-flex items-center justify-center gap-1.5 rounded-[4px] border border-[var(--color-rule)] text-[13px] font-semibold"
@@ -640,7 +640,7 @@ function DaySheet({ day, mode, viewAsUser }: { day: Day; mode: Mode; viewAsUser?
     getHotelsForDay,
   } = useApp();
   const effectiveUser = viewAsUser ?? user;
-  const venue = getVenue(day.venueId);
+  const venue = getVenueForTour(tour, day.venueId);
   const allItems = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
   const allTravel = FLIGHTS_ENABLED ? getTravelForDay(day.id) : [];
   const allHotels = getHotelsForDay(day.id);

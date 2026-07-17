@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import type { Venue } from '@/types';
 import { useApp } from '@/state/AppState';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { LastUpdated } from '@/components/LastUpdated';
 import { UpdatesFeed } from '@/components/UpdatesFeed';
-import { getVenue } from '@/data/venues';
+import { getVenueForTour } from '@/data/venues';
 import { FLIGHTS_ENABLED } from '@/lib/features';
 import { getTodayIso, getNowIso } from '@/lib/today';
 import { cn } from '@/lib/cn';
@@ -39,7 +40,7 @@ export function TodaySurface({ className }: { className?: string }) {
   }
 
   const managerView = user.groupId === 'grp_mgmt' || user.groupId === 'grp_production';
-  const venue = getVenue(day.venueId);
+  const venue = getVenueForTour(tour, day.venueId);
   const locked = isDayLocked(day.id);
   const allSchedule = getScheduleItemsForDay(day.id).sort((a, b) => a.startTime.localeCompare(b.startTime));
   const visibleSchedule = managerView
@@ -250,7 +251,7 @@ function VenuePanel({
   venue,
   dayCity,
 }: {
-  venue: ReturnType<typeof getVenue>;
+  venue: Venue | undefined;
   dayCity?: string;
 }) {
   if (!venue) {
@@ -262,15 +263,14 @@ function VenuePanel({
     );
   }
 
-  const mapHref = mapsHref(`${venue.name}, ${venue.address}, ${venue.city}`);
+  const mapHref = mapsHref([venue.name, venue.address, venue.city].filter(Boolean).join(', '));
 
   return (
     <div>
       <div className="eyebrow">Venue</div>
       <div className="mt-2 text-[16px] font-semibold text-[var(--color-ink)]">{venue.name}</div>
       <div className="text-[12.5px] text-[var(--color-ink-3)] leading-snug">
-        {venue.address}
-        {dayCity ? `, ${dayCity}` : ''}
+        {[venue.address, dayCity].filter(Boolean).join(', ')}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">

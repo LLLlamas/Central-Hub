@@ -9,6 +9,9 @@ interface CollapsibleSectionProps {
   defaultOpen?: boolean;
   /** Optional chip/status shown on the right of the header. */
   badge?: ReactNode;
+  /** Optional action controls (e.g. a button) on the far right of the header.
+   *  Clicks inside are swallowed so they never toggle the section. */
+  actions?: ReactNode;
   children: ReactNode;
 }
 
@@ -21,6 +24,7 @@ export function CollapsibleSection({
   eyebrow,
   defaultOpen = true,
   badge,
+  actions,
   children,
 }: CollapsibleSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
@@ -45,6 +49,17 @@ export function CollapsibleSection({
           <div className="text-[14px] font-semibold text-[var(--color-ink)]">{title}</div>
         </div>
         {badge && <div className="shrink-0">{badge}</div>}
+        {actions && (
+          <div
+            className="shrink-0"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            {actions}
+          </div>
+        )}
       </summary>
       <div className="border-t border-[var(--color-rule-soft)] p-5">{children}</div>
     </details>

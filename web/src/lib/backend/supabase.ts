@@ -355,7 +355,7 @@ export const supabaseBackend: Backend = {
   },
 
   // Every ACTIVE membership the caller holds, across every tour — the data
-  // source for the My Shows switcher. `tour_members.tour_id` isn't a DB foreign
+  // source for the My Tours switcher. `tour_members.tour_id` isn't a DB foreign
   // key into `tours` (both are plain text ids), so this is two round-trips
   // rather than a PostgREST embed: memberships first, then the matching tours
   // (RLS already restricts that second read to tours the caller can see).

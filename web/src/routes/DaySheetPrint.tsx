@@ -14,13 +14,13 @@ import {
   travelModeIcon,
   travelModeLabel,
 } from '@/lib/format';
-import { getVenue } from '@/data/venues';
+import { getVenueForTour } from '@/data/venues';
 import { cn } from '@/lib/cn';
 import { FLIGHTS_ENABLED } from '@/lib/features';
 import { getGeneratedAtLabel } from '@/lib/today';
 import { buildShareUrl, verifyShareToken } from '@/lib/shareToken';
 import { tourPath } from '@/lib/routing';
-import type { Day, ScheduleItem, Travel, Hotel } from '@/types';
+import type { Day, ScheduleItem, Travel, Hotel, Venue } from '@/types';
 
 /**
  * Print-optimized day sheet. Lives at `/print/daysheet/:date`, outside the
@@ -66,7 +66,7 @@ export function DaySheetPrint() {
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
   const travel = FLIGHTS_ENABLED ? getTravelForDay(day.id).filter((t) => canSee(t.visibility, user)) : [];
   const hotels = getHotelsForDay(day.id).filter((h) => canSee(h.visibility, user));
-  const venue = getVenue(day.venueId);
+  const venue = getVenueForTour(tour, day.venueId);
   const dayIndex = tour.days.findIndex((d) => d.id === day.id);
   const pm = tour.riderImports[0]?.productionManager;
   const tm = tour.personnel.find((p) => p.role === 'Tour Manager');
@@ -257,7 +257,7 @@ export function DaySheetPrint() {
                   {venue?.promoterRep && (
                     <ContactRow
                       name={venue.promoterRep}
-                      role={`Promoter · ${venue.promoter}`}
+                      role={venue.promoter ? `Promoter · ${venue.promoter}` : 'Promoter'}
                       phone={venue.promoterPhone}
                       email={venue.promoterEmail}
                     />
@@ -484,14 +484,18 @@ function TravelRow({ travel }: { travel: Travel }) {
   );
 }
 
-function VenueBlock({ venue }: { venue: ReturnType<typeof getVenue> & object }) {
+function VenueBlock({ venue }: { venue: Venue }) {
   return (
     <div className="text-[12px] space-y-0.5">
       <div className="font-semibold text-[var(--color-ink)] leading-tight">{venue.name}</div>
       <div className="text-[var(--color-ink-2)] leading-snug">
-        {venue.address}
-        <br />
-        {venue.city}, {venue.country}
+        {venue.address && (
+          <>
+            {venue.address}
+            <br />
+          </>
+        )}
+        {[venue.city, venue.country].filter(Boolean).join(', ')}
       </div>
       {venue.phone && (
         <div className="font-mono tabular text-[var(--color-ink-2)] mt-0.5">

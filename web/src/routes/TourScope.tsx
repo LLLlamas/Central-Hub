@@ -29,10 +29,10 @@ function TourNotFound() {
       <div className="text-center max-w-sm">
         <h1 className="font-display text-[22px] font-bold text-[var(--color-ink)]">Tour not found</h1>
         <p className="mt-2 text-[13px] text-[var(--color-ink-3)]">
-          This tour isn't in this browser — the link may be old, or the show may have been removed.
+          This tour isn't in this browser — the link may be old, or the tour may have been removed.
         </p>
         <Link to="/" className="mt-4 inline-block text-[13px] font-semibold underline">
-          ← Back to My Shows
+          ← Back to My Tours
         </Link>
       </div>
     </div>

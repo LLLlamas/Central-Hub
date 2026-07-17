@@ -5,7 +5,7 @@
 // legs, days, and a show-day schedule skeleton so the schedule/visibility
 // surfaces have something to work with.
 
-import type { Day, DayType, Leg, ScheduleItem } from '@/types';
+import type { Day, DayType, Leg, ScheduleItem, Venue } from '@/types';
 import { vis } from '@/lib/visibility';
 import { defaultVisibilityForType } from '@/lib/visibilityDefaults';
 
@@ -13,6 +13,9 @@ export interface ParsedRoute {
   legs: Leg[];
   days: Day[];
   scheduleItems: ScheduleItem[];
+  /** Per-tour venue records built from the CSV's own venue/city columns —
+   *  merged into `Tour.venues` on import (the shared directory ships empty). */
+  venues: Record<string, Venue>;
   startDate: string;
   endDate: string;
 }
@@ -172,7 +175,7 @@ export function parseRouteCsv(text: string): ParsedRoute {
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
   if (lines.length < 2) {
-    return { legs: [], days: [], scheduleItems: [], startDate: '', endDate: '' };
+    return { legs: [], days: [], scheduleItems: [], venues: {}, startDate: '', endDate: '' };
   }
 
   const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
@@ -192,6 +195,7 @@ export function parseRouteCsv(text: string): ParsedRoute {
 
   const days: Day[] = [];
   const scheduleItems: ScheduleItem[] = [];
+  const venues: Record<string, Venue> = {};
   const legBounds = new Map<string, { start: string; end: string }>();
 
   for (let i = 1; i < lines.length; i++) {
@@ -217,6 +221,15 @@ export function parseRouteCsv(text: string): ParsedRoute {
       published: false,
     };
     days.push(day);
+
+    if (day.venueId && venueName && !venues[day.venueId]) {
+      venues[day.venueId] = {
+        name: venueName,
+        address: '',
+        city: cells[col.city] || '',
+        country: cells[col.country] || '',
+      };
+    }
 
     const bounds = legBounds.get(legId);
     if (!bounds) legBounds.set(legId, { start: date, end: date });
@@ -245,6 +258,7 @@ export function parseRouteCsv(text: string): ParsedRoute {
     legs,
     days,
     scheduleItems,
+    venues,
     startDate: dates[0] ?? '',
     endDate: dates[dates.length - 1] ?? '',
   };

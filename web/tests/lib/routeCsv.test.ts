@@ -56,6 +56,21 @@ describe('parseRouteCsv', () => {
     expect(route.days.find((d) => d.date === '2026-09-23')?.venueId).toBeUndefined();
   });
 
+  it('builds per-tour venue records from the CSV venue/city columns', () => {
+    expect(Object.keys(route.venues).sort()).toEqual([
+      'v_auditorio_banamex',
+      'v_auditorio_nacional',
+    ]);
+    expect(route.venues.v_auditorio_nacional).toEqual({
+      name: 'Auditorio Nacional',
+      address: '',
+      city: 'Mexico City',
+      country: 'MX',
+    });
+    expect(route.venues.v_auditorio_banamex.name).toBe('Auditorio Banamex');
+    expect(parseRouteCsv('').venues).toEqual({});
+  });
+
   it('seeds a schedule skeleton for every day type', () => {
     const countFor = (date: string) =>
       route.scheduleItems.filter((s) => s.dayId === `day_${date}`).length;

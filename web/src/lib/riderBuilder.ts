@@ -14,18 +14,19 @@ import { getRiderSection } from '@/lib/riderSections';
 import { getNowIso } from '@/lib/today';
 import type { ID, RiderImport, RiderSection, RiderSectionType } from '@/types';
 
-// Same 14 section types, same order, as `TOC_TITLES` (data/riderFixture.ts)
-// and `RIDER_SECTIONS` (lib/riderSections.ts) — the consensus rider TOC.
-// Titles are the English category label (`getRiderSection(type).name`) since
-// an authored rider has no source-language PDF to draw a verbatim title from.
+// Same 14 section types, in the same order they appear in the Elsa y Elmar
+// rider PDF — see `RIDER_SECTIONS` (lib/riderSections.ts), the canonical §N
+// page map this list mirrors. Titles are the English category label
+// (`getRiderSection(type).name`) since an authored rider has no
+// source-language PDF to draw a verbatim title from.
 const TOC_TYPES: RiderSectionType[] = [
   'cover_and_contacts',
   'production_control',
   'permits',
   'stage_specs',
-  'stage_plot',
   'audio_pa',
   'input_list',
+  'stage_plot',
   'lighting_equipment',
   'backline',
   'soundcheck',

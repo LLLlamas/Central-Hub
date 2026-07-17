@@ -273,7 +273,7 @@ contribute documents without being able to silently change the tour:
 
 **Multi-tour switching — DONE & build-validated (this milestone).** A caller can
 now hold an active membership in more than one tour and switch between them
-from My Shows; see "Multi-tour on supabase" below for the full detail. No
+from My Tours; see "Multi-tour on supabase" below for the full detail. No
 migration file — `tour_members`'s existing `(tour_id, email)` PK already
 supported it. Tour *creation* on supabase stays out of scope (unchanged).
 Verified: `typecheck` clean · `npx vitest run` 193/193.
@@ -701,10 +701,10 @@ assumption (three call sites), now removed:
   confirms the caller is an active member of the *specific* `tourId` passed in
   (falling back to "first active membership" only when `tourId` is null/foreign,
   i.e. the original bootstrap-creates-the-first-tour path).
-- `routes/MyShows.tsx`'s `MyShowsSupabaseRedirect` — exactly one active
+- `routes/MyTours.tsx`'s `MyToursSupabaseRedirect` — exactly one active
   membership still redirects straight in (today's fast path, unchanged);
   more than one renders `MembershipSwitcher`, a card list built from
-  `Membership[]` (adapted from `MyShowsList`'s card pattern, not `TourSummary[]`
+  `Membership[]` (adapted from `MyToursList`'s card pattern, not `TourSummary[]`
   / `useToursIndex()` — that index is `local`-only).
 
 **Deliberately out of scope:** creating a brand-new shared tour on supabase

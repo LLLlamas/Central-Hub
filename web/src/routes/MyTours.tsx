@@ -13,7 +13,7 @@ import {
   type TmAttraction,
   type TourSeed,
 } from '@/lib/ticketmaster';
-import { MyShowsMap } from '@/components/MyShowsMap';
+import { MyToursMap } from '@/components/MyToursMap';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
@@ -33,9 +33,17 @@ const STATUS_CHIP_TONE: Record<TourSummaryStatus, 'neutral' | 'hold' | 'success'
   completed: 'off',
 };
 
-export function MyShows() {
-  if (BACKEND_KIND === 'supabase') return <MyShowsSupabaseRedirect />;
-  return <MyShowsList />;
+// The '/' route renders outside <Layout> (no sidebar/topbar — it's the
+// cross-tour home), so it carries its own page shell matching Layout's main
+// content classes to stay aligned with every in-tour page.
+export function MyTours() {
+  return (
+    <div className="min-h-screen bg-[var(--color-paper)]">
+      <main className="page-fade px-4 py-5 sm:px-5 md:px-6 md:py-8 max-w-[1280px] w-full mx-auto">
+        {BACKEND_KIND === 'supabase' ? <MyToursSupabaseRedirect /> : <MyToursList />}
+      </main>
+    </div>
+  );
 }
 
 // Supabase: a caller may hold an active membership in more than one tour.
@@ -43,7 +51,7 @@ export function MyShows() {
 // of them by the time this mounts. The common case (exactly one active
 // membership) keeps the old straight-in redirect; more than one renders a
 // real switcher over Membership[] (not the local tours-index).
-function MyShowsSupabaseRedirect() {
+function MyToursSupabaseRedirect() {
   const { membership, membershipLoading } = useAuth();
   const [memberships, setMemberships] = useState<Membership[] | null>(null);
 
@@ -70,13 +78,13 @@ function MyShowsSupabaseRedirect() {
 
 // Tour creation on supabase (who becomes TM/PM of a brand-new shared tour,
 // billing/tenancy) is out of scope here — this only switches between EXISTING
-// active memberships, so there's no "+ New show" on this screen.
+// active memberships, so there's no "+ New tour" on this screen.
 function MembershipSwitcher({ memberships }: { memberships: Membership[] }) {
   return (
     <div>
       <PageHeader
         eyebrow="Tour Hub"
-        title="My Shows"
+        title="My Tours"
         description="Every tour you're an active member of. Pick one to jump in."
       />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -102,23 +110,25 @@ function MembershipSwitcher({ memberships }: { memberships: Membership[] }) {
   );
 }
 
-function MyShowsList() {
+function MyToursList() {
   const tours = useToursIndex();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
-  const [newShowOpen, setNewShowOpen] = useState(false);
+  const [newTourOpen, setNewTourOpen] = useState(false);
 
   const byStatus = (status: TourSummaryStatus) => tours.filter((t) => t.status === status);
 
   // Ask for a name up front — otherwise every new draft shares the same
   // placeholder title and is indistinguishable from the others in this list.
+  // Land straight in the Rider Builder, not the tour overview — authoring the
+  // rider is the first thing a TM actually does with a brand-new tour.
   const handleCreate = (name: string) => {
     if (creating) return;
     setCreating(true);
     const newId = createTourId();
     const freshTour = createScratchTour(newId, name);
     saveScratchTour(newId, freshTour);
-    navigate(tourPath(newId));
+    navigate(tourPath(newId, 'rider'));
   };
 
   // Ticketmaster-seeded creation: same shell, pre-filled with the artist's
@@ -139,46 +149,46 @@ function MyShowsList() {
       status: 'in_progress' as const,
     };
     saveScratchTour(newId, freshTour);
-    navigate(tourPath(newId));
+    navigate(tourPath(newId, 'rider'));
   };
 
   return (
     <div>
       <PageHeader
         eyebrow="Tour Hub"
-        title="My Shows"
+        title="My Tours"
         description="Every tour you run, in one place. Pick one up where you left off, or start a new one from scratch."
         actions={
           <button
             type="button"
-            onClick={() => setNewShowOpen(true)}
+            onClick={() => setNewTourOpen(true)}
             disabled={creating}
-            className="min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)] disabled:opacity-60"
+            className="min-h-11 md:min-h-9 inline-flex items-center gap-1.5 px-3.5 text-[13px] font-semibold rounded-[4px] cursor-pointer bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Icon.Plus size={14} /> New show
+            <Icon.Plus size={14} /> New tour
           </button>
         }
       />
 
-      <NewShowModal
-        open={newShowOpen}
-        onClose={() => setNewShowOpen(false)}
+      <NewTourModal
+        open={newTourOpen}
+        onClose={() => setNewTourOpen(false)}
         onCreate={handleCreate}
         onCreateSeeded={handleCreateSeeded}
       />
 
-      <div className="mb-5">
-        <MyShowsMap tours={tours} />
-      </div>
-
       {tours.length === 0 ? (
         <div className="card p-6 text-center">
           <p className="text-[13px] text-[var(--color-ink-3)]">
-            No shows yet — click "New show" to start building your first tour.
+            No tours yet — click "New tour" to start building your first one.
           </p>
         </div>
       ) : (
         <div className="space-y-3">
+          <div className="mb-5">
+            <MyToursMap tours={tours} />
+          </div>
+
           <CollapsibleSection
             title="On tour now"
             eyebrow="Live"
@@ -189,7 +199,7 @@ function MyShowsList() {
               </Chip>
             }
           >
-            <TourGrid tours={byStatus('on_tour')} emptyLabel="No shows currently on tour." />
+            <TourGrid tours={byStatus('on_tour')} emptyLabel="No tours on the road right now." />
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -202,7 +212,7 @@ function MyShowsList() {
               </Chip>
             }
           >
-            <TourGrid tours={byStatus('upcoming')} emptyLabel="No upcoming shows." />
+            <TourGrid tours={byStatus('upcoming')} emptyLabel="No upcoming tours." />
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -213,6 +223,17 @@ function MyShowsList() {
               <Chip tone="neutral" variant="outline" size="sm">
                 {byStatus('draft').length}
               </Chip>
+            }
+            actions={
+              <button
+                type="button"
+                onClick={() => setNewTourOpen(true)}
+                disabled={creating}
+                aria-label="Add a new tour"
+                className="min-h-11 md:min-h-8 inline-flex items-center gap-1 px-2.5 text-[12px] font-semibold rounded-[3px] cursor-pointer border border-[var(--color-rule)] bg-[var(--color-card)] text-[var(--color-ink-2)] hover:border-[var(--color-ink-4)] hover:text-[var(--color-ink)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Icon.Plus size={12} /> Add
+              </button>
             }
           >
             <TourGrid tours={byStatus('draft')} emptyLabel="No drafts in progress." />
@@ -228,7 +249,7 @@ function MyShowsList() {
               </Chip>
             }
           >
-            <TourGrid tours={byStatus('completed')} emptyLabel="No completed shows yet." />
+            <TourGrid tours={byStatus('completed')} emptyLabel="No completed tours yet." />
           </CollapsibleSection>
         </div>
       )}
@@ -236,7 +257,7 @@ function MyShowsList() {
   );
 }
 
-function NewShowModal({
+function NewTourModal({
   open,
   onClose,
   onCreate,
@@ -322,7 +343,7 @@ function NewShowModal({
   const canCreate = trimmed.length > 0;
 
   return (
-    <Modal open={open} onClose={onClose} eyebrow="New show" title="Start a tour" size="md">
+    <Modal open={open} onClose={onClose} eyebrow="New tour" title="Start a tour" size="md">
       <div className="space-y-4">
         {hasApiKey ? (
           <div className="space-y-2">
@@ -360,7 +381,7 @@ function NewShowModal({
                     <button
                       type="button"
                       onClick={() => void handlePick(a)}
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left hover:bg-[var(--color-paper)]/60"
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left cursor-pointer hover:bg-[var(--color-paper)]/60"
                     >
                       {a.imageUrl ? (
                         <img
@@ -453,7 +474,7 @@ function NewShowModal({
             Cancel
           </Button>
           <Button size="sm" variant="primary" disabled={!canCreate} onClick={() => onCreate(trimmed)}>
-            Create show
+            Create tour
           </Button>
         </div>
       </div>

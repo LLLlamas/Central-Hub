@@ -1,5 +1,5 @@
 // Shared lat/lng → SVG coordinate projection math, extracted out of
-// RouteMap.tsx so other map surfaces (e.g. the My Shows map) can reuse it
+// RouteMap.tsx so other map surfaces (e.g. the My Tours map) can reuse it
 // without duplicating the projection logic. Linear projection is fine at
 // this resolution — these are illustrative routing maps, not navigation
 // charts.
@@ -51,6 +51,26 @@ export function computeBounds(coords: CityCoord[]): ProjectionBounds {
     maxLat: Math.max(...lats),
     minLng: Math.min(...lngs),
     maxLng: Math.max(...lngs),
+  };
+}
+
+// Expands degenerate or near-degenerate bounds symmetrically around their
+// center so a single city (or a tight cluster) projects to the middle of the
+// plot instead of collapsing into the top-left padding corner — project()'s
+// zero-range guard alone would pin such a point at (pad.left, pad.top).
+// The lng floor is 1.5x the lat floor to match the 540x360 (3:2) viewBox, so
+// a lone pin sits dead-center with even margins. Pass the result of
+// computeBounds() through here before calling project().
+export function padBounds(bounds: ProjectionBounds, minSpan = 4): ProjectionBounds {
+  const latCenter = (bounds.minLat + bounds.maxLat) / 2;
+  const lngCenter = (bounds.minLng + bounds.maxLng) / 2;
+  const latSpan = Math.max(bounds.maxLat - bounds.minLat, minSpan);
+  const lngSpan = Math.max(bounds.maxLng - bounds.minLng, minSpan * 1.5);
+  return {
+    minLat: latCenter - latSpan / 2,
+    maxLat: latCenter + latSpan / 2,
+    minLng: lngCenter - lngSpan / 2,
+    maxLng: lngCenter + lngSpan / 2,
   };
 }
 

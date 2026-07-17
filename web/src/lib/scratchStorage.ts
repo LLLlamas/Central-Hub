@@ -1,6 +1,6 @@
 // localStorage persistence for scratch tours (multi-tour). Only the scratch
 // Tour is persisted per-tour, plus a lightweight tours-index for the "My
-// Shows" switcher. AppState's overlay Maps (lockedDays, sectionEdits,
+// Tours" switcher. AppState's overlay Maps (lockedDays, sectionEdits,
 // visibilityEdits, …) are NOT persisted here — they reset on reload by design.
 //
 // The scratch Tour is plain JSON-serializable data (no Map/Set/Date), so
@@ -84,7 +84,7 @@ export function stripForPersistence(tour: Tour): Tour {
   };
 }
 
-/** Read the "My Shows" tours index. Returns [] on missing/corrupt data. */
+/** Read the "My Tours" tours index. Returns [] on missing/corrupt data. */
 export function loadToursIndex(): TourSummary[] {
   if (typeof window === 'undefined') return [];
   try {

@@ -4,9 +4,9 @@ Operational notes for Claude sessions working on this repo. README.md is the hum
 
 ## What this is
 
-A multi-tour production/logistics hub for touring professionals. React + Vite + TypeScript + Tailwind v4 frontend in `web/`. **Default backend is `local`** (localStorage + IndexedDB, no login — everything client-side). A Phase-A **Supabase** backend (auth + one shared tour with role-gated membership) is implemented behind `VITE_BACKEND=supabase` — see "Backend seam" below. Note: the supabase backend does not yet support multiple tours per account (`MyShows.tsx` redirects straight into the caller's one membership tour on that backend) — multi-tour is a `local`-only capability today.
+A multi-tour production/logistics hub for touring professionals. React + Vite + TypeScript + Tailwind v4 frontend in `web/`. **Default backend is `local`** (localStorage + IndexedDB, no login — everything client-side). A Phase-A **Supabase** backend (auth + one shared tour with role-gated membership) is implemented behind `VITE_BACKEND=supabase` — see "Backend seam" below. Note: on supabase a caller can switch between tours they already belong to (`MyTours.tsx` renders a membership switcher, or redirects straight in when there's exactly one), but tour *creation* there is unbuilt — full multi-tour is a `local`-only capability today.
 
-`/` is **My Shows** (`routes/MyShows.tsx`) — every tour a TM/PM runs, grouped by status (on tour / upcoming / drafts / completed) with a map, plus "+ New show". Every other surface lives nested under `/t/:tourId/...`. Within a tour, the TM/PM:
+`/` is **My Tours** (`routes/MyTours.tsx`) — every tour a TM/PM runs, grouped by status (on tour / upcoming / drafts / completed) with a map, plus "+ New tour". Every other surface lives nested under `/t/:tourId/...`. Within a tour, the TM/PM:
 - **Authors the rider directly in-app** from a 14-section consensus table of contents (`routes/RiderBuilder.tsx`, `lib/riderBuilder.ts`) — add/remove/reorder/rename sections, with real inline editors for every section type including the three that used to be review-only (Backline, Lodging, Catering: `components/rider/*Editor.tsx`). The old "upload a PDF and extract it" path still exists as a fallback (`lib/pdfParser.ts`), used when there's no time to author from scratch or the TM has an existing rider PDF.
 - **Sends the rider to each show's venue and negotiates it** — a venue-advance board (`routes/Advance.tsx` + `routes/AdvanceDetail.tsx`) per show, the venue responds per item (have/partial/don't-have/acknowledged/issue) via a simulated venue persona (`grp_venue`, using the existing viewer-switcher mechanism), and the TM reconciles any gap (`components/ReconcileModal.tsx`) until every item is confirmed.
 - **Attaches stage-design media** — a gallery of pasted Dropbox/YouTube/Vimeo links or uploaded photos/video on the rider's "Stage design" section (`components/StageMediaEditor.tsx` / `StageMediaGallery.tsx`), with a persistent "peek" strip while authoring any other section.
@@ -46,7 +46,7 @@ There is also a launchable dev server config at `.claude/launch.json` that the p
 ```
 web/src/
 ├── main.tsx                       # MigrationGate → AuthProvider → AuthGate → PdfViewerProvider → RouterProvider
-├── router.tsx                     # '/' = MyShows; everything else nested under /t/:tourId (Layout + print sub-tree)
+├── router.tsx                     # '/' = MyTours; everything else nested under /t/:tourId (Layout + print sub-tree)
 ├── index.css                      # Tailwind v4 + design tokens + @media print rules
 ├── state/
 │   ├── AppState.tsx                # tour, booting, user, every overlay Map + mutator — see "State (AppState)"
@@ -60,7 +60,7 @@ web/src/
 │   ├── riderFixture.ts            # Collapses riderSeed into the 14-entry TOC + hydrateRiderPlotImages (PDF-fallback path)
 │   ├── scratchTour.ts             # createScratchTour(tourId, name?) — empty per-tour shell; scratchUsers/scratchDefaultUserKey
 │   ├── groups.ts                  # Standard department taxonomy (Artist/A Party/Mgmt/Production/Audio/Lighting/Video/Staff/Venue)
-│   ├── venues.ts                  # Venue directory (address/promoter/house-PM) + getVenueForTour (tour override > directory)
+│   ├── venues.ts                  # Venue directory — ships EMPTY; real venues live on Tour.venues (CSV/Ticketmaster) via getVenueForTour
 │   ├── flightFixture.ts           # Raw flight data + buildScratchFlightImport (dormant while FLIGHTS_ENABLED=false)
 │   ├── hotelFixture.ts            # Per-hotel raw data + buildScratchHotelImport(fixtureId, personnel)
 │   ├── gearFixture.ts             # buildRiderGearItems() + mergeGearItems() — gear seeded from the fixture rider only
@@ -72,10 +72,10 @@ web/src/
 │   ├── negotiation.ts             # Pure state transitions for a NegotiationThread (venue response / TM reconcile / reopen)
 │   ├── media.ts                   # Stage-media URL classification + Dropbox/YouTube/Vimeo embed helpers
 │   ├── updatesFeed.ts             # collectRecentUpdates — folds every edit-history overlay into one sorted FeedEntry[]
-│   ├── tourSummary.ts             # summarizeTour/deriveTourStatus — Tour → TourSummary for My Shows
+│   ├── tourSummary.ts             # summarizeTour/deriveTourStatus — Tour → TourSummary for My Tours
 │   ├── migrateLegacyTour.ts       # One-time migration: old fixed-key storage → per-tour keyed storage (gated on a flag)
 │   ├── routing.ts                 # tourPath(tourId, path?) — the one place that builds `/t/:tourId/...` strings
-│   ├── mapProjection.ts           # Shared lat/lng → SVG projection (CITY_COORDS), used by RouteMap + MyShowsMap
+│   ├── mapProjection.ts           # Shared lat/lng → SVG projection (CITY_COORDS), used by RouteMap + MyToursMap
 │   ├── idbTourRange.ts            # deleteAllForTour — shared IndexedDB cursor-delete for [tourId, id]-keyed stores
 │   ├── useToursIndex.ts           # Hook: reads the tours-index, re-reads on tab focus/visibilitychange
 │   ├── features.ts                # FLIGHTS_ENABLED = false — hide-not-delete flag for the flight-import feature
@@ -87,7 +87,7 @@ web/src/
 │   ├── travelGridCsv.ts           # Travel-agent grid CSV → FlightImport[] (dormant while FLIGHTS_ENABLED=false)
 │   ├── flightImportDiff.ts        # Duplicate-flight diff (passengers + seats + metadata)
 │   ├── fixtureMatcher.ts          # FIXTURES registry + matchFixture (filename → known fixture)
-│   ├── scratchStorage.ts          # Per-tour localStorage load/save (tourKey) + the "My Shows" tours-index + createTourId
+│   ├── scratchStorage.ts          # Per-tour localStorage load/save (tourKey) + the "My Tours" tours-index + createTourId
 │   ├── overlayStorage.ts          # Per-tour localStorage load/save for AppState overlays (overlayKey)
 │   ├── riderPdfStore.ts           # IndexedDB `rider-pdfs` store, keyed [tourId, RiderImport.id] — raw rider PDF bytes
 │   ├── documentStore.ts           # IndexedDB `documents` store, keyed [tourId, id] — hotel PDFs, stage-media uploads
@@ -123,7 +123,7 @@ web/src/
 │   ├── StageMediaEditor.tsx       # Authoring side of the stage-media gallery (paste a link or upload a file)
 │   ├── StageMediaGallery.tsx      # Read-facing gallery — images/video inline, links open in a new tab
 │   ├── UpdatesFeed.tsx            # Crew-facing "what changed recently" feed, ungated by managerView
-│   ├── MyShowsMap.tsx             # Map for the My Shows home page — one pin per tour at its primaryCity
+│   ├── MyToursMap.tsx             # Map for the My Tours home page — one pin per tour at its primaryCity
 │   ├── MigrationGate.tsx          # Runs migrateLegacyTourIfNeeded() before anything else mounts
 │   ├── RiderRef.tsx               # `Stage specs (p.4)` clickable link + linkifyRiderRefs helper
 │   ├── RouteMap.tsx               # SVG plot of one tour's show cities with numbered legend
@@ -134,7 +134,7 @@ web/src/
 │   ├── ExplainTag.tsx             # Amber "(?)" — plain-English popup for red/alert warnings
 │   └── VisibilityEditor.tsx / TypeDefaultsEditor.tsx
 └── routes/
-    ├── MyShows.tsx                 # / — multi-tour switcher (or a straight redirect into the one tour, on supabase)
+    ├── MyTours.tsx                 # / — multi-tour switcher (or a straight redirect into the one tour, on supabase)
     ├── TourScope.tsx               # /t/:tourId — loads-or-404s the tour, then key={tourId}-remounts AppStateProvider
     ├── TourNotFoundRedirect.tsx    # /t/:tourId/* catch-all — bounces an unknown in-tour path back to the tour root
     ├── LegacyPathRedirect.tsx      # Un-scoped pre-migration paths (old bookmarks) → /t/:tourId/... if exactly one tour exists
@@ -181,20 +181,20 @@ web/tests/                          # Unit tests (vitest) — mirrors src/ struc
 
 ## Multi-tour architecture
 
-`/` no longer boots straight into a tour — it's **My Shows** (`routes/MyShows.tsx`), a switcher across every tour on this browser:
+`/` no longer boots straight into a tour — it's **My Tours** (`routes/MyTours.tsx`), a switcher across every tour on this browser:
 
 - **`TourSummary`** (`types/index.ts`) is the lightweight per-tour card shape (`id`, `name`, `artistName`, `status`, date range, show/day counts, `updatedAt`) — derived from a full `Tour` by `summarizeTour`/`deriveTourStatus` (`lib/tourSummary.ts`). Status (`draft` / `upcoming` / `on_tour` / `completed`) is computed from `tour.days` vs `getTodayIso()`, not stored.
 - **The tours-index** — one extra localStorage key (`tour-hub:tours-index`) holding `TourSummary[]`, read by `useToursIndex()` (`lib/useToursIndex.ts`, re-reads on tab focus/`visibilitychange`) and written by `scratchStorage.ts`'s `saveScratchTour` (upserts a fresh summary on every tour save) and `clearScratchTour` (removes the entry on delete/reset).
 - **Per-tour storage keying** — every persistence layer is keyed by `tourId`, not a single fixed key: `scratchStorage.ts`'s `tourKey(tourId)` → `tour-hub:tour:${tourId}` (localStorage), `overlayStorage.ts`'s `overlayKey(tourId)` → `tour-hub:overlays:${tourId}` (localStorage), and `riderPdfStore.ts` / `documentStore.ts` key IndexedDB rows by a compound `[tourId, id]` array key (`lib/idbTourRange.ts`'s `deleteAllForTour` is the shared cursor-delete both stores use to wipe just one tour on reset). `createTourId()` mints `tour_${crypto.randomUUID()}`.
 - **`migrateLegacyTourIfNeeded()`** (`lib/migrateLegacyTour.ts`) — a one-time migration from the pre-multi-tour scheme (a single fixed-key tour + overlay bundle, bare-string IndexedDB keys) to the per-tour scheme above. Gated by the `tour-hub:migrated-v2` localStorage flag; no-ops entirely on `supabase` (which never had the old scheme); self-healing (doesn't set the flag if any step throws, so a failed migration just retries next load). Runs inside `components/MigrationGate.tsx`, mounted in `main.tsx` **above** `AuthProvider`/`AppStateProvider` so migration completes before anything reads per-tour storage.
 - **`TourScope`** (`routes/TourScope.tsx`) is the `/t/:tourId` route element: on `local`, it synchronously checks `loadScratchTour(tourId)` and renders a "Tour not found" screen instead of silently fabricating a fresh blank tour for a stale bookmark or typo'd id (which `AppStateProvider`'s initializer would otherwise do); on `supabase` this check is skipped (the shared tour resolves from membership, not a bookmarkable id). It then renders `<AppStateProvider key={tourId} tourId={tourId}>` wrapping `<Outlet />` — **the `key={tourId}` forces a full remount of `AppStateProvider` (and everything under it) on every tour switch**, which is why AppState's plot-image render cache (`hydratedPlotsCache`) is deliberately module-scope, not component state — it needs to survive that remount.
-- **`tourPath(tourId, path?)`** (`lib/routing.ts`) is the single place that builds `/t/:tourId/...` strings — every cross-tour link (My Shows cards, the sidebar exit link, `UpdatesFeed` hrefs, `CommandPalette`) goes through it rather than hand-rolling the template string.
+- **`tourPath(tourId, path?)`** (`lib/routing.ts`) is the single place that builds `/t/:tourId/...` strings — every cross-tour link (My Tours cards, the sidebar exit link, `UpdatesFeed` hrefs, `CommandPalette`) goes through it rather than hand-rolling the template string.
 - **Relative-nav convention**: every link *within* a tour's own nested routes (`Sidebar`, `BottomNav`, `More`) uses a **bare relative `to`** (e.g. `to="calendar"`, `to=""` for the index) rather than `tourPath(tour.id, 'calendar')` — React Router resolves it against the current `/t/:tourId` match. Only cross-tour or tour-id-carrying links (anything built outside the currently-active nested route tree, or any link constructed from a `tourId` value rather than "the tour I'm already inside") need `tourPath`.
 - **`LegacyPathRedirect`** (`routes/LegacyPathRedirect.tsx`) catches un-scoped pre-migration paths (`/calendar`, `/daysheet/:date`, etc. — old bookmarks/printed sheets/shared links) and forwards into `/t/:tourId/...` if there's exactly one tour on this browser, else sends to `/`. **`TourNotFoundRedirect`** (`routes/TourNotFoundRedirect.tsx`) is the in-tour catch-all (`/t/:tourId/*`) for an unrecognized path within a known tour — bounces to the tour root rather than a 404.
 
 ## Data modes — rider authoring, not upload-only
 
-A new tour still starts as an empty shell (`createScratchTour(tourId, name?)`, `data/scratchTour.ts`) — named, the standard `groups` (`data/groups.ts`), one Tour Manager, everything else empty. "+ New show" on My Shows prompts for a name up front (so multiple drafts aren't indistinguishable) and creates one immediately.
+A new tour still starts as an empty shell (`createScratchTour(tourId, name?)`, `data/scratchTour.ts`) — named, the standard `groups` (`data/groups.ts`), one Tour Manager, everything else empty. "+ New tour" on My Tours prompts for a name up front (so multiple drafts aren't indistinguishable) and creates one immediately.
 
 **The rider is now authored in-app, not just uploaded.** `createRiderDraft()` (AppState mutator, wrapping the pure `lib/riderBuilder.ts` builder) seeds a brand-new `RiderImport` with **14 blank sections** from `RIDER_TOC_TEMPLATE` — the same section-type list and order the fixture rider and `riderSections.ts` page-map use (cover & contacts, production control, permits, stage specs, stage design, audio PA, input list, lighting equipment, backline, soundcheck, ground transport, lodging, dressing rooms, catering). The TM/PM then:
 - Fills each section in with real inline editors — tabular editors for Input List / Monitor Mix / FOH Outputs (pre-existing), and dedicated editors for Backline / Lodging / Catering (`components/rider/BacklineEditor.tsx` etc — these three used to be review-only).
@@ -214,7 +214,7 @@ A new tour still starts as an empty shell (`createScratchTour(tourId, name?)`, `
 
 ## The fixture data at a glance
 
-`data/fixtures/riderSeed.ts` is the raw over-split rider content (§6 split into 3 rows, §8 into 2) that `data/riderFixture.ts` collapses into the 14 TOC entries the authoring/review surface expects — this fixture only comes into play on the PDF-upload fallback path (an authored rider never touches it). `data/venues.ts` is the real venue directory (address/promoter/house-PM) keyed by venue id, with `Tour.venues` as an optional per-tour override layer.
+`data/fixtures/riderSeed.ts` is the raw over-split rider content (§6 split into 3 rows, §8 into 2) that `data/riderFixture.ts` collapses into the 14 TOC entries the authoring/review surface expects — this fixture only comes into play on the PDF-upload fallback path (an authored rider never touches it). `data/venues.ts`'s `VENUE_DIRECTORY` ships empty (the fabricated sample-city venues/contacts were removed); real venues live on `Tour.venues`, written by route-CSV import and Ticketmaster seeding, and resolve via `getVenueForTour`.
 
 - **Real clock:** `lib/today.ts` exports `getTodayIso()` and `getNowIso()` — both use `new Date()` (local time). Every "today" lookup goes through these helpers, never inline `new Date()`.
 - **Personnel (13) in the fixture rider:** 5 named (Elsa Carvajal, Julian Bernal, Juan, Daniel, Manuel González PM) + 8 placeholders (Tour Manager, Audio Engineer, Lighting Engineer, VJ, MUA, Personal Asst, Staff #1, Staff #2). See "Pending user-blocked items" below — this is no longer a hard blocker since Personnel now supports direct add/edit/remove.
@@ -225,7 +225,7 @@ A new tour still starts as an empty shell (`createScratchTour(tourId, name?)`, `
 - **Hotels are keyed to check-in day**, not subsequent show nights. So `getHotelsForDay('day_2026-09-25')` returns nothing even though the band is staying somewhere; check `day_2026-09-22` for the CDMX block. This is a real data-model issue, not a bug to silently fix — surface to user before changing.
 - **Conflicts ARE real** (for the fixture/imported-PDF rider). They were extracted from `docs/handoff-post-pdf-interpret.md` (the AI analysis of the rider PDF). Only the *detector* is automated; the contradictions themselves exist in the actual rider. An authored rider has no equivalent conflict source (nothing to cross-check against).
 - **Schedule item TIMES are seed data**, but some constraints attached to them are real (e.g., the soundcheck `6h min from load-in` rule comes from rider §10 and is rendered as an `(i)` next to the soundcheck row).
-- **Venue promoter/house-PM contacts in `data/venues.ts` are seed data for the sample cities** — `getVenueForTour` prefers a tour's own `Tour.venues` override when present. The rider itself never contains venue routing.
+- **The venue directory ships empty** — `VENUE_DIRECTORY` in `data/venues.ts` has no seed entries (the old fabricated sample-city contacts are gone). `getVenueForTour` resolves from `Tour.venues` (populated by route-CSV import and Ticketmaster seeding); a missing venue renders a graceful fallback (`day.city` / "Venue TBD"), never fake data. The rider itself never contains venue routing.
 
 ## Provenance system
 
@@ -307,14 +307,14 @@ When backend lands fully, replace with TanStack Query + Zustand or similar; the 
 
 All persistence routes through one interface: `lib/backend/types.ts` → `Backend` (`subscribeTour` / `saveTour` / `loadOverlays` / `saveOverlays` / `loadPdf` / `savePdf` / `deletePdf` / `clearAll`, plus optional membership + submissions methods). `lib/backend/index.ts` selects the impl from `VITE_BACKEND` (default **`local`**): `local.ts` wraps today's per-tour localStorage + IndexedDB modules verbatim; `supabase.ts` persists the shared `Tour` + overlays as JSONB rows and PDF bytes to tour-scoped Storage paths (`{tourId}/{scope}/{id}.pdf`). **The `local` path is byte-for-byte unchanged** — every supabase behavior is gated on `BACKEND_KIND === 'supabase'`, and the Supabase SDK only loads via dynamic import (`lib/supabase/client.ts`).
 
-**Supabase now supports a caller belonging to more than one tour** — the model is still one *shared* tour per tour set up by its own TM/PM (crew join by email via `tour_members`, role-gated, `claimMembership()` on login, filtered to their role), but a single email can hold an active `tour_members` row in several tours (the table's PK was always `(tour_id, email)`, not `email` alone) and switch between them. `MyShows.tsx` special-cases `BACKEND_KIND === 'supabase'`: exactly one active membership still redirects straight into that tour (`tourPath(membership.tourId)`, unchanged fast path); more than one renders `MembershipSwitcher`, a card list built from `backend.listMyMemberships()` (`Membership[]`, not the `local`-only `TourSummary[]`/`useToursIndex()`). Creating a brand-new shared tour on supabase (who becomes its TM/PM, billing/tenancy) is still unbuilt — the switcher only moves between tours the caller is already an active member of. See `docs/backend.md`'s "Multi-tour on supabase" for the full detail. Managers may preview-as via the TopBar switcher; non-managers are pinned to their membership identity, and manager-only writes are gated by `isManagerMember` (`lib/access.ts`'s `isOwnerFloorRole`). Overlays are tour-shared; only the per-user `userKey` stays client-side. `AuthProvider`/`AuthGate` gate only on supabase — `local` reports a synthetic active-TM membership and is never gated; on supabase the tour cloud-boots (`booting` flag on `useApp()`, spinner in `Layout`) and writes are debounced ~500ms.
+**Supabase now supports a caller belonging to more than one tour** — the model is still one *shared* tour per tour set up by its own TM/PM (crew join by email via `tour_members`, role-gated, `claimMembership()` on login, filtered to their role), but a single email can hold an active `tour_members` row in several tours (the table's PK was always `(tour_id, email)`, not `email` alone) and switch between them. `MyTours.tsx` special-cases `BACKEND_KIND === 'supabase'`: exactly one active membership still redirects straight into that tour (`tourPath(membership.tourId)`, unchanged fast path); more than one renders `MembershipSwitcher`, a card list built from `backend.listMyMemberships()` (`Membership[]`, not the `local`-only `TourSummary[]`/`useToursIndex()`). Creating a brand-new shared tour on supabase (who becomes its TM/PM, billing/tenancy) is still unbuilt — the switcher only moves between tours the caller is already an active member of. See `docs/backend.md`'s "Multi-tour on supabase" for the full detail. Managers may preview-as via the TopBar switcher; non-managers are pinned to their membership identity, and manager-only writes are gated by `isManagerMember` (`lib/access.ts`'s `isOwnerFloorRole`). Overlays are tour-shared; only the per-user `userKey` stays client-side. `AuthProvider`/`AuthGate` gate only on supabase — `local` reports a synthetic active-TM membership and is never gated; on supabase the tour cloud-boots (`booting` flag on `useApp()`, spinner in `Layout`) and writes are debounced ~500ms.
 
 **⚠️ Client-side privacy caveat (accepted this milestone):** privacy *between active members* is UI-only — the full Tour JSONB reaches every member's browser. Safe for a trusted-crew demo; before untrusted members, do the Phase B per-row `readable_by` RLS decomposition drafted in `supabase/migrations/0001_init.sql`. `lib/access.ts`'s `computeReadableBy` is the pure bridge that reuses `resolveVisibility` so the eventual server-side denormalization has exactly one copy of the rank logic to import.
 
 ## Routing
 
 ```
-/                                     My Shows — multi-tour switcher (redirects straight into the one tour on supabase)
+/                                     My Tours — multi-tour switcher (redirects straight into the one tour on supabase)
 /t/:tourId                            Tour Overview — this tour's homepage
 /t/:tourId/calendar                   Month grid
 /t/:tourId/calendar/:date             Day Detail
@@ -373,7 +373,7 @@ Three layout layers in `router.tsx`: `TourScope` (loads the tour, remounts `AppS
 3. If it should be individually negotiable (not just a whole-section acknowledgment), add a `deriveXItems` branch to `lib/riderItems.ts`'s `deriveSectionItems` switch
 
 **A new venue field:**
-1. Add to `Venue` in `types/index.ts` and `data/venues.ts`'s `VENUE_DIRECTORY` (or leave it for `Tour.venues` per-tour overrides)
+1. Add to `Venue` in `types/index.ts` — values live on `Tour.venues` per-tour (`VENUE_DIRECTORY` ships empty)
 2. Read via `getVenueForTour(tour, venueId)`, never `VENUE_DIRECTORY[venueId]` directly, so per-tour overrides win
 
 **A new real-data field (rider extraction citation):**
@@ -384,8 +384,9 @@ Three layout layers in `router.tsx`: `TourScope` (loads the tour, remounts `AppS
 
 > One-liners only — the full operational note for each lives in `docs/feature-notes.md` where it predates this phase; the multi-tour/rider-authoring/venue-negotiation/stage-media items below are this overhaul's own additions and aren't in that doc yet.
 
-- **Multi-tour architecture** — My Shows home page, `/t/:tourId` nesting, per-tour storage keying, one-time legacy-tour migration. See "Multi-tour architecture" above.
-- **Ticketmaster-seeded tour creation** — "+ New show" on My Shows can search an artist (Discovery API v2, key via `VITE_TICKETMASTER_API_KEY`, search hidden when unset) and seed the tour with their real upcoming show days/venues/timezones; `lib/ticketmaster.ts` (fetch wrappers + pure `buildTourSeed`, tested offline in `tests/lib/ticketmaster.test.ts`). Local backend only; blank creation unchanged.
+- **My Tours home page (renamed from "My Shows")** — `/` has its own centered page shell (it renders outside `Layout`), a size-capped tour map (`padBounds` in `lib/mapProjection.ts` centers degenerate/single-city bounds; pin labels clamp instead of clipping), and an "+ Add" action on the Drafts header (`CollapsibleSection`'s optional `actions` prop). "Tour" = the collection at `/`; "show" only ever means a show-day inside a tour.
+- **Multi-tour architecture** — My Tours home page, `/t/:tourId` nesting, per-tour storage keying, one-time legacy-tour migration. See "Multi-tour architecture" above.
+- **Ticketmaster-seeded tour creation** — "+ New tour" on My Tours can search an artist (Discovery API v2, key via `VITE_TICKETMASTER_API_KEY`, search hidden when unset) and seed the tour with their real upcoming show days/venues/timezones; `lib/ticketmaster.ts` (fetch wrappers + pure `buildTourSeed`, tested offline in `tests/lib/ticketmaster.test.ts`). Local backend only; blank creation unchanged.
 - **In-app rider authoring** — 14-section consensus TOC template, add/remove/reorder/rename, inline editors for every section type including Backline/Lodging/Catering. PDF upload/extraction is now the fallback path, not primary. See "Data modes" above.
 - **Venue negotiation** — advance board + per-show detail + reconcile flow, simulated venue persona. See "Venue negotiation model" above.
 - **Stage-design media gallery + crew updates feed** — see "Stage design media + updates feed" above.
@@ -397,7 +398,7 @@ Three layout layers in `router.tsx`: `TourScope` (loads the tour, remounts `AppS
 - **Clarity + mobile redesign** — `TodaySurface` (desktop Overview hero + mobile home), `BottomNav`, `/more` overflow.
 - **Day-sheet Edit mode** — manager-only inline schedule editing with batch Save/Discard, add/delete, per-day edit history; time helpers in `lib/time.ts`; `EditableText`/`EditableSelect` in `components/ui/`.
 - **Last-updated audit line** — `<LastUpdated>` on Today / DaySheets / print / DayDetail / Gear / Plots / Advance; lock, conflict-resolve, and negotiation actions live-stamp their surfaces.
-- **Printable day sheet** (`/t/:tourId/print/daysheet/:date`) — venue/promoter info from `data/venues.ts`.
+- **Printable day sheet** (`/t/:tourId/print/daysheet/:date`) — venue/promoter info via `getVenueForTour` (per-tour `Tour.venues`).
 - **Per-day lock state** — chips in DaySheets/Calendar/Overview; `DayLockRecord` history with reason prompt + "N lock events" accordion.
 - **Conflict feed + resolution flow** — conflicts model *cross-document* disagreement (new rider version vs on-file), not intra-rider contradictions; resolve modal pre-fills mailto to the PM; `p. N` page links open the rider PDF in-app.
 - **Document submissions (Milestone 2)** — `/t/:tourId/me` (every member's personal page + "Submit a document") and `/t/:tourId/submissions` (manager inbox: approve → attach + parse into Travel/Hotels, or reject with reason). Ingest/authoring routes are manager-gated.
@@ -407,7 +408,7 @@ Three layout layers in `router.tsx`: `TourScope` (loads the tour, remounts `AppS
 - **Warning explainers** — `<ExplainTag>` amber "(?)" popovers on every red/alert element.
 - **Gear & Supplies tracker** (`/t/:tourId/gear`) — items seeded from an imported rider (skipped for an authored one), status cycling, cost totals; smart merge on rider re-upload (`mergeGearItems` keeps user edits).
 - **Personnel CRUD** — direct add/edit/remove of crew + groups from `/t/:tourId/personnel` (`addTourPerson`/`updateTourPerson`/`removeTourPerson`/`addGroup`), no propose/approve.
-- **Cmd+K palette**; **Route map** (hard-coded city lat/lngs, now shared via `lib/mapProjection.ts` with the new My Shows map); **Calendar List/Grid toggle**; **Lobby-call ladder** (anchors on the `doors` item).
+- **Cmd+K palette**; **Route map** (hard-coded city lat/lngs, now shared via `lib/mapProjection.ts` with the new My Tours map); **Calendar List/Grid toggle**; **Lobby-call ladder** (anchors on the `doors` item).
 - **Multi-rider version history** — uploads/authored versions prepend to `riderImports[]`; `setActiveRider(id)` promotes without clearing approvals.
 
 ## Pending user-blocked items
@@ -435,6 +436,6 @@ Still open:
 - **PDF text highlighting** — the viewer + jump-to-page are done, but auto-highlighting the cited text is blocked on a data issue (Spanish PDF vs. English citations). Plan + fix in `docs/pdf.md`.
 - **Promoter contact card as a first-class entity** — promoter fields live on `Venue` (`data/venues.ts`) but there's no dedicated promoter-contact surface; `AdvanceDetail`/`Advance` don't currently surface promoter info at all, only venue name/city.
 - **Timezone-aware times throughout (next up)** — still untouched; no `timezone`/`timeZone` handling anywhere in the codebase.
-- **Tour creation on the supabase backend** — a caller can now switch between every tour they're an active member of (`listMyMemberships()` + `MembershipSwitcher` in `MyShows.tsx`), but creating a brand-new *shared* tour there (who becomes its TM/PM, billing/tenancy) is still unbuilt; the `local` tours-index/per-tour-storage model's "+ New show" has no supabase equivalent yet.
+- **Tour creation on the supabase backend** — a caller can now switch between every tour they're an active member of (`listMyMemberships()` + `MembershipSwitcher` in `MyTours.tsx`), but creating a brand-new *shared* tour there (who becomes its TM/PM, billing/tenancy) is still unbuilt; the `local` tours-index/per-tour-storage model's "+ New tour" has no supabase equivalent yet.
 
 See `docs/potential-implementation.md` §9 for the original full backlog (predates this overhaul; treat as historical context, not a current TODO list).

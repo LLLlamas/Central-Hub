@@ -40,7 +40,7 @@ const scratchTmTourPerson: TourPerson = {
 
 /** Build a fresh, empty scratch tour — the minimal shell. `name` lets "+ New
  *  show" give the tour a real name up front so multiple drafts aren't
- *  indistinguishable in My Shows; omit it to fall back to the placeholder. */
+ *  indistinguishable in My Tours; omit it to fall back to the placeholder. */
 export function createScratchTour(tourId: ID, name?: string): Tour {
   return {
     id: tourId,

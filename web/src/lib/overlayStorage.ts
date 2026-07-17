@@ -24,6 +24,7 @@ import type {
   DocumentSubmission,
   ShowAdvance,
   NegotiationThread,
+  RiderReviewRound,
 } from '@/types';
 import type {
   ConflictResolution,
@@ -57,6 +58,12 @@ export interface OverlayBundle {
   /** Per-item negotiation threads, keyed by `threadKey(showDayId, itemKey)`
    *  (see lib/negotiation.ts). Tour-shared, same as `showAdvances`. */
   negotiations?: [string, NegotiationThread][];
+  /** Rider internal-review round history, chronological (oldest first). One
+   *  list per tour — there's one active rider, same as `showAdvances`/
+   *  `negotiations` are keyed to the rider's derived items. */
+  riderReviewRounds?: RiderReviewRound[];
+  /** Set once the TM locks the rider after a fully-ok review round. */
+  riderLocked?: UpdateStamp;
   gearItems?: GearItem[];
   /** Rider id the gear list was last seeded/merged from — guards re-seeding on reload. */
   gearSeedRiderId?: string | null;

@@ -16,7 +16,8 @@ import { FLIGHT_COST_BY_LEG } from '@/data/flightFixture';
 import { normalizeRider, createRiderDraft as buildRiderDraft, sectionKey } from '@/lib/riderBuilder';
 import { getMergedSections, deriveRiderItems } from '@/lib/riderItems';
 import { threadKey, applyVenueResponse, applyReconcile, reopenThread, isShowFullyConfirmed } from '@/lib/negotiation';
-import { getVenueForTour, VENUE_DIRECTORY } from '@/data/venues';
+import { createReviewRound, applyReviewMark, isRoundFullyOk, latestRound } from '@/lib/riderReview';
+import { getVenueForTour } from '@/data/venues';
 import type {
   Tour,
   CurrentUser,
@@ -56,6 +57,8 @@ import type {
   NegotiationThread,
   VenueItemAnswer,
   ReconcileAction,
+  RiderReviewRound,
+  SectionReviewStatus,
 } from '@/types';
 import { defaultVisibilityForType } from '@/lib/visibilityDefaults';
 import { scheduleItemLabel } from '@/lib/format';
@@ -331,6 +334,28 @@ interface AppState {
   markShowConfirmed: (showDayId: ID) => void;
   getShowAdvance: (showDayId: ID) => ShowAdvance | undefined;
   getNegotiationThread: (showDayId: ID, itemKey: string) => NegotiationThread | undefined;
+
+  // Rider internal review — a whole-rider approval round-trip with a second
+  // team (e.g. artist management), BEFORE the rider goes to venues. Distinct
+  // from venue negotiation above. Supports many rounds (inventory changes,
+  // emergencies): each "send for review" snapshots the current sections into
+  // a new round; the reviewer marks each section ok/needs_changes; the TM
+  // edits and can send another round. Tour-shared overlay, chronological.
+  riderReviewRounds: RiderReviewRound[];
+  /** Send (or re-send) the active rider for internal review — snapshots the
+   *  current sections into a new round and creates the reviewer's TourPerson
+   *  (grp_rider_review) if one doesn't exist yet. */
+  sendRiderForReview: () => void;
+  /** Reviewer-side mutator: mark one section of the latest round ok or
+   *  needs_changes, with an optional note. No-op if there's no open round. */
+  recordSectionReviewMark: (sectionKey: string, status: SectionReviewStatus, note?: string) => void;
+  getLatestReviewRound: () => RiderReviewRound | undefined;
+  /** True once the rider has been locked (finalized) after review. */
+  riderLocked: UpdateStamp | undefined;
+  /** Lock the rider — no-op unless the latest review round is fully marked
+   *  'ok'. Locking is advisory (a banner + confirm), not a hard edit-block. */
+  lockRider: () => void;
+  unlockRider: () => void;
 
   // Gear & supplies — a flat list of rider-sourced and manually-added items.
   // Status and cost are tracked here; the rider section is the source of truth
@@ -619,6 +644,12 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
   const [negotiations, setNegotiations] = useState<ReadonlyMap<string, NegotiationThread>>(
     () => new Map(initialOverlays?.negotiations ?? []),
   );
+  const [riderReviewRounds, setRiderReviewRounds] = useState<RiderReviewRound[]>(
+    () => initialOverlays?.riderReviewRounds ?? [],
+  );
+  const [riderLocked, setRiderLocked] = useState<UpdateStamp | undefined>(
+    () => initialOverlays?.riderLocked,
+  );
   const [gearItems, setGearItems] = useState<GearItem[]>(
     () => initialOverlays?.gearItems ?? [],
   );
@@ -889,6 +920,8 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
       flightPassengerResolutions: [...flightPassengerResolutions.entries()],
       showAdvances: [...showAdvances.entries()],
       negotiations: [...negotiations.entries()],
+      riderReviewRounds,
+      riderLocked,
       gearItems,
       gearSeedRiderId,
       gearUpdatedAt,
@@ -912,6 +945,8 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
       flightPassengerResolutions,
       showAdvances,
       negotiations,
+      riderReviewRounds,
+      riderLocked,
       gearItems,
       gearSeedRiderId,
       gearUpdatedAt,
@@ -941,6 +976,8 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
     setFlightPassengerResolutionsMap(new Map(b.flightPassengerResolutions ?? []));
     setShowAdvances(new Map(b.showAdvances ?? []));
     setNegotiations(new Map(b.negotiations ?? []));
+    setRiderReviewRounds(b.riderReviewRounds ?? []);
+    setRiderLocked(b.riderLocked);
     if (b.gearItems) setGearItems(b.gearItems);
     if (b.gearSeedRiderId !== undefined) setGearSeedRiderId(b.gearSeedRiderId);
     if (b.gearUpdatedAt !== undefined) setGearUpdatedAt(b.gearUpdatedAt);
@@ -1086,6 +1123,8 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
     setFlightPassengerResolutionsMap(new Map());
     setShowAdvances(new Map());
     setNegotiations(new Map());
+    setRiderReviewRounds([]);
+    setRiderLocked(undefined);
     setGearItems([]);
     setGearSeedRiderId(null);
     setGearUpdatedAt(undefined);
@@ -1125,6 +1164,9 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
         legs: parsed.legs,
         days: parsed.days,
         scheduleItems: parsed.scheduleItems,
+        // CSV venue names land as per-tour venue records — existing entries
+        // (e.g. richer Ticketmaster-seeded ones) win over the bare CSV shell.
+        venues: { ...parsed.venues, ...t.venues },
         startDate: parsed.startDate,
         endDate: parsed.endDate,
         status: 'in_progress',
@@ -2957,6 +2999,64 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
     [negotiations],
   );
 
+  // ---- Rider internal review ------------------------------------------------
+  // Same shape as venue negotiation above, but for the whole rider draft
+  // reviewed by a second internal team before it ever reaches a venue.
+  // `sendRiderForReview` snapshots the current (edit-merged) sections into a
+  // new round; the reviewer persona marks each section via
+  // `recordSectionReviewMark`; the TM can send another round at any time —
+  // there's no cap, since inventory changes and emergencies mean this is
+  // rarely a single pass.
+  const sendRiderForReview = useCallback(() => {
+    const activeRider = tour.riderImports[0];
+    if (!activeRider) return;
+    const stamp: UpdateStamp = { at: getNowIso(), by: currentName };
+
+    const reviewPersonId = 'tp_rider_review';
+    const hasReviewPerson = tour.personnel.some((p) => p.id === reviewPersonId);
+    if (!hasReviewPerson) {
+      const newPerson: TourPerson = {
+        id: reviewPersonId,
+        personId: 'p_rider_review',
+        person: { id: 'p_rider_review', name: 'Rider Review' },
+        role: 'Rider review team',
+        groupId: 'grp_rider_review',
+        tagIds: [],
+        startDate: tour.startDate,
+        endDate: tour.endDate,
+        isPlaceholder: true,
+      };
+      updateScratchTour((t) => ({ ...t, personnel: [...t.personnel, newPerson] }));
+    }
+
+    const mergedSections = getMergedSections(activeRider.sections, sectionEdits);
+    const round = createReviewRound(mergedSections, riderReviewRounds.length + 1, stamp);
+    setRiderReviewRounds((prev) => [...prev, round]);
+    // A fresh round supersedes any prior lock — the content may have moved on.
+    setRiderLocked(undefined);
+  }, [tour, sectionEdits, riderReviewRounds, currentName, updateScratchTour]);
+
+  const recordSectionReviewMark = useCallback(
+    (secKey: string, status: SectionReviewStatus, note?: string) => {
+      const round = latestRound(riderReviewRounds);
+      if (!round) return;
+      const stamp: UpdateStamp = { at: getNowIso(), by: currentName };
+      const updated = applyReviewMark(round, secKey, status, note, stamp);
+      setRiderReviewRounds((prev) => prev.map((r) => (r.id === round.id ? updated : r)));
+    },
+    [riderReviewRounds, currentName],
+  );
+
+  const getLatestReviewRound = useCallback(() => latestRound(riderReviewRounds), [riderReviewRounds]);
+
+  const lockRider = useCallback(() => {
+    const round = latestRound(riderReviewRounds);
+    if (!round || !isRoundFullyOk(round)) return; // no-op — outstanding flags or nothing reviewed yet
+    setRiderLocked({ at: getNowIso(), by: currentName });
+  }, [riderReviewRounds, currentName]);
+
+  const unlockRider = useCallback(() => setRiderLocked(undefined), []);
+
   const getPendingConflictResolution = useCallback(
     (id: ID) => pendingConflictResolutions.get(id),
     [pendingConflictResolutions],
@@ -3106,6 +3206,13 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
       markShowConfirmed,
       getShowAdvance,
       getNegotiationThread,
+      riderReviewRounds,
+      sendRiderForReview,
+      recordSectionReviewMark,
+      getLatestReviewRound,
+      riderLocked,
+      lockRider,
+      unlockRider,
       gearItems,
       updateGearItem,
       addGearItem,
@@ -3123,7 +3230,7 @@ export function AppStateProvider({ children, tourId }: { children: ReactNode; to
       loadSubmissionFileUrl,
       addDocument,
     }),
-    [tour, booting, user, userKey, allUsers, resetScratchTour, renameTour, applyRouteToScratch, addRiderImportToScratch, setActiveRider, createRiderDraft, addRiderSection, removeRiderSection, moveRiderSection, renameRiderSection, updateRiderMeta, addStageMedia, removeStageMedia, addFlightImportToScratch, commitFlightImportToScratch, editFlightImportPassenger, removeFlightImportPassenger, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, sectionEditHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, visibilityEditHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory, scheduleItemEditHistory, addTourPerson, updateTourPerson, addGroup, showAdvances, negotiations, sendRiderToVenue, recordVenueResponse, reconcileItem, reopenNegotiation, markShowConfirmed, getShowAdvance, getNegotiationThread, gearItems, updateGearItem, addGearItem, deleteGearItem, gearUpdatedAt, syncGearFromAuthoredRider, updateHotelCost, updateTravelCost, updateHotelOccupant, submissions, refreshSubmissions, proposeSubmission, approveSubmission, rejectSubmission, loadSubmissionFileUrl, addDocument],
+    [tour, booting, user, userKey, allUsers, resetScratchTour, renameTour, applyRouteToScratch, addRiderImportToScratch, setActiveRider, createRiderDraft, addRiderSection, removeRiderSection, moveRiderSection, renameRiderSection, updateRiderMeta, addStageMedia, removeStageMedia, addFlightImportToScratch, commitFlightImportToScratch, editFlightImportPassenger, removeFlightImportPassenger, addHotelImportToScratch, getDay, getDayById, getScheduleItemsForDay, getTravelForDay, getHotelsForDay, getTasksForDay, getTourPersonById, getGroupById, getGroupTagById, getAllConflicts, lockedDays, isDayLocked, toggleDayLocked, setDayLocked, dayLockHistory, getDayLockHistory, getDayLastUpdated, resolvedConflicts, resolveConflict, unresolveConflict, isSectionApproved, getSectionApproval, approveSection, reopenSection, getSectionEdit, updateSectionEdit, getPendingEdit, proposeSectionEdit, approvePendingEdit, rejectPendingEdit, getSectionHistory, sectionEditHistory, pendingConflictResolutions, getPendingConflictResolution, proposeConflictResolution, approvePendingConflictResolution, rejectPendingConflictResolution, visibilityEdits, getVisibilityEdit, updateVisibilityEdit, pendingVisibilityEdits, getPendingVisibilityEdit, proposeVisibilityEdit, approvePendingVisibilityEdit, rejectPendingVisibilityEdit, getVisibilityHistory, visibilityEditHistory, updateScheduleItem, addScheduleItem, deleteScheduleItem, getScheduleItemHistory, scheduleItemEditHistory, addTourPerson, updateTourPerson, addGroup, showAdvances, negotiations, sendRiderToVenue, recordVenueResponse, reconcileItem, reopenNegotiation, markShowConfirmed, getShowAdvance, getNegotiationThread, riderReviewRounds, sendRiderForReview, recordSectionReviewMark, getLatestReviewRound, riderLocked, lockRider, unlockRider, gearItems, updateGearItem, addGearItem, deleteGearItem, gearUpdatedAt, syncGearFromAuthoredRider, updateHotelCost, updateTravelCost, updateHotelOccupant, submissions, refreshSubmissions, proposeSubmission, approveSubmission, rejectSubmission, loadSubmissionFileUrl, addDocument],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

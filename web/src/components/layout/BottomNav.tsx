@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
 import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/lib/cn';
-import { isVenuePersona } from '@/lib/access';
+import { isVenuePersona, isReviewPersona } from '@/lib/access';
 
 const tabs = [
   { to: '', label: 'Today', icon: Icon.Home, end: true },
@@ -13,12 +13,15 @@ const tabs = [
 
 // A grp_venue persona is single-purpose: swap the whole tab bar for just the
 // advance board rather than filtering the standard tabs down (the tour-exit
-// "My Shows" link still shows — it lives ungated in TopBar, not here).
+// "My Tours" link still shows — it lives ungated in TopBar, not here).
 const venueTabs = [{ to: 'advance', label: 'Advance', icon: Icon.Handshake, end: true }];
+
+// Same idea for the rider-review persona — single-purpose, just the rider.
+const reviewTabs = [{ to: 'rider', label: 'Rider', icon: Icon.Sparkle, end: true }];
 
 export function BottomNav() {
   const { user } = useApp();
-  const visibleTabs = isVenuePersona(user) ? venueTabs : tabs;
+  const visibleTabs = isVenuePersona(user) ? venueTabs : isReviewPersona(user) ? reviewTabs : tabs;
 
   return (
     <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t border-[var(--color-rule)] bg-[var(--color-paper)]/95 backdrop-blur">

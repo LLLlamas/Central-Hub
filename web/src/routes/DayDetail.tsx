@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { PersonName } from '@/components/provenance/PersonName';
 import { SensitiveExplain } from '@/components/ExplainTag';
 import { LastUpdated } from '@/components/LastUpdated';
-import { getVenue } from '@/data/venues';
+import { getVenueForTour } from '@/data/venues';
 import { FLIGHTS_ENABLED } from '@/lib/features';
 import {
   fmtFullDate,
@@ -72,7 +72,7 @@ export function DayDetail() {
   const tasks = getTasksForDay(day.id).filter(
     (t) => managerView || resolveVisibility(t.visibility, user) !== 'blocked',
   );
-  const venue = getVenue(day.venueId);
+  const venue = getVenueForTour(tour, day.venueId);
 
   return (
     <div>
@@ -221,7 +221,9 @@ export function DayDetail() {
               <div className="space-y-3 text-[12.5px]">
                 <div>
                   <div className="font-semibold text-[var(--color-ink)]">{venue.name}</div>
-                  <div className="text-[var(--color-ink-2)] leading-snug mt-0.5">{venue.address}</div>
+                  {venue.address && (
+                    <div className="text-[var(--color-ink-2)] leading-snug mt-0.5">{venue.address}</div>
+                  )}
                   {venue.phone && (
                     <div className="font-mono tabular text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
                       <a href={`tel:${venue.phone.replace(/\s/g, '')}`} className="hover:underline">{venue.phone}</a>

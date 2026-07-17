@@ -1,6 +1,6 @@
-// Hook for the "My Shows" home page: reads the tours-index from
+// Hook for the "My Tours" home page: reads the tours-index from
 // localStorage on mount, and re-reads it on tab focus/visibilitychange so a
-// My Shows tab left open picks up tours created/edited in another tab. Plain
+// My Tours tab left open picks up tours created/edited in another tab. Plain
 // hook — no context/provider, any component can call it directly.
 
 import { useEffect, useState } from 'react';

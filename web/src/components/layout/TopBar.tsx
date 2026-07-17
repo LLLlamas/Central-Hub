@@ -48,8 +48,8 @@ export function TopBar() {
           <Link
             to="/"
             className="inline-flex items-center justify-center h-11 w-11 md:h-9 md:w-9 rounded-[4px] border border-[var(--color-rule)] hover:border-[var(--color-ink-4)] transition-colors bg-[var(--color-card)] text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
-            title="My Shows"
-            aria-label="My Shows"
+            title="My Tours"
+            aria-label="My Tours"
           >
             <Icon.Grid size={15} />
           </Link>

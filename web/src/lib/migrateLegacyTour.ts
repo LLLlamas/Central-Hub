@@ -1,7 +1,7 @@
 // One-time migration from the pre-multi-tour storage scheme (a single fixed
 // localStorage tour + overlay bundle, and bare-string IndexedDB keys) to the
 // per-tour scheme (`scratchStorage.ts` / `overlayStorage.ts` keyed by tourId,
-// plus a "My Shows" tours-index; IndexedDB entries keyed by `[tourId, id]`).
+// plus a "My Tours" tours-index; IndexedDB entries keyed by `[tourId, id]`).
 //
 // Runs once per browser, gated by the `tour-hub:migrated-v2` flag. No-ops
 // entirely on the `supabase` backend, which never had this local-only scheme.

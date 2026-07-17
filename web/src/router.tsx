@@ -30,7 +30,7 @@ import { PrintLayout } from '@/components/layout/PrintLayout';
 import { TourScope } from '@/routes/TourScope';
 import { TourNotFoundRedirect } from '@/routes/TourNotFoundRedirect';
 import { LegacyPathRedirect } from '@/routes/LegacyPathRedirect';
-import { MyShows } from '@/routes/MyShows';
+import { MyTours } from '@/routes/MyTours';
 import { TourOverview } from '@/routes/TourOverview';
 import { CalendarPage } from '@/routes/Calendar';
 import { DayDetail } from '@/routes/DayDetail';
@@ -58,7 +58,7 @@ function RiderIngestRedirect() {
 }
 
 export const router = createBrowserRouter([
-  { path: '/', element: <MyShows />, errorElement: <RouteErrorCard /> },
+  { path: '/', element: <MyTours />, errorElement: <RouteErrorCard /> },
   {
     path: '/t/:tourId',
     element: <TourScope />,

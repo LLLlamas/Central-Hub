@@ -277,17 +277,17 @@ function ScratchGetStarted() {
   const steps = [
     {
       n: 1,
+      title: 'Build the rider',
+      file: rider?.filename,
+      hint: 'Start here — fill in the standard 14-section template yourself, or skip typing and import a rider PDF like the sample below.',
+      to: 'ingest/riders',
+    },
+    {
+      n: 2,
       title: 'Import the tour route',
       file: route?.filename,
       hint: 'Builds a day for every date — shows, travel, off days — plus each show’s schedule.',
       to: 'ingest/flights',
-    },
-    {
-      n: 2,
-      title: 'Build the rider',
-      file: rider?.filename,
-      hint: 'Fill in the standard 14-section template yourself — or skip typing and import a rider PDF like the sample below.',
-      to: 'ingest/riders',
     },
     {
       n: 3,
@@ -307,10 +307,10 @@ function ScratchGetStarted() {
           You’re the new Tour Manager
         </h2>
         <p className="mt-2 text-[13px] text-[var(--color-ink-3)] leading-relaxed max-w-xl">
-          Elsa y Elmar are about to tour. A routing spreadsheet from the booking
-          agent and the hotel bookings are waiting in your inbox. Import those
-          below, then build the band’s tech rider right here in the hub —
-          or import one instead if a PDF already exists.
+          Your artist is about to tour. Start with the band’s tech rider —
+          author it right here in the hub, or import one if a PDF already
+          exists. Then bring in the routing spreadsheet from the booking
+          agent and any hotel bookings from your inbox.
         </p>
         <div className="mt-4">
           <span className="text-[12px] text-[var(--color-ink-3)]">

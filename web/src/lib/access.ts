@@ -49,6 +49,14 @@ export function isVenuePersona(user: Pick<CurrentUser, 'groupId'>): boolean {
 /** In-tour route fragments a venue persona may see in nav (Sidebar/More) — single source shared across nav surfaces so they can't drift. */
 export const VENUE_VISIBLE_ROUTES: ReadonlySet<string> = new Set(['advance']);
 
+/** True when the current viewer is the simulated rider-review persona (`grp_rider_review`) — the internal team (e.g. artist management) that signs off on a rider draft before it goes to venues. */
+export function isReviewPersona(user: Pick<CurrentUser, 'groupId'>): boolean {
+  return user.groupId === 'grp_rider_review';
+}
+
+/** In-tour route fragments a review persona may see in nav — same idea as `VENUE_VISIBLE_ROUTES`. */
+export const REVIEW_VISIBLE_ROUTES: ReadonlySet<string> = new Set(['rider']);
+
 /** Shape a Membership into the CurrentUser the visibility resolver expects. */
 export function membershipToCurrentUser(m: Membership): CurrentUser {
   return {

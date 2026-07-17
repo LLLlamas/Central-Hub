@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/state/AppState';
 import { Icon } from '@/components/ui/Icon';
-import { VENUE_DIRECTORY } from '@/data/venues';
+import { getVenueForTour } from '@/data/venues';
 import { fmtDate, dayTypeLabel } from '@/lib/format';
 import type { Tour, CurrentUser, Visibility } from '@/types';
 import { resolveVisibility } from '@/lib/visibility';
@@ -141,14 +141,19 @@ function buildIndex(
     });
   }
 
-  // Venues.
-  for (const [vid, v] of Object.entries(VENUE_DIRECTORY)) {
-    const day = tour.days.find((d) => d.venueId === vid);
+  // Venues — the tour's own venue records (per-tour `Tour.venues` layered
+  // over the shared directory, which ships empty), one entry per show day.
+  const seenVenues = new Set<string>();
+  for (const day of tour.days) {
+    if (!day.venueId || seenVenues.has(day.venueId)) continue;
+    const v = getVenueForTour(tour, day.venueId);
+    if (!v) continue;
+    seenVenues.add(day.venueId);
     items.push({
       type: 'venue',
       label: v.name,
-      sublabel: `${v.city}${day ? ` · ${fmtDate(day.date, 'MMM d')}` : ''}`,
-      to: day ? `daysheet/${day.date}` : 'calendar',
+      sublabel: `${v.city} · ${fmtDate(day.date, 'MMM d')}`,
+      to: `daysheet/${day.date}`,
       keywords: [v.name, v.city, v.promoter ?? '', v.country],
     });
   }

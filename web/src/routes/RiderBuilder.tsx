@@ -28,7 +28,9 @@ import { backend } from '@/lib/backend';
 import { FLIGHTS_ENABLED } from '@/lib/features';
 import { cn } from '@/lib/cn';
 import { sectionKey, RIDER_TOC_TEMPLATE } from '@/lib/riderBuilder';
-import { diffRiderVersions } from '@/lib/riderDiff';
+import { diffRiderVersions, diffSections } from '@/lib/riderDiff';
+import { isReviewPersona } from '@/lib/access';
+import { isRoundFullyOk, getFlaggedSections } from '@/lib/riderReview';
 import { BacklineEditor } from '@/components/rider/BacklineEditor';
 import { LodgingEditor } from '@/components/rider/LodgingEditor';
 import { CateringEditor } from '@/components/rider/CateringEditor';
@@ -48,6 +50,8 @@ import type {
   SectionEditRecord,
   UpdateStamp,
   StageMediaItem,
+  RiderReviewRound,
+  SectionReviewStatus,
 } from '@/types';
 
 // Active rider PDF URL — Blob URL of the user's uploaded file. Returns
@@ -261,6 +265,319 @@ function RiderVersionHistory() {
   );
 }
 
+// Short, generic content summary for a section — used by the reviewer's
+// read-only pass (no source PDF or full editors, just enough to judge each
+// section) and by the review status card's flagged-section list.
+function sectionSummary(s: RiderSection): string {
+  const parts: string[] = [];
+  if (s.inputList?.length) parts.push(`${s.inputList.length} input ch.`);
+  if (s.monitorMix?.length) parts.push(`${s.monitorMix.length} monitor mixes`);
+  if (s.fohOutputs?.length) parts.push(`${s.fohOutputs.length} FOH outputs`);
+  if (s.backline) parts.push('backline spec');
+  if (s.lodging) parts.push(`${s.lodging.totalRooms ?? s.lodging.roomingList?.length ?? 0} rooms`);
+  if (s.catering?.menus?.length) parts.push(`${s.catering.menus.length} menus`);
+  if (s.media?.length) parts.push(`${s.media.length} media item${s.media.length === 1 ? '' : 's'}`);
+  if (s.plots?.length) parts.push(`${s.plots.length} plot image${s.plots.length === 1 ? '' : 's'}`);
+  if (parts.length === 0) return s.freeText?.trim() ? s.freeText.trim() : 'No content yet';
+  return parts.join(' · ');
+}
+
+/**
+ * Reviewer-persona surface (grp_rider_review) — a read-only pass over the
+ * latest round's section snapshot with a per-section OK / Needs changes
+ * control. Deliberately per-section, not per-line-item: the reviewer is
+ * signing off on the draft as a whole, not negotiating individual gear like
+ * the venue does. Nothing here edits the live rider — only the round's marks.
+ */
+function RiderReviewerView() {
+  const { getLatestReviewRound, recordSectionReviewMark } = useApp();
+  const round = getLatestReviewRound();
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+
+  if (!round) {
+    return (
+      <div>
+        <PageHeader eyebrow="Rider review" title="Rider" description="Nothing has been sent for review yet." />
+        <Card>
+          <EmptyState title="No rider to review" hint="The tour manager hasn't sent a draft for review yet. Check back once they do." />
+        </Card>
+      </div>
+    );
+  }
+
+  const rows = round.sectionSnapshot
+    .slice()
+    .sort((a, b) => (a.tocIndex ?? 99) - (b.tocIndex ?? 99));
+
+  return (
+    <div>
+      <PageHeader
+        eyebrow={`Round ${round.roundNumber}`}
+        title="Rider review"
+        description={`Sent by ${round.sentAt.by} on ${round.sentAt.at.replace('T', ' ')}. Mark each section OK or flag it with what needs to change.`}
+        meta={
+          <Chip tone="neutral" variant="outline">
+            {Object.values(round.marks).filter((m) => m.status === 'ok').length}/{rows.length} marked OK
+          </Chip>
+        }
+      />
+      <div className="space-y-3">
+        {rows.map((s) => {
+          const key = s.id;
+          const mark = round.marks[key];
+          const noteDraft = noteDrafts[key] ?? mark?.note ?? '';
+          return (
+            <Card key={key}>
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <div className="inline-flex items-baseline gap-2">
+                    {s.tocIndex != null && (
+                      <span className="font-mono text-[12px] text-[var(--color-ink-4)] tabular">§{s.tocIndex}</span>
+                    )}
+                    <span className="font-display text-[15px] font-bold text-[var(--color-ink)]">{sectionLabel(s)}</span>
+                  </div>
+                  <p className="mt-1 text-[12.5px] text-[var(--color-ink-3)]">{sectionSummary(s)}</p>
+                  {s.freeText?.trim() && (
+                    <p className="mt-1.5 text-[12px] text-[var(--color-ink-2)] whitespace-pre-wrap leading-relaxed max-w-2xl">
+                      {s.freeText.trim()}
+                    </p>
+                  )}
+                </div>
+                {mark && (
+                  <Chip tone={mark.status === 'ok' ? 'success' : 'critical'} size="sm">
+                    {mark.status === 'ok' ? 'Marked OK' : 'Needs changes'}
+                  </Chip>
+                )}
+              </div>
+              <div className="mt-3 pt-3 border-t border-[var(--color-rule-soft)] flex items-start gap-2 flex-wrap">
+                <input
+                  value={noteDraft}
+                  onChange={(e) => setNoteDrafts((prev) => ({ ...prev, [key]: e.target.value }))}
+                  placeholder="What needs to change (optional for OK)…"
+                  className="min-w-[220px] flex-1 text-[12px] bg-[var(--color-card)] rounded-[3px] px-2 py-1.5 outline-none border border-[var(--color-rule)] focus:border-[var(--color-ocean)]"
+                />
+                <Button
+                  size="sm"
+                  variant={mark?.status === 'ok' ? 'primary' : 'outline'}
+                  leading={<Icon.Check size={12} />}
+                  onClick={() => recordSectionReviewMark(key, 'ok', noteDraft.trim() || undefined)}
+                >
+                  OK
+                </Button>
+                <Button
+                  size="sm"
+                  variant={mark?.status === 'needs_changes' ? 'primary' : 'outline'}
+                  leading={<Icon.Alert size={12} />}
+                  onClick={() => recordSectionReviewMark(key, 'needs_changes', noteDraft.trim() || undefined)}
+                >
+                  Needs changes
+                </Button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Diff one round's snapshot against another (or against the live current
+ *  sections, for the latest round) — reuses `diffSections`, the same engine
+ *  `CompareVersionsModal` uses for full rider-version diffs. */
+function ReviewRoundDiffModal({
+  rounds,
+  currentSections,
+  onClose,
+}: {
+  rounds: RiderReviewRound[];
+  currentSections: RiderSection[];
+  onClose: () => void;
+}) {
+  const options = [
+    ...rounds.map((r) => ({ id: r.id, label: `Round ${r.roundNumber} (sent)` })),
+    { id: '__current', label: 'Current draft' },
+  ];
+  const [aId, setAId] = useState(options[Math.max(0, options.length - 2)].id);
+  const [bId, setBId] = useState(options[options.length - 1].id);
+  const sectionsFor = (id: string) => (id === '__current' ? currentSections : rounds.find((r) => r.id === id)?.sectionSnapshot ?? []);
+  const diff = diffSections(sectionsFor(aId), sectionsFor(bId));
+  const noChanges = diff.addedSections.length === 0 && diff.removedSections.length === 0 && diff.sectionDiffs.length === 0;
+
+  return (
+    <Modal open title="Compare review rounds" eyebrow="Round diff" onClose={onClose} size="lg">
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div>
+          <label className="block text-[10px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-4)] mb-1">From</label>
+          <select value={aId} onChange={(e) => setAId(e.target.value)} className="w-full text-[12.5px] rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] px-2 py-1.5">
+            {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-4)] mb-1">To</label>
+          <select value={bId} onChange={(e) => setBId(e.target.value)} className="w-full text-[12.5px] rounded-[4px] border border-[var(--color-rule)] bg-[var(--color-card)] px-2 py-1.5">
+            {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </div>
+      </div>
+      {aId === bId ? (
+        <p className="text-[12.5px] text-[var(--color-ink-3)]">Pick two different rounds to compare.</p>
+      ) : noChanges ? (
+        <p className="text-[12.5px] text-[var(--color-ink-3)]">No differences between these.</p>
+      ) : (
+        <div className="space-y-4 max-h-[55vh] overflow-y-auto">
+          {diff.sectionDiffs.map((sd) => (
+            <div key={sd.type}>
+              <div className="text-[12.5px] font-semibold text-[var(--color-ink)] mb-1.5">{sd.label}</div>
+              <table className="w-full text-[11.5px]">
+                <thead>
+                  <tr className="text-left text-[10px] font-mono uppercase tracking-[0.10em] text-[var(--color-ink-4)]">
+                    <th className="pb-1 pr-3 w-[35%]">Row</th>
+                    <th className="pb-1 pr-3 w-[15%]">Field</th>
+                    <th className="pb-1 pr-3">Before</th>
+                    <th className="pb-1">After</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sd.changes.map((ch, ci) => (
+                    <tr key={ci} className="border-t border-[var(--color-rule-soft)]">
+                      <td className="py-1 pr-3 text-[var(--color-ink-3)] truncate max-w-[160px]">{ch.rowLabel}</td>
+                      <td className="py-1 pr-3 font-mono text-[10px] text-[var(--color-ink-4)] uppercase">{ch.field}</td>
+                      <td className="py-1 pr-3 line-through text-[var(--color-ink-4)] max-w-[180px] truncate">{ch.before || '—'}</td>
+                      <td className="py-1 text-[var(--color-ink)] font-semibold max-w-[180px] truncate">{ch.after || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/**
+ * TM-facing review status card — sits above the section rail/doc. Shows the
+ * latest round's progress, flagged sections with the reviewer's notes, a
+ * "Send for review" / "Send another round" action, the diff modal, and the
+ * lock action once every section in the latest round is OK. Deliberately
+ * supports many rounds: sending again never wipes prior rounds.
+ */
+function ReviewStatusCard({ imp }: { imp: RiderImport }) {
+  const { riderReviewRounds, sendRiderForReview, riderLocked, lockRider, unlockRider } = useApp();
+  const [showHistory, setShowHistory] = useState(false);
+  const [showDiff, setShowDiff] = useState(false);
+  const round = riderReviewRounds.length > 0 ? riderReviewRounds[riderReviewRounds.length - 1] : undefined;
+
+  if (!round && !riderLocked) {
+    return (
+      <Card className="mb-5">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="eyebrow mb-1">Internal review</div>
+            <p className="text-[12.5px] text-[var(--color-ink-3)] max-w-lg">
+              Send this draft to the review team before it goes to any venue. They mark each section OK or flag what needs to change; you can send as many rounds as it takes.
+            </p>
+          </div>
+          <Button variant="primary" size="sm" leading={<Icon.Sparkle size={12} />} onClick={sendRiderForReview}>
+            Send for review
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  const flagged = round ? getFlaggedSections(round) : [];
+  const fullyOk = round ? isRoundFullyOk(round) : false;
+  const markedCount = round ? Object.keys(round.marks).length : 0;
+  const totalCount = round ? round.sectionSnapshot.length : 0;
+
+  return (
+    <Card className="mb-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div className="min-w-0">
+          <div className="eyebrow mb-1">Internal review</div>
+          {riderLocked ? (
+            <div className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[var(--color-moss)]">
+              <Icon.Lock size={12} /> Locked by {riderLocked.by} on {riderLocked.at.replace('T', ' ')}
+            </div>
+          ) : round ? (
+            <p className="text-[12.5px] text-[var(--color-ink-3)]">
+              Round {round.roundNumber} sent {round.sentAt.at.replace('T', ' ')} · {markedCount}/{totalCount} sections marked
+              {flagged.length > 0 && <> · <span className="text-[var(--color-critical)] font-semibold">{flagged.length} need changes</span></>}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          {riderReviewRounds.length > 1 && (
+            <Button size="sm" variant="outline" onClick={() => setShowHistory((v) => !v)}>
+              {showHistory ? 'Hide' : 'Round history'} ({riderReviewRounds.length})
+            </Button>
+          )}
+          {round && (
+            <Button size="sm" variant="outline" onClick={() => setShowDiff(true)}>
+              Compare rounds
+            </Button>
+          )}
+          {riderLocked ? (
+            <Button size="sm" variant="outline" onClick={unlockRider}>Unlock</Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              leading={<Icon.Lock size={12} />}
+              disabled={!fullyOk}
+              title={fullyOk ? 'Finalize the rider' : 'Every section in the latest round must be marked OK first'}
+              onClick={lockRider}
+            >
+              Lock rider
+            </Button>
+          )}
+          <Button variant="primary" size="sm" leading={<Icon.Sparkle size={12} />} onClick={sendRiderForReview}>
+            {round ? 'Send another round' : 'Send for review'}
+          </Button>
+        </div>
+      </div>
+
+      {flagged.length > 0 && (
+        <ul className="divide-y divide-[var(--color-rule-soft)] border-t border-[var(--color-rule-soft)]">
+          {flagged.map(({ section, mark }) => (
+            <li key={section.id} className="py-2 flex items-start gap-2">
+              <Icon.Alert size={12} className="text-[var(--color-critical)] shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <span className="text-[12.5px] font-semibold text-[var(--color-ink)]">{sectionLabel(section)}</span>
+                {mark.note && <span className="ml-2 text-[12px] text-[var(--color-ink-3)]">{mark.note}</span>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {showHistory && (
+        <ul className="mt-3 pt-3 border-t border-[var(--color-rule-soft)] space-y-1.5">
+          {riderReviewRounds.map((r) => {
+            const ok = Object.values(r.marks).filter((m) => m.status === 'ok').length;
+            return (
+              <li key={r.id} className="text-[12px] text-[var(--color-ink-3)] flex items-center justify-between gap-2">
+                <span>Round {r.roundNumber} — sent {r.sentAt.at.replace('T', ' ')} by {r.sentAt.by}</span>
+                <span className="font-mono tabular">{ok}/{r.sectionSnapshot.length} OK</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {showDiff && (
+        <ReviewRoundDiffModal
+          rounds={riderReviewRounds}
+          currentSections={imp.sections}
+          onClose={() => setShowDiff(false)}
+        />
+      )}
+    </Card>
+  );
+}
+
 /**
  * Persistent, collapsed-by-default preview of the "Stage design" section's
  * media — stays visible no matter which OTHER section is open in the detail
@@ -408,6 +725,23 @@ export function RiderBuilder() {
     if (!imp || active === 'plots') return;
     document.getElementById(`rider-rail-${active}`)?.scrollIntoView({ block: 'nearest' });
   }, [active, imp]);
+
+  // Continuous-doc mode (authored riders): scroll the long document to the
+  // anchor for a given section. Deferred via setTimeout (not
+  // requestAnimationFrame, which browsers pause for backgrounded tabs) so a
+  // just-added section's anchor exists in the DOM before we try to scroll.
+  const scrollToDocSection = (key: string) => {
+    setTimeout(() => {
+      document.getElementById(`rider-doc-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  };
+
+  // The simulated internal-review persona gets its own read-only, mark-up
+  // surface — carved out ahead of the manager-only guard below, which would
+  // otherwise block it the same as ordinary crew.
+  if (isReviewPersona(user)) {
+    return <RiderReviewerView />;
+  }
 
   // Rider import + review is a manager-only power tool. Crew share documents via
   // /me, which the Submissions inbox surfaces for manager review.
@@ -571,8 +905,15 @@ export function RiderBuilder() {
         }
       />
 
+      {/* Sticky "Add section" bar, right under the title — the fastest way in
+          when you're heads-down typing the rider like a Word doc and don't
+          want to hunt for the control at the bottom of the section list. */}
+      {managerView && <StickyAddSectionBar imp={imp} onAdded={scrollToDocSection} />}
+
       {/* Cover & revision banner */}
       <CoverBanner imp={imp} />
+
+      {managerView && <ReviewStatusCard imp={imp} />}
 
       <RiderVersionHistory />
 
@@ -581,8 +922,10 @@ export function RiderBuilder() {
       <StageDesignPeek imp={imp} active={active} />
 
       <div className="grid lg:grid-cols-[240px_1fr] gap-5 mt-6">
-        {/* Left rail — TOC-ordered section list + Plots entry */}
-        <Card padded={false} className="overflow-hidden">
+        {/* Left rail — TOC-ordered section list + Plots entry. In authored
+            mode, clicking a row scrolls the long document below to that
+            section instead of swapping which section is shown. */}
+        <Card padded={false} className="overflow-hidden lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)]">
           <div className="px-4 py-3 border-b border-[var(--color-rule-soft)]">
             <div className="eyebrow">Sections</div>
             <div className="text-[11.5px] text-[var(--color-ink-3)] mt-0.5">
@@ -606,7 +949,10 @@ export function RiderBuilder() {
                   key={key}
                   section={s}
                   active={key === active}
-                  onSelect={() => setActive(key)}
+                  onSelect={() => {
+                    setActive(key);
+                    if (origin === 'authored') scrollToDocSection(key);
+                  }}
                   pendingEdit={!!getPendingEdit(key)}
                   approved={false}
                   origin={origin}
@@ -633,7 +979,10 @@ export function RiderBuilder() {
             {plots.length > 0 && (
               <li>
                 <button
-                  onClick={() => setActive('plots')}
+                  onClick={() => {
+                    setActive('plots');
+                    if (origin === 'authored') scrollToDocSection('plots');
+                  }}
                   className={cn(
                     'w-full text-left px-4 py-2.5 hover:bg-[var(--color-paper)]/60 transition-colors',
                     active === 'plots' && 'bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]',
@@ -655,50 +1004,26 @@ export function RiderBuilder() {
                 </button>
               </li>
             )}
-            {managerView && (
-              <AddSectionRow
-                imp={imp}
-                onAdded={(id) => setActive(id)}
-              />
-            )}
-          </ul>
-        </Card>
-
-        {/* Right side — Approved-sections card + Plots grid OR section two-pane review */}
-        <div className="min-w-0 space-y-4">
-          {totalCount > 0 && (
-            <Card padded={false} className="overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setApprovedExpanded((v) => !v)}
-                className="w-full flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[var(--color-paper)]/40 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <Icon.Check size={12} />
-                  <span className="text-[12.5px] font-semibold">
-                    Completed sections
-                  </span>
-                  <span className="font-mono tabular text-[11px] text-[var(--color-ink-3)]">
-                    {approvedCount}/{totalCount}
-                  </span>
-                </div>
-                <span className="font-mono uppercase tracking-[0.10em] text-[10px] text-[var(--color-ink-3)] inline-flex items-center gap-1">
-                  {approvedExpanded ? 'Hide' : 'Show'}
+            {approvedRows.length > 0 && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => setApprovedExpanded((v) => !v)}
+                  className="w-full text-left px-4 py-2 flex items-center justify-between gap-2 text-[11.5px] font-semibold text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+                >
+                  <span className="inline-flex items-center gap-1.5"><Icon.Check size={11} /> {approvedRows.length} complete</span>
                   <Icon.Arrow size={9} className={approvedExpanded ? 'rotate-90' : ''} />
-                </span>
-              </button>
-              {approvedExpanded && (
-                <ul className="border-t border-[var(--color-rule-soft)] divide-y divide-[var(--color-rule-soft)] max-h-[280px] overflow-y-auto">
-                  {approvedRows.length === 0 ? (
-                    <li className="px-4 py-4 text-[12px] italic text-[var(--color-ink-3)] text-center">
-                      No sections marked complete yet.
-                    </li>
-                  ) : (
-                    approvedRows.map(({ s, key }) => (
+                </button>
+                {approvedExpanded && (
+                  <ul className="divide-y divide-[var(--color-rule-soft)] border-t border-[var(--color-rule-soft)]">
+                    {approvedRows.map(({ s, key }) => (
                       <li key={key}>
                         <button
                           type="button"
-                          onClick={() => setActive(key)}
+                          onClick={() => {
+                            setActive(key);
+                            if (origin === 'authored') scrollToDocSection(key);
+                          }}
                           className={cn(
                             'w-full text-left px-4 py-2 hover:bg-[var(--color-paper)]/60 transition-colors flex items-center justify-between gap-3',
                             key === active && 'bg-[var(--color-ink)] text-[var(--color-paper)] hover:bg-[var(--color-ink-2)]',
@@ -715,32 +1040,62 @@ export function RiderBuilder() {
                               {sectionLabel(s)}
                             </span>
                           </div>
-                          <span className={cn(
-                            'shrink-0 font-mono uppercase tracking-[0.10em] text-[10px]',
-                            key === active ? 'text-[var(--color-paper)] opacity-80' : 'text-[var(--color-ink-4)]',
-                          )}>
-                            Complete
-                          </span>
                         </button>
                       </li>
-                    ))
-                  )}
-                </ul>
-              )}
-            </Card>
-          )}
+                    ))}
+                  </ul>
+                )}
+              </li>
+            )}
+            {managerView && (
+              <AddSectionRow
+                imp={imp}
+                onAdded={(id) => {
+                  setActive(id);
+                  if (origin === 'authored') scrollToDocSection(id);
+                }}
+              />
+            )}
+          </ul>
+        </Card>
 
-          {active === 'plots' ? (
-            <PlotsPanel imp={imp} />
-          ) : activeSection && active !== 'plots' ? (
-            <SectionReviewSplit
-              section={activeSection}
-              sectionKey={active}
-              sourceLang={imp.sourceLanguage ?? ''}
-              origin={origin}
-            />
-          ) : null}
-        </div>
+        {/* Right side. Authored riders render as one continuous scrollable
+            document (every section stacked, like typing a rider in Word) —
+            the rail above just scrolls you to a spot in it. Imported riders
+            keep the one-section-at-a-time review (source PDF alongside the
+            extracted text only makes sense for a single section at a time). */}
+        {origin === 'authored' ? (
+          <div className="min-w-0 space-y-5">
+            {sectionRows.map(({ s, key }) => (
+              <div key={key} id={`rider-doc-${key}`}>
+                <SectionReviewSplit
+                  section={s}
+                  sectionKey={key}
+                  sourceLang={imp.sourceLanguage ?? ''}
+                  origin={origin}
+                />
+              </div>
+            ))}
+            {plots.length > 0 && (
+              <div id="rider-doc-plots">
+                <PlotsPanel imp={imp} />
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="min-w-0 space-y-4">
+            {active === 'plots' ? (
+              <PlotsPanel imp={imp} />
+            ) : activeSection && active !== 'plots' ? (
+              <SectionReviewSplit
+                section={activeSection}
+                sectionKey={active}
+                sourceLang={imp.sourceLanguage ?? ''}
+                origin={origin}
+              />
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -933,6 +1288,108 @@ function SectionRailItem({
         )}
       </div>
     </li>
+  );
+}
+
+/**
+ * Sticky "Add section" control right under the page title — the fast path
+ * when heads-down authoring and you don't want to hunt for the control at
+ * the bottom of the (possibly long) section rail. Same picker contents as
+ * `AddSectionRow` below, different chrome (a dropdown off a button, not a
+ * rail list item) — small enough duplication that a shared abstraction isn't
+ * worth it.
+ */
+function StickyAddSectionBar({
+  imp,
+  onAdded,
+}: {
+  imp: RiderImport;
+  onAdded: (sectionId: string) => void;
+}) {
+  const { addRiderSection } = useApp();
+  const [open, setOpen] = useState(false);
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customTitle, setCustomTitle] = useState('');
+
+  const presentTypes = new Set(imp.sections.map((s) => s.type));
+  const available = RIDER_TOC_TEMPLATE.filter((t) => !presentTypes.has(t.type));
+
+  const reset = () => {
+    setOpen(false);
+    setShowCustomInput(false);
+    setCustomTitle('');
+  };
+
+  const handleAdd = (type: RiderSectionType, title: string) => {
+    const id = addRiderSection(type, title);
+    onAdded(id);
+    reset();
+  };
+
+  return (
+    <div className="sticky top-2 z-20 mb-4">
+      <div className="relative inline-block">
+        <Button
+          variant="outline"
+          size="sm"
+          leading={<Icon.Plus size={12} />}
+          onClick={() => setOpen((v) => !v)}
+          className="shadow-sm bg-[var(--color-paper)]"
+        >
+          Add section
+        </Button>
+        {open && (
+          <Card className="absolute left-0 top-full mt-1.5 w-[280px] z-30 shadow-lg" padded>
+            {available.length > 0 && (
+              <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                {available.map((t) => (
+                  <button
+                    key={t.type}
+                    type="button"
+                    onClick={() => handleAdd(t.type, t.title)}
+                    className="w-full text-left text-[12px] px-2 py-1 rounded-[2px] hover:bg-[var(--color-paper)] text-[var(--color-ink-2)]"
+                  >
+                    {t.title}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!showCustomInput ? (
+              <button
+                type="button"
+                onClick={() => setShowCustomInput(true)}
+                className="w-full text-left text-[12px] px-2 py-1 mt-1 rounded-[2px] hover:bg-[var(--color-paper)] text-[var(--color-ink-3)] italic"
+              >
+                Custom section…
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 mt-1">
+                <input
+                  autoFocus
+                  value={customTitle}
+                  onChange={(e) => setCustomTitle(e.target.value)}
+                  placeholder="Section title"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && customTitle.trim()) handleAdd('other', customTitle.trim());
+                  }}
+                  className="min-w-0 flex-1 text-[12px] bg-[var(--color-card)] rounded-[2px] px-1.5 py-1 outline-none border border-[var(--color-rule)] focus:border-[var(--color-ocean)]"
+                />
+                <Button size="sm" variant="primary" onClick={() => customTitle.trim() && handleAdd('other', customTitle.trim())}>
+                  Add
+                </Button>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={reset}
+              className="mt-2 text-[11px] font-mono uppercase tracking-[0.08em] text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+            >
+              Cancel
+            </button>
+          </Card>
+        )}
+      </div>
+    </div>
   );
 }
 

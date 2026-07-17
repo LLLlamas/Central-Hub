@@ -19,7 +19,7 @@
 - **Gear & Supplies tracker** (`/t/:tourId/gear`) — flat inventory seeded from an *imported* rider only (`buildRiderGearItems()` in `data/gearFixture.ts`, ~80 items from Input List/monitors/backline/video/dressing rooms/catering; skipped entirely for an authored rider, see CLAUDE.md's Data modes). `GearItem`: name, quantity, unit, category, status (`needed/sourced/confirmed/not_required`), `providedBy`, `estimatedCost`, `fromRider`. **Re-import smart merge:** `mergeGearItems()` keeps user edits (status/cost/notes) on name-matched items, updates quantities, appends new items, keeps items that disappeared from the new rider. Manual items (`fromRider: false`) are always untouched. UI: category sidebar + status filter + search, grouped/collapsible table, click a status badge to cycle, running cost summary bar.
 
 - **Cmd+K palette** — provider in `Layout`, tour-scoped search index (days, personnel, schedule items, venues, pages) built via `tourPath`.
-- **Route map** — static SVG, city coordinates in `lib/mapProjection.ts` (shared with `MyShowsMap`). New cities need their lat/lng added there.
+- **Route map** — static SVG, city coordinates in `lib/mapProjection.ts` (shared with `MyToursMap`). New cities need their lat/lng added there.
 - **Calendar List/Grid toggle** — defaults to Grid on desktop, List on mobile, switchable on both.
 - **Lobby-call ladder** — only renders for show days, anchored on the `doors` schedule item; empty state if missing.
 

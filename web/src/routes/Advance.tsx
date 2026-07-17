@@ -158,8 +158,8 @@ function ShowRow({
           <div className="text-[13px] font-medium text-[var(--color-ink)] truncate">
             {venue?.name ?? 'Venue TBD'}
           </div>
-          {venue?.city && (
-            <div className="text-[11px] text-[var(--color-ink-3)] truncate">{venue.city}</div>
+          {(venue?.city ?? day.city) && (
+            <div className="text-[11px] text-[var(--color-ink-3)] truncate">{venue?.city ?? day.city}</div>
           )}
         </div>
         <div className="shrink-0 flex items-center gap-1.5 flex-wrap">

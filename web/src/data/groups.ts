@@ -22,4 +22,5 @@ export const groups: Group[] = [
   { id: 'grp_video', name: 'Video', color: '#2e6478', description: 'VJ / playback.' },
   { id: 'grp_staff', name: 'Staff', color: '#6b665c', description: 'Touring staff (rooming list §12).' },
   { id: 'grp_venue', name: 'Venue', color: '#8a3f5c', description: 'Venue house production — responds to the rider per show.' },
+  { id: 'grp_rider_review', name: 'Rider Review', color: '#3f6b52', description: 'Internal team that signs off on the rider draft before it goes to venues.' },
 ];
